@@ -154,7 +154,9 @@ export function compareModels(plan, built) {
       return { name: x.name, mustHave: !!x.mustHave, tested: !!test && !notPassingYet, notPassingYet,
         mismatches: test && !notPassingYet ? mismatches(shape(x, plan), shape(test, built)) : [] };
     });
-    const extraTests = tests.filter(x => !matched.has(x.id)).map(x => x.name);
+    // A test whose name a planned scenario already has (the same name twice on a slice) is that scenario, not an extra
+    const matchedNames = new Set([...matched].map(id => norm(tests.find(t => t.id === id)?.name)));
+    const extraTests = tests.filter(x => !matched.has(x.id) && !matchedNames.has(norm(x.name))).map(x => x.name);
     const pf = fieldsOf(p, plan), bf = fieldsOf(b, built);
     // A plan with no fields for a slice hasn't decided them yet: only compare where it names some
     const fields = pf.size

@@ -6,14 +6,23 @@
 
 import { statusChips } from '../filter/status.js';
 import { projectState } from '../../core/projections.js';
-import { boardScreen, withFlows, otherFlow, sliceTypeLabels } from './screen.js';
-import { boardSliceHeader, boardLane, boardScenarios, boardComments, boardChapterHead, boardEmptyChapter, boardSpine, boardLaneLabels, boardStats, noteTilt } from './rowView.js';
+import { boardLayout, withFlows, firstAppearances } from './boardLayout.read.js';
+import { boardLaneStickies, cardTags, otherFlow } from './boardLaneStickies.read.js';
+import { sliceTypeLabels, boardSliceHeaderFields } from './boardSliceHeaderFields.read.js';
+import { boardScenariosCell } from './boardScenariosCell.read.js';
+import { boardOpenThreads } from './boardOpenThreads.read.js';
+import { boardChapterHeading } from './boardChapterHeading.read.js';import { boardChapterToAddTo } from './boardChapterToAddTo.read.js';
+import { boardSpineBands } from './boardSpineBands.read.js';
+import { boardScenariosLabel } from './boardScenariosLabel.read.js';
+import { boardCommentsLabel } from './boardCommentsLabel.read.js';
+import { boardCounts } from './boardCounts.read.js';
+import { boardSliceHeader, boardLane, boardScenarios, boardComments, boardChapterHead, boardEmptyChapter, boardSpine, boardLaneLabels, boardScenariosToggle, boardCommentsToggle, boardStats, noteTilt } from './board.parts.js';
 import { getEventStream, historyOf } from '../../core/eventStore.js';
 import { usageButton } from '../usage/view.js';
 
 // Re-exported for the poster and the other screens
 export { sliceTypeLabels, noteTilt };
-export { cardTags, firstAppearances } from './screen.js';
+export { cardTags, firstAppearances };
 export const laneLabels = ['UI · Automation', 'Commands · Views', 'Events'];
 
 // Folded chapters show as a book spine. A per-device view preference, so it
@@ -183,44 +192,49 @@ export function renderBoard() {
     board.addEventListener('pointerover', aimRibbon);
     board.addEventListener('focusin', aimRibbon);
   }
-  const screen = boardScreen(projectState(), { folded: isChapterFolded, flowOf: shownFlowOf });
-  board.classList.toggle('has-chapters', screen.hasChapters);
+  // One replay of the book per draw: the layout and each part's own view read from it
+  const state = projectState();
+  const layout = boardLayout(state, { folded: isChapterFolded, flowOf: shownFlowOf });
+  board.classList.toggle('has-chapters', layout.hasChapters);
   board.classList.toggle('gwt-open', gwtOpen);
-  renderStats(screen);
+  renderStats(boardCounts(state, { folded: isChapterFolded }));
 
-  let html = boardLaneLabels(screen, { gwtOpen });
+  let html = boardLaneLabels() + boardScenariosToggle(boardScenariosLabel(), { gwtOpen }) + boardCommentsToggle(boardCommentsLabel(state));
 
   // Column widths: lane labels, then a slice width per column or a narrow spine
   const widths = ['26px'];
   let col = 2;
-  screen.chapters.forEach(chapter => {
+  layout.chapters.forEach(chapter => {
     if (chapter.folded) {
-      html += boardSpine(chapter, { col: col++ });
+      const spine = boardSpineBands(state, chapter);
+      html += boardSpine(spine, { col: col++ });
       // A spine's own width, wider when its name needs a second line. Not max-content: Safari
       // sizes vertical text by its full length, so the spine took the whole board there
-      const len = chapter.name.length;
+      const len = spine.name.length;
       widths.push(len > 60 ? '100px' : len > 26 ? '76px' : '52px');
       return;
     }
     widths.push(...Array(Math.max(chapter.columns.length, 1)).fill('var(--col-w)'));
-    if (!chapter.loose) html += boardChapterHead(chapter, { col, bookmarked: isChapterBookmarked(chapter.id) });
+    if (!chapter.loose) html += boardChapterHead(boardChapterHeading(state, chapter, shownFlowOf), { col, bookmarked: isChapterBookmarked(chapter.id) });
     if (chapter.empty) {
-      html += boardEmptyChapter(chapter, { col });
+      html += boardEmptyChapter(boardChapterToAddTo(state, chapter), { col });
       col++;
       return;
     }
     chapter.columns.forEach(c => {
-      html += boardSliceHeader(c, { col }) + c.lanes.map(l => boardLane(l, { col })).join('')
-        + boardScenarios(c.gwt, { col, open: gwtOpen }) + (screen.hasComments ? boardComments(c, { col }) : '');
+      html += boardSliceHeader(boardSliceHeaderFields(state, c), { col })
+        + [0, 1, 2].map(l => boardLane(boardLaneStickies(state, c, l, layout), { col })).join('')
+        + boardScenarios(boardScenariosCell(state, c), { col, open: gwtOpen })
+        + (layout.hasComments ? boardComments(boardOpenThreads(state, c), { col }) : '');
       col++;
     });
   });
 
   // New slices and chapters come from the floating + button; an empty board points at it
-  if (screen.emptyHint !== null) {
-    html += `<div class="bd-new" style="grid-column: ${col}; grid-row: 3 / span 3"><span class="bd-new-hint">${screen.emptyHint}</span></div>`;
+  if (layout.emptyHint !== null) {
+    html += `<div class="bd-new" style="grid-column: ${col}; grid-row: 3 / span 3"><span class="bd-new-hint">${layout.emptyHint}</span></div>`;
     widths.push('var(--col-w)');
-  } else if (screen.firstRun) {
+  } else if (layout.firstRun) {
     html += `
       <div class="bd-new" style="grid-column: ${col}; grid-row: 3 / span 3">
         <span class="bd-new-hint">Tap <b>＋</b> to add your first slice. Start with something a user <b>does</b>: that's a state change.</span>

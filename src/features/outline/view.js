@@ -9,10 +9,21 @@
 
 import { statusChips, filtering as staged, emptyText } from '../filter/status.js';
 import { projectState } from '../../core/projections.js';
+import { openProgressHistory } from '../buildProgress/sheet.js';
 import { refinedPillTap } from './refinedPill.js';
-import { outlineScreen } from './outlineScreen.read.js';
+import { outlineLayout } from './outlineLayout.read.js';
+import { outlineSliceRow } from './outlineSliceRow.read.js';
+import { outlineChapterHeading } from './outlineChapterHeading.read.js';
+import { outlineSearchField } from './outlineSearchField.read.js';
+import { outlineToolbarOptions } from './outlineToolbarOptions.read.js';
+import { outlineAddKinds } from './outlineAddKinds.read.js';
+import { outlineCanAddChapter } from './outlineCanAddChapter.read.js';
+import { outlineBookName } from './outlineBookName.read.js';
+import { outlineFoldAllState } from './outlineFoldAllState.read.js';
+import { outlineOpenCommentsCount } from './outlineOpenCommentsCount.read.js';
+import { outlineMoveTargets } from './outlineMoveTargets.read.js';
 import { outlineRow, outlineChapterHead, outlineSearchBox, outlineToolbar, outlineAddButtons, outlineNewChapterButton, outlineBookTitle,
-  outlineFoldAll, outlineBarComments, outlineMoveBar, outlineAddSheet, outlineEditSheet, outlineVerdictSheet } from './outline.parts.js';
+  outlineFoldAll, outlineBarComments, outlineMoveBar, outlineAddSheet, outlineEditSheet, outlineVerdictSheet, scenarioTestersSheet } from './outline.parts.js';
 import { outlineStepPlan } from './outlineStepPlan.read.js';
 import { outlineMovePlan } from './outlineMovePlan.read.js';
 import { outlineAddForm } from './outlineAddForm.read.js';
@@ -52,7 +63,7 @@ const COLLAPSED_KEY = 'eventpad_outline_collapsed';
 let collapsedAll = (() => { try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch (e) { return false; } })();
 const toggled = new Set();
 const gwtOpen = id => collapsedAll ? toggled.has(id) : !toggled.has(id);
-let screenNow = null;      // the Outline screen as last drawn: what a tap reads of the book
+let screenNow = null;      // the Outline as last drawn (its layout and the row views): what a tap reads
 let addForm = null;        // the add sheet's view as it was opened
 let adding = null;         // chapter id ('' for no chapter) the add sheet adds to
 let addKind = 'SC';        // Do (state change), See (state view) or Auto (automation)
@@ -66,7 +77,7 @@ const openFields = new Set();   // slices showing their fields
 const openValues = new Set();   // slices showing their scenarios' values
 
 // What the last draw showed of a slice (its row), or null
-const rowNow = id => screenNow?.chapters.flatMap(c => c.rows).find(r => r.sliceId === id) || null;
+const rowNow = id => screenNow?.rows[id] || null;
 
 // ↑ / ↓ within a chapter; at a chapter's edge, step into the neighbouring one
 function stepSlice(sliceId, dir) {
@@ -193,49 +204,54 @@ function saveEdit() {
 export function renderOutline() {
   const container = document.getElementById('outlineView');
   if (!container) return;
-  // Everything drawn here comes from the Outline screen's view
-  const screen = outlineScreen(projectState(), { query, folded: isChapterFolded, built: isBuildBook(getEventStream()) });
-  screenNow = screen;
+  // One replay of the book per draw: the layout and each part's own view read from it
+  const state = projectState();
+  const built = isBuildBook(getEventStream());
+  const layout = outlineLayout(state, { query, folded: isChapterFolded });
   // A literature book's outline is its paragraphs and sentences: no scenarios, stickies or add steps
-  if (screen.literature) { renderLiteratureOutline(container); return; }
+  if (layout.literature) { screenNow = { layout, rows: {} }; renderLiteratureOutline(container); return; }
+  const rows = {};
+  layout.chapters.forEach(ch => ch.rows.forEach(r => { rows[r.slice.id] = outlineSliceRow(state, r.slice, r); }));
+  screenNow = { layout, rows };
 
   const rowUi = row => ({
     selecting, selected: selected.has(row.sliceId), query,
     open: gwtOpen(row.sliceId), nice: allScenarios.has(row.sliceId), showFields,
     fields: openFields.has(row.sliceId), values: openValues.has(row.sliceId),
-    canAdd: !isReadOnly() || canAddScenariosHere(), verifying: !!screen.verify
+    canAdd: !isReadOnly() || canAddScenariosHere(), verifying: !!layout.verify
   });
-  const sections = screen.chapters.map(chapter => {
+  const sections = layout.chapters.map(chapter => {
+    const heading = outlineChapterHeading(state, chapter, { built, searching: layout.searching });
     const head = chapter.loose
-      ? (screen.hasChapters ? outlineChapterHead(chapter) : '')
-      : outlineChapterHead(chapter, { searching: screen.searching, bookmarked: isChapterBookmarked(chapter.id) });
-    const rows = chapter.folded ? ''
+      ? (layout.hasChapters ? outlineChapterHead(heading) : '')
+      : outlineChapterHead(heading, { searching: layout.searching, bookmarked: isChapterBookmarked(chapter.id) });
+    const body = chapter.folded ? ''
       : chapter.rows.length
-        ? chapter.rows.map(row => outlineRow(row, rowUi(row))).join('')
+        ? chapter.rows.map(r => outlineRow(rows[r.slice.id], rowUi(rows[r.slice.id]))).join('')
         : `<div class="ol-empty">No slices yet — add the first step below, or move some here</div>`;
-    const add = chapter.folded || selecting || screen.filtering ? '' : outlineAddButtons({ kinds: screen.addKinds, chapterId: chapter.id || '' });
-    return `<section class="ol-section">${head}${rows}${add}</section>`;
+    const add = chapter.folded || selecting || layout.filtering ? '' : outlineAddButtons(outlineAddKinds(state, { chapterId: chapter.id || '' }));
+    return `<section class="ol-section">${head}${body}${add}</section>`;
   }).join('');
 
-  const moveBar = selecting ? outlineMoveBar({ chapters: screen.chapterChoices, hasChapters: screen.hasChapters, selected: selected.size }) : '';
+  const moveBar = selecting ? outlineMoveBar({ ...outlineMoveTargets(state), selected: selected.size }) : '';
 
   // The search box is made once and kept, so typing never loses focus; the rest redraws
-  if (!container.querySelector('#olSearch')) container.innerHTML = `${outlineSearchBox({ ...screen.search, query })}<div id="olBody"></div>`;
+  if (!container.querySelector('#olSearch')) container.innerHTML = `${outlineSearchBox(outlineSearchField(state, { query }))}<div id="olBody"></div>`;
   container.querySelector('.ol-search-clear').hidden = !query;
   container.querySelector('#olBody').innerHTML = `
-    ${outlineToolbar({ ...screen.toolbar, showFields, selecting })}
-    ${verifyLine(screen.verify)}
-    ${roundsLine(screen.rounds)}
-    ${sections || (screen.searching ? `<div class="ol-empty">Nothing matches "${escapeHtml(query)}"</div>` : staged() ? `<div class="ol-empty">${emptyText()}</div>` : '')}
-    ${outlineNewChapterButton(screen)}
+    ${outlineToolbar({ ...outlineToolbarOptions(state, layout), showFields, selecting })}
+    ${verifyLine(layout.verify)}
+    ${roundsLine(layout.rounds)}
+    ${sections || (layout.searching ? `<div class="ol-empty">Nothing matches "${escapeHtml(query)}"</div>` : staged() ? `<div class="ol-empty">${emptyText()}</div>` : '')}
+    ${outlineNewChapterButton(outlineCanAddChapter(state, layout))}
     ${moveBar}
-    ${bottomBar(screen)}`;
+    ${bottomBar(state, layout)}`;
   pinOutline();
 }
 
 // Not checked out here: expanding, folding, fields and scenarios still open; a slice's row
 // opens its page, a scenario its slice's scenarios to read; anything that would change it does nothing
-const readOnlyReads = new Set(['chapter-menu', 'jump', 'open-slice', 'gwt', 'expand', 'collapse-all', 'comment', 'next-comment', 'verdict', 'verdict-save', 'nice', 'values-one', 'fields-one', 'fields', 'fold', 'search-clear', 'share-slice', 'add-scenario']);
+const readOnlyReads = new Set(['chapter-menu', 'jump', 'open-slice', 'gwt', 'expand', 'collapse-all', 'comment', 'next-comment', 'testers', 'progress-history', 'verdict', 'verdict-save', 'nice', 'values-one', 'fields-one', 'fields', 'fold', 'search-clear', 'share-slice', 'add-scenario']);
 function readOnlyTap(a, t) {
   if (readOnlyReads.has(a)) return false;
   if (a === 'edit') { hideAllSheets(); openSliceMenu(t.dataset.slice); }   // read-only: only sharing
@@ -253,6 +269,7 @@ function handleClick(e) {
   if (isReadOnly() && readOnlyTap(a, t)) return;
   if (a === 'up' || a === 'down') { stepSlice(id, a === 'up' ? -1 : 1); render(); }
   else if (a === 'jump') { hideAllSheets(); window.EventPad.showSliceOnBoard(id); }
+  else if (a === 'progress-history') openProgressHistory(id);
   else if (a === 'open-slice') { hideAllSheets(); showSlicePage(id); }
   else if (a === 'add-scenario') openScenariosSheet(id, { readOnly: isReadOnly() && !canAddScenariosHere() });
   else if (a === 'select') { selecting = !selecting; selected.clear(); renderOutline(); }
@@ -274,11 +291,15 @@ function handleClick(e) {
     // Collapse all: every chapter folded and every slice's scenarios shut; Expand all: the reverse
     collapsedAll = t.dataset.fold === 'close';
     toggled.clear();
-    setAllChaptersFolded(screenNow.chapterIds, collapsedAll);
+    setAllChaptersFolded(screenNow.layout.chapterIds, collapsedAll);
     try { localStorage.setItem(COLLAPSED_KEY, collapsedAll ? '1' : '0'); } catch (e) { /* just this time */ }
     renderOutline();
   }
   else if (a === 'comment') openThread(id, t.dataset.scenario || null);
+  else if (a === 'testers') {
+    const scn = Object.values(screenNow.rows).flatMap(r => r.scenarios).find(x => x.id === t.dataset.scenario);
+    if (scn?.testers) openBoardSheet(scenarioTestersSheet(scn.testers));
+  }
   else if (a === 'verdict') {
     if (t.dataset.verdict === 'fails') askWhatHappened(id, t.dataset.scenario);
     else if (saveVerdict(id, t.dataset.scenario, 'works')) render();
@@ -299,7 +320,7 @@ function handleClick(e) {
   }
   else if (a === 'edit-scenario') window.EventPad.editScenario(t.dataset.scenario);
   else if (a === 'must') {
-    const row = screenNow.chapters.flatMap(c => c.rows).find(r => r.scenarios.some(x => x.id === t.dataset.scenario));
+    const row = Object.values(screenNow.rows).find(r => r.scenarios.some(x => x.id === t.dataset.scenario));
     const scn = row?.scenarios.find(x => x.id === t.dataset.scenario);
     // Still marking: keep every scenario of the slice in view (so the next one can be starred too)
     if (scn) { setMustHave(scn.id, !scn.mustHave); allScenarios.add(row.sliceId); renderOutline(); }
@@ -327,17 +348,17 @@ function handleClick(e) {
 
 // Along the bottom, as on the board: Collapse all (every chapter and every slice's scenarios)
 // or Expand all, then the counts
-function bottomBar(screen) {
-  if (!screen.sliceCount) return `<div class="bd-stats ol-stats">${outlineBookTitle(screen.bar)}</div>`;
-  const anyOpen = !collapsedAll || screen.chapterIds.some(id => !isChapterFolded(id));
+function bottomBar(state, layout) {
+  const title = outlineBookName(state);
+  if (!layout.sliceCount) return `<div class="bd-stats ol-stats">${outlineBookTitle(title)}</div>`;
   const stat = (n, one, many) => `<span class="bd-stat">${n} ${n === 1 ? one : many}</span>`;
-  const { slices, chapters, scenarios } = screen.totals;
+  const { slices, chapters, scenarios } = layout.totals;
   return `<div class="bd-stats ol-stats">
-    ${outlineBookTitle(screen.bar)}
-    ${outlineFoldAll({ ...screen.bar, anyOpen })}
+    ${outlineBookTitle(title)}
+    ${outlineFoldAll(outlineFoldAllState(state, { collapsedAll, folded: isChapterFolded }))}
     ${usageButton(getEventStream())}
-    ${outlineBarComments(screen.bar)}
-    ${statusChips(screen.stageSlices)}
+    ${outlineBarComments(outlineOpenCommentsCount(state))}
+    ${statusChips(layout.stageSlices)}
     ${stat(slices, 'slice', 'slices')}${chapters ? stat(chapters, 'chapter', 'chapters') : ''}${stat(scenarios, 'scenario', 'scenarios')}
   </div>`;
 }
@@ -358,7 +379,7 @@ function askWhatHappened(sliceId, scenarioId) {
 }
 
 function saveVerdict(sliceId, scenarioId, verdict, note) {
-  const why = recordVerdict({ sliceId, scenarioId, verdict, note }, screenNow?.verify?.edition ?? null);
+  const why = recordVerdict({ sliceId, scenarioId, verdict, note }, screenNow?.layout.verify?.edition ?? null);
   if (why === 'Pick a nickname first') { openThread(sliceId, scenarioId); showToast('Pick a nickname first, then try again'); return false; }
   if (why) { showToast(why); return false; }
   return true;
@@ -366,7 +387,7 @@ function saveVerdict(sliceId, scenarioId, verdict, note) {
 
 // A comment picked in the drawer: unfold its chapter, open its slice, scroll to it and flash it
 function revealComment(c) {
-  const chapterId = screenNow.chapters.find(ch => ch.rows.some(r => r.sliceId === c.sliceId))?.id;
+  const chapterId = screenNow.layout.chapters.find(ch => ch.slices.some(sl => sl.id === c.sliceId))?.id;
   if (chapterId && isChapterFolded(chapterId)) toggleChapterFolded(chapterId);
   if (!gwtOpen(c.sliceId)) { toggled.has(c.sliceId) ? toggled.delete(c.sliceId) : toggled.add(c.sliceId); }
   renderOutline();

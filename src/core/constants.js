@@ -61,6 +61,7 @@ export const EventTypes = {
   PlanCheckedOutForBuild: 'PlanCheckedOutForBuild', // a builder took it { app, builder, fromCommit }
   BuildAttached: 'BuildAttached',             // the deploy's build edition, attached to the plan being built { app, edition, commit, build, scenarios, repo, workflow }
   PlanCheckedInWithBuild: 'PlanCheckedInWithBuild', // back with its build: built slices Done { edition, commit, done, missing }
+  SliceProgressReported: 'SliceProgressReported', // a builder says where a slice is: started, red, green, pr or stuck { sliceId, step, note, pr: { number, url }, tests: { passing, total }, by, at } (features/buildProgress)
   SpecsGenerated: 'SpecsGenerated',          // refined slices written as pending specs in the app's repo { app, repo, language, slices: [sliceId], files: [{ path, hash }] }
   SpecsRegenerated: 'SpecsRegenerated',       // the same, again after the slices changed: untouched files rewritten, hand-edited ones proposed
   SliceMarkedReady: 'SliceMarkedReady',       // older models: read as SliceMarkedRefined
@@ -71,6 +72,7 @@ export const EventTypes = {
   BookReplacedFromImport: 'BookReplacedFromImport', // an import of the same book took its place; the snapshot before it holds the import, the history the old content { fileName, from, matchedBy }
   UsageImported: 'UsageImported',             // a build book gets an app's usage for a window (features/usage); the book stays published { app, at, since, days, total, counts, unmatched }
   BuildFollowed:'BuildFollowed',             // a plan follows an app's build book: its newest edition marks Done { app, followedBy }
+  PlanRetired: 'PlanRetired',                 // a plan whose every slice is built is put away: read only, on the Retired shelf { modelId, app, edition, retiredAt }
   BuildUnfollowed: 'BuildUnfollowed',         // it stops; Done stays { app }
   CompareSettled: 'CompareSettled',           // a compare confirmed or rejected: the draft goes up { draft }
   SliceAdopted: 'SliceAdopted',               // compare: the built slice took the planned one's place { sliceId, commit }

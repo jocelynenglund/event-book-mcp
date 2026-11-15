@@ -11,5 +11,5 @@
     "node": ">=22"
   },
   "homepage": "https://eventbook.itsybit.se/",
-  "builtFrom": "eventpad@f43be1f"
+  "builtFrom": "eventpad@c000217"
 }

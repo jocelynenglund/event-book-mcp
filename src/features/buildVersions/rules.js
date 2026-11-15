@@ -76,8 +76,16 @@ const screenLines = s => (s?.description || '').split('\n').filter(l => /^(Used 
 export function modelChanges(from, to) {
   const out = { slicesAdded: [], slicesRemoved: [], scenariosAdded: [], scenariosRemoved: [], fieldsAdded: [], fieldsRemoved: [], codeAdded: [], codeRemoved: [], screensChanged: [] };
   const names = (id, st) => getScenariosForSlice(id, st).map(x => x.name);
-  compareModels(from, to).rows.forEach(r => {
+  // Each slice counts once, by its key (as Compare matches): a name in several chapters is one slice, so a
+  // build compared with itself is unchanged
+  const rows = compareModels(from, to).rows;
+  const seen = new Set(rows.filter(r => r.plan).map(r => r.key)), counted = new Set();
+  rows.forEach(r => {
     const p = r.plan, b = r.built;
+    // a built slice whose name the plan side already has (or an earlier built one) is the same slice
+    if (!p && seen.has(r.key)) return;
+    if (counted.has(r.key)) return;
+    counted.add(r.key);
     if (p && b && r.status !== 'maybe') {
       r.scenarios.filter(x => !x.tested).forEach(x => out.scenariosRemoved.push(x.name));
       r.extraTests.forEach(n => out.scenariosAdded.push(n));

@@ -4,7 +4,7 @@
 // ===========================================
 
 import { sliceTitle } from '../../core/projections.js';
-import { sliceTypeLabels } from '../board/screen.js';
+import { sliceTypeLabels } from '../board/boardSliceHeaderFields.read.js';
 
 // -> null when the slice is gone, else { sliceId, typeLabel, share: { title, desc } }
 export function readOnlySliceMenu(book, sliceId) {

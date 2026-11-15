@@ -63,6 +63,14 @@ export function refinedState(state, sliceId) {
   return s ? { sliceId, refined: !!s.refined } : null;
 }
 
+// A scenario in words that can be compared (name, Given events, When command, Then): what a verdict is about
+export function scenarioShape(scn, state) {
+  const name = id => state.elements[id]?.name || '';
+  const t = scn.then;
+  return JSON.stringify([scn.name, (scn.given || []).map(g => name(g.elementId)).filter(Boolean), scn.when?.commandId ? name(scn.when.commandId) : '',
+    t?.type === 'event' ? name(t.eventId) : t?.type === 'rejection' ? 'rejected' : t?.type === 'readModel' ? name(t.readModelId) : '']);
+}
+
 export function projectState(eventStream = getEventStream()) {
   
   const state = {
@@ -82,8 +90,10 @@ export function projectState(eventStream = getEventStream()) {
     modelSource: null, // built from code: { repo, commit, createdAt, build } (a test export)
     sliceDecisions: [], // compare: { sliceId, otherShelf, otherSliceName, same } (possible renames answered)
     edition: null,     // { published, edition, draft, commit, lastBuild } (features/editions/rules.js)
+    retired: null,     // { app, edition, retiredAt }: the plan was built and put away (features/retire)
     follow: null,      // { app, followedBy }: the app whose build book this plan follows (features/buildVersions)
     specs: {},         // sliceId → { app, at }: its refined scenarios written as pending specs (features/specs)
+    progress: {},      // sliceId → { step, note, pr, tests, by, at, history: [{ step, note, pr, tests, by, at }] }: a builder's reports on a slice, newest last (features/buildProgress)
     press: null,       // { stage: press | building | built, app, slices, sentBy, builder, fromCommit, build, back } (features/press)
     structure: null,   // { approved, by, at, changed }: round one, the chapters and slices approved (features/article)
     bookKind: null,    // 'fact' | 'literature' as chosen when the book was made (features/literature); kind below is what it reads as
@@ -96,7 +106,8 @@ export function projectState(eventStream = getEventStream()) {
     voting: { closed: false, until: null },   // open unless she closed it (or its until has passed)
     paragraphs: {},    // paragraphId → { id, sliceId, text, by, at }: an article point's text (features/article)
     comments: {},      // id -> { id, sliceId, scenarioId, part, text, nickname, deviceId, at, resolved, resolvedBy, deleted }
-    verdicts: {},      // edition -> scenarioId -> { verdict: works | fails, note, testedBy, at, sliceId } (the latest counts)
+    verdicts: {},      // edition -> scenarioId -> tester (nickname) -> { verdict: works | fails, note, testedBy, at, sliceId } (each tester's latest counts)
+    verdictShapes: {}, // edition -> scenarioId -> the scenario as it was when that edition was published (so a verdict can carry over while it's unchanged)
     pendingSlice: null
   };
 
@@ -261,9 +272,13 @@ export function projectState(eventStream = getEventStream()) {
 
       case EventTypes.ScenarioTested: {
         const d = event.data;
-        (state.verdicts[d.edition ?? 0] ||= {})[d.scenarioId] = { verdict: d.verdict, note: d.note || null, testedBy: d.testedBy, at: d.at || event.timestamp, sliceId: d.sliceId };
+        ((state.verdicts[d.edition ?? 0] ||= {})[d.scenarioId] ||= {})[d.testedBy || ''] = { verdict: d.verdict, note: d.note || null, testedBy: d.testedBy, at: d.at || event.timestamp, sliceId: d.sliceId };
         break;
       }
+
+      case EventTypes.EditionPublished:
+        state.verdictShapes[event.data.edition ?? 0] = Object.fromEntries(Object.values(state.scenarios).map(s => [s.id, scenarioShape(s, state)]));
+        break;
 
       case EventTypes.CommentResolved:
         if (state.comments[event.data.commentId]) Object.assign(state.comments[event.data.commentId], { resolved: true, resolvedBy: event.data.resolvedBy || null });
@@ -443,7 +458,7 @@ export function projectState(eventStream = getEventStream()) {
 
       // Done: confirmed against a model built from the tests, at its commit
       case EventTypes.SliceMarkedBuilt:
-        if (state.slices[event.data.sliceId]) Object.assign(state.slices[event.data.sliceId], { built: true, builtCommit: event.data.commit || null });
+        if (state.slices[event.data.sliceId]) Object.assign(state.slices[event.data.sliceId], { built: true, builtCommit: event.data.commit || null, builtEdition: event.data.edition ?? null });
         break;
 
       // Compare: a possible rename answered, against the other shelf
@@ -458,6 +473,9 @@ export function projectState(eventStream = getEventStream()) {
         break;
       case EventTypes.BuildUnfollowed:
         state.follow = null;
+        break;
+      case EventTypes.PlanRetired:
+        state.retired = { app: event.data.app || null, edition: event.data.edition ?? null, retiredAt: event.data.retiredAt || event.timestamp || null };
         break;
 
       case EventTypes.StructureApproved:
@@ -562,13 +580,21 @@ export function projectState(eventStream = getEventStream()) {
         if (state.press) Object.assign(state.press, { stage: 'built', back: { ...event.data } });
         break;
 
+      case EventTypes.SliceProgressReported: {
+        const d = event.data;
+        const entry = { step: d.step, note: d.note || null, pr: d.pr || null, tests: d.tests || null, by: d.by || null, at: d.at || event.timestamp || null };
+        const was = state.progress[d.sliceId];
+        state.progress[d.sliceId] = { ...entry, history: [...(was?.history || []), entry] };
+        break;
+      }
+
       case EventTypes.SpecsGenerated:
       case EventTypes.SpecsRegenerated:
         (event.data.slices || []).forEach(id => { (state.specs ||= {})[id] = { app: event.data.app || null, at: event.timestamp || null }; });
         break;
 
       case EventTypes.SliceBuiltCleared:
-        if (state.slices[event.data.sliceId]) Object.assign(state.slices[event.data.sliceId], { built: false, builtCommit: null });
+        if (state.slices[event.data.sliceId]) Object.assign(state.slices[event.data.sliceId], { built: false, builtCommit: null, builtEdition: null });
         break;
 
       case EventTypes.SliceCompleted:

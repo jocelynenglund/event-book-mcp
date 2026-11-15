@@ -10,7 +10,7 @@ import { externalAttr, byName } from '../../../core/constants.js';
 import { isLiterature } from '../../literature/rules.js';
 import { isAutomated, freeViewSlices } from '../../automate/command.js';
 import { isTrigger, readsModel } from '../command.js';
-import { sliceTypeLabels } from '../screen.js';
+import { sliceTypeLabels } from '../boardSliceHeaderFields.read.js';
 import { searchKey } from './shared.js';
 
 const elementsOf = (book, type) => Object.values(book.elements).filter(e => e.type === type).sort(byName);

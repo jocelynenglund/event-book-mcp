@@ -33,6 +33,7 @@ import { openThread, openCommentsList } from '../comments/sheet.js';
 import { isLiterature } from '../literature/rules.js';
 import { revealInBook } from '../literature/view.js';
 import { canAddScenariosHere } from '../review/client.js';
+import { openProgressHistory } from '../buildProgress/sheet.js';
 
 // ---------- Wiring ----------
 
@@ -74,6 +75,7 @@ function handleBoardClick(e) {
   else if (action === 'element') openElementMenu(el, slice);
   else if (action === 'slice-menu') openSliceMenu(slice);
   else if (action === 'slice-page') showSlicePage(slice);
+  else if (action === 'progress-history') openProgressHistory(slice);
   else if (action === 'slice-info') openSliceInfo(slice);
   else if (action === 'toggle-gwt') toggleGwtLane();
   else if (action === 'comment') openThread(slice, t.dataset.scenario || null);
@@ -91,7 +93,7 @@ function handleBoardClick(e) {
 
 // Not checked out here: a tap reads (a sticky's sheet, the slice page, the scenarios);
 // what would change the model does nothing. Folding, flows and ⓘ are left to the board.
-const readOnlyReads = new Set(['chapter-menu', 'fold', 'show-flow', 'toggle-gwt', 'slice-info', 'slice-page', 'comment', 'next-comment']);
+const readOnlyReads = new Set(['chapter-menu', 'fold', 'show-flow', 'toggle-gwt', 'slice-info', 'slice-page', 'progress-history', 'comment', 'next-comment']);
 function readOnlyTap(action, t) {
   const { slice, el } = t.dataset;
   if (readOnlyReads.has(action)) return false;

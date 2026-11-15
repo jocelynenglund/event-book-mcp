@@ -73,11 +73,15 @@ const { commentEventTypes } = await import(new URL('core/constants.js', src));
 const { snapshotEvents } = await import(new URL('features/snapshot/command.js', src));
 const gen = await import(new URL('features/specs/generate.js', src));
 const ps = await import(new URL('features/press/command.js', src));
+const bp = await import(new URL('features/buildProgress/command.js', src));
+const { sliceProgress } = await import(new URL('features/buildProgress/sliceProgress.read.js', src));
 const ar = await import(new URL('features/article/command.js', src));
 const lit = await import(new URL('features/literature/command.js', src));
 const litr = await import(new URL('features/literature/rules.js', src));
 const sug = await import(new URL('features/literature/suggestions.js', src));
 const auto = await import(new URL('features/automate/command.js', src));
+// Steps and scenarios are built by the same code ☰ → Import uses for an Event Book plan file
+const { addStep, addScenario, checkScenario, chapterId: chapterIdIn, checkPlan, buildPlan } = await import(new URL('features/planFile/build.js', src));
 es.loadEventStream();
 
 const lib = await import('./library.mjs');
@@ -104,12 +108,7 @@ function findSlice(ref, st = state()) {
   return hit.slice;
 }
 
-function chapterId(name, st = state()) {
-  if (!name) return null;
-  const hit = Object.values(st.chapters).find(ch => ch.name.toLowerCase() === name.trim().toLowerCase());
-  return hit ? hit.id : c.createChapter(name.trim());
-}
-
+const chapterId = name => chapterIdIn(name);
 const props = el => (el.properties?.length ? ` (${el.properties.map(p => p.name + (p.type && p.type !== 'string' ? ':' + p.type : '')).join(', ')})` : '');
 
 // A literature book's outline: paragraphs in order, each with its sentences numbered (where scenarios would be)
@@ -168,7 +167,7 @@ function outline({ chapter, scenarios = false } = {}) {
       ];
       const scns = [...pr.getScenariosForSlice(s.id, st)].sort((a, b) => !!b.mustHave - !!a.mustHave);
       const must = scns.filter(x => x.mustHave).length;
-      lines.push(`${refs.get(s.id)} [${kind}] ${pr.sliceTitle(s, st)}: ${parts.join(' → ') || '(empty)'}${scns.length ? ` · ${scns.length} scenario${scns.length > 1 ? 's' : ''}${must ? ` (${must} must)` : ''}` : ''}${!s.refined ? '' : s.built ? ' · ☑ done' : ` · ☐ ready${st.specs?.[s.id] ? ' · 🧪 specs written' : ''}`}`);
+      lines.push(`${refs.get(s.id)} [${kind}] ${pr.sliceTitle(s, st)}: ${parts.join(' → ') || '(empty)'}${scns.length ? ` · ${scns.length} scenario${scns.length > 1 ? 's' : ''}${must ? ` (${must} must)` : ''}` : ''}${!s.refined ? '' : s.built ? ' · ☑ done' : ` · ☐ ready${st.specs?.[s.id] ? ' · 🧪 specs written' : ''}`}${progressText(st, s.id)}`);
       if (s.description) lines.push(`   ${s.description}`);
       if (s.waived) lines.push(`   no scenario (waived)${s.waived.reason ? `: ${s.waived.reason}` : ''}`);
       ar.paragraphsOf(st, s.id).forEach(p => lines.push(`   ¶ ${p.text}`));
@@ -181,6 +180,9 @@ function outline({ chapter, scenarios = false } = {}) {
   });
   return lines.join('\n');
 }
+
+// Where a builder says the slice has got to (nothing once it is Done)
+const progressText = (st, sliceId) => { const v = sliceProgress(st, sliceId); return v ? ` · ${v.icon} ${v.label}${v.ago ? ` (${v.ago})` : ''}` : ''; };
 
 const vals = v => (v && Object.keys(v).length ? ' ' + JSON.stringify(v) : '');
 // The threads an agent should read: the open ones, and resolved ones a person answered (she often
@@ -205,119 +207,11 @@ function gwtText(x, st) {
 // A literature book is paragraphs and sentences: no stickies, steps, scenarios or specs
 const notLiterature = what => { if (litr.isLiterature(state())) throw new Error(`A literature book has paragraphs and their sentences, not ${what}: use import_draft, outline, add_comment`); };
 
-// The same sticky by name is reused (as the outline does)
-const as = (type, name) => {
-  const same = ol.findByName(type, name, state());
-  return same ? { elementId: same.id } : { name: name.trim() };
-};
-const list = v => (Array.isArray(v) ? v : v ? [v] : []);
-
-function addStep(step, chId) {
-  const kind = String(step.kind || '').toLowerCase();
-  let sliceId;
-  if (kind === 'do') {
-    if (!step.command) throw new Error('A Do step needs a command');
-    sliceId = c.createSlice('SC', step.name || null, { chapterId: chId });
-    if (step.screen) c.addToSlice(sliceId, 'screen', as('screen', step.screen));
-    c.addToSlice(sliceId, 'command', as('command', step.command));
-    list(step.events || step.event).forEach(e => c.addToSlice(sliceId, 'event', as('event', e)));
-  } else if (kind === 'see') {
-    if (!step.readModel) throw new Error('A See step needs a readModel');
-    sliceId = c.createSlice('SV', step.name || null, { chapterId: chId });
-    list(step.events || step.event).forEach(e => c.addToSlice(sliceId, 'event', as('event', e)));
-    c.addToSlice(sliceId, 'readModel', as('readModel', step.readModel));
-    if (step.screen) c.addToSlice(sliceId, 'screen', as('screen', step.screen));
-  } else if (kind === 'auto') {
-    sliceId = addAutomation(step, chId);
-  } else throw new Error(`Step kind "${step.kind}": use do, see or auto`);
-  if (step.fields) ol.addOutlineProperties(sliceId, list(step.fields).join(', '));
-  if (step.description) c.describeSlice(sliceId, step.description);
-  return sliceId;
-}
-
-// When [event] using [read model] ⚙ [processor] does [command] → [result] (the outline's Auto)
-function addAutomation(step, chId) {
-  if (!step.processor || !step.command) throw new Error('An Auto step needs a processor and a command');
-  const st = state();
-  let triggerId = step.when ? ol.findByName('event', step.when, st)?.id : null;
-  if (step.when && !triggerId) {
-    triggerId = c.newId('el');
-    es.appendEvent(es.EventTypes.ElementCreated, { elementId: triggerId, elementType: 'event', name: step.when.trim() });
-  }
-  if (triggerId && step.external) es.appendEvent(es.EventTypes.ElementExternalSet, { elementId: triggerId, external: true });
-  const known = step.using ? ol.findByName('readModel', step.using, st) : null;
-  let sliceId, viewId = null;
-  if (step.using && !known) {
-    viewId = c.createAutomation(step.name || null, chId);
-    sliceId = state().slices[viewId].pairWith;
-  } else sliceId = c.createSlice('SC', step.name || null, { actor: 'processor', chapterId: chId });
-  const procId = c.addToSlice(viewId || sliceId, 'processor', as('processor', step.processor));
-  if (viewId) {
-    const rmId = c.addToSlice(viewId, 'readModel', { name: step.using.trim() });
-    if (triggerId) c.addToSlice(viewId, 'event', { elementId: triggerId });
-    if (step.todo) c.setTodo(rmId, true);
-  } else if (known) {
-    c.linkReads(procId, known.id);
-    if (step.todo && !known.todo) c.setTodo(known.id, true);
-  }
-  c.addToSlice(sliceId, 'command', as('command', step.command));
-  list(step.events || step.result).forEach(e => c.addToSlice(sliceId, 'event', as('event', e)));
-  if (triggerId) c.setTrigger(triggerId, procId, true);
-  return sliceId;
-}
-
-// An event / read model by name: the model's, or a new sticky (not on the board) when it has none
-function elementByName(type, name) {
-  const hit = ol.findByName(type, name, state());
-  if (hit) return hit.id;
-  const id = c.newId('el');
-  es.appendEvent(es.EventTypes.ElementCreated, { elementId: id, elementType: type, name: name.trim() });
-  return id;
-}
-
 // A slice's place in the order: right after another one
 function placeAfter(id, afterId) {
   const order = state().sliceOrder, from = order.indexOf(id), at = order.indexOf(afterId);
   if (from < 0 || at < 0 || from === at + 1) return;
   es.appendEvent(es.EventTypes.SliceMoved, { sliceId: id, toIndex: from < at ? at : at + 1 });
-}
-
-// A scenario in another shape would be dropped without a word: refuse it instead
-const scenarioKeys = ['name', 'given', 'when', 'then', 'mustHave'];
-function checkScenario(x) {
-  const odd = Object.keys(x || {}).filter(k => !scenarioKeys.includes(k));
-  if (odd.length) throw new Error(`A scenario takes ${scenarioKeys.join(', ')}; not ${odd.join(', ')}`);
-  if (!x.name) throw new Error('Every scenario needs a name');
-  if (x.given !== undefined && !Array.isArray(x.given)) throw new Error(`${x.name}: given is a list of {event, values}`);
-  (x.given || []).forEach(g => { if (!g?.event) throw new Error(`${x.name}: each given needs an event`); });
-  if (x.when !== undefined) {
-    if (typeof x.when !== 'object' || Array.isArray(x.when)) throw new Error(`${x.name}: when is {values, command?}`);
-    const bad = Object.keys(x.when).filter(k => !['values', 'command'].includes(k));
-    if (bad.length) throw new Error(`${x.name}: when is {values, command?}; put ${bad.join(', ')} inside values`);
-  }
-  if (x.then !== undefined && (typeof x.then !== 'object' || Array.isArray(x.then))) throw new Error(`${x.name}: then is one {event, values}, {rejected} or {readModel?, values | rows}`);
-  const tk = Object.keys(x.then || {}).filter(k => !['event', 'values', 'rejected', 'readModel', 'rows'].includes(k));
-  if (tk.length) throw new Error(`${x.name}: then takes event, values, rejected, readModel or rows; not ${tk.join(', ')}`);
-}
-
-function addScenario(slice, x) {
-  const st = state();
-  const own = type => slice.elements.map(id => st.elements[id]).filter(e => e?.type === type);
-  const id = sc.addScenario(slice.id, x.name, slice.type === 'SV' ? 'SV' : 'SC');
-  if (x.mustHave) sc.setMustHave(id, true);
-  if (x.given?.length) sc.setGiven(id, x.given.map(g => ({ elementId: elementByName('event', g.event), values: g.values || {} })));
-  if (slice.type !== 'SV') {
-    const cmd = x.when?.command ? ol.findByName('command', x.when.command, st) : own('command')[0];
-    if (cmd) sc.setWhen(id, cmd.id, x.when?.values || {});
-  }
-  const t = x.then || {};
-  if (t.rejected) sc.setThenRejection(id, t.rejected);
-  else if (t.event) sc.setThenEvent(id, elementByName('event', t.event), t.values || {});
-  else if (t.readModel || slice.type === 'SV') {
-    const rm = t.readModel ? elementByName('readModel', t.readModel) : own('readModel')[0]?.id;
-    if (rm) sc.setThenReadModel(id, rm, t.values || {}, t.rows || null);
-  }
-  return id;
 }
 
 // ---------- Handing it over ----------
@@ -539,13 +433,14 @@ function importFile({ path: p }) {
   const kind = kindOf(json);
   const file = path.basename(real);
   if (kind === 'unknown') throw new Error('not an Event Book model or test export');
-  if (kind === 'events') es.createModel(json);
+  if (kind === 'eventbook-plan') { const why = checkPlan(json); if (why) throw new Error(why); buildPlan(json); }
+  else if (kind === 'events') es.createModel(json);
   else if (kind === 'export' || kind === 'scenarios') fromExport.modelFromTests([{ name: file, json, kind }], { es, c, sc });
   else fromExport.buildModel(fromExport.specFromPlan(json, json.name || json.project || 'Plan'), { es, c, sc });
   const st = state();
   const slices = Object.keys(st.slices).length, scns = Object.keys(st.scenarios).length;
   const chapters = st.chapterOrder.map(id => st.chapters[id]?.name).filter(Boolean);
-  const what = kind === 'events' ? 'an Event Book model' : kind === 'plan' ? 'a plan' : 'a test export';
+  const what = kind === 'events' ? 'an Event Book model' : kind === 'plan' || kind === 'eventbook-plan' ? 'a plan' : 'a test export';
   return `Imported ${what} as a new model: ${st.modelName || 'Untitled model'} (id=${es.getCurrentModelId()}), ${count(chapters.length, 'chapter')} · ${count(slices, 'slice')} · ${count(scns, 'scenario')}${st.modelSource?.commit ? ` · built at ${String(st.modelSource.commit).slice(0, 7)}` : ''}.${chapters.length ? `\nChapters: ${chapters.join('; ')}` : ''}\nkeep_model puts it in the library; outline shows it.`;
 }
 
@@ -682,7 +577,7 @@ async function startBuildingTool({ plan, as, from_commit }) {
       return `Building ${st.modelName} for ${st.press.app} as ${builder}: checked out to you, nobody else edits it meanwhile.\n`
         + `To build (${count(titles.length, 'refined slice')}): ${titles.join(', ')}\n`
         + (article ? 'An article: put the post together from the paragraphs below, in this order (join and polish, don\'t rewrite what the person read), answer the open comments in the text, never link a source marked private. Sending it to press was the author\'s go to publish: put it together and publish it (no further approval needed), then link it back.' + article
-          : 'generate_specs {repo} writes them as pending specs. When the deploy has published the build, finish_building attaches it and checks the plan back in.');
+          : 'generate_specs {repo} writes them as pending specs. As you build, report_progress {slice, step: started | red | green | pr | stuck} for each slice: the person sees it live. When the deploy has published the build, finish_building attaches it and checks the plan back in.');
     });
     return text;
   } catch (e) { await closeModel().catch(() => {}); throw e; }
@@ -716,6 +611,22 @@ async function finishBuildingTool({ as }) {
       + `${s.slicesBuiltButNotPlanned.length ? `; built but not planned: ${s.slicesBuiltButNotPlanned.join(', ')}` : ''}.`;
   });
   return `${text}\n${await closeModel()}`;
+}
+
+// report_progress: the builder says where a slice has got to; each refusal is one line
+function reportProgressTool({ slice, step, note, pr: prIn, tests, as }) {
+  const st = state();
+  let found = null, missing = null;
+  try { found = findSlice(slice, st); } catch (e) { missing = e.message; }
+  // A number, a url or { number, url } for the pull request
+  const pull = prIn == null ? null : typeof prIn === 'object' ? prIn
+    : /^\d+$/.test(String(prIn).replace(/^#/, '')) ? { number: Number(String(prIn).replace(/^#/, '')) }
+    : { url: String(prIn), ...(String(prIn).match(/\/pull\/(\d+)/) ? { number: Number(String(prIn).match(/\/pull\/(\d+)/)[1]) } : {}) };
+  const why = bp.reportProgress({ sliceId: found ? found.id : null, step, note, pr: pull, tests, by: lib.agentName(as, process.env), state: st });
+  if (why === 'No such slice' && missing) throw new Error(missing);
+  if (why) throw new Error(why);
+  const v = sliceProgress(state(), found.id);
+  return `${pr.sliceTitle(found, state())}: ${v ? `${v.icon} ${v.label}` : step}.`;
 }
 
 // ---------- Board to failing specs ----------
@@ -1176,13 +1087,16 @@ const tools = [
   { name: 'press_queue', description: 'What is at the press: the plans in the library the person has sent to press, waiting for a builder (start_building takes one), and the ones being built and by whom. Reads only.',
     inputSchema: { type: 'object', properties: {} },
     run: pressQueueTool },
-  { name: 'start_building', description: 'Take a plan the person has sent to press (their final go), to build it: it is checked out to you (as ItsyBOT · <as>) so nobody else edits it meanwhile, and its refined slices are listed. Refused when it is not at the press, already being built, or checked out elsewhere. Then generate_specs, build, deploy, finish_building.',
+  { name: 'start_building', description: 'Take a plan the person has sent to press (their final go), to build it: it is checked out to you (as ItsyBOT · <as>) so nobody else edits it meanwhile, and its refined slices are listed. Refused when it is not at the press, already being built, or checked out elsewhere. Then generate_specs, build, deploy, finish_building. Report each slice\'s step as you go with report_progress (started, red, green, pr, stuck): the person sees it live on the slice and on the plan\'s spine.',
     inputSchema: { type: 'object', properties: { plan: S, as: S, from_commit: S }, required: ['plan'] },
     run: startBuildingTool },
-  { name: 'finish_building', description: 'The open plan you are building, back with its build: the newest edition of the app\'s build book (published by the deploy) is attached, the slices it sent to press that the build has go Done, and it is checked back in with a build summary for the person. Post the build first (systemctl --user start eventpad-models.service): a build made before building started, or at the commit you started from, is refused. On a plan already checked in (open_model {edit:true} first), it attaches a newer build of its app if the library has one.',
+  { name: 'finish_building', description: 'The open plan you are building, back with its build: the newest edition of the app\'s build book (published by the deploy) is attached, the slices it sent to press that the build has go Done, and it is checked back in with a build summary for the person. Slices not Done yet keep their last reported step (report_progress) until the build has them. Post the build first (systemctl --user start eventpad-models.service): a build made before building started, or at the commit you started from, is refused. On a plan already checked in (open_model {edit:true} first), it attaches a newer build of its app if the library has one.',
     inputSchema: { type: 'object', properties: { as: S } },
     run: finishBuildingTool },
-  { name: 'generate_specs', edits: true, description: 'Board to failing specs: write the open board\'s refined slices (not built yet) into an app\'s repo as Given/When/Then spec files, one per slice (chapter = feature, When = the exact command name, Then = the planned outcome), each beside a stub that throws NotBuiltYet. While a stub throws, its scenarios are pending ("not built yet"): CI and deploys aren\'t blocked, GWT_RUN_PENDING=1 runs them red. Spec files are generated-only: run it again after refined slices change and they are rewritten. A stub is written once: the builder writes the real slice there, and it is never overwritten. Recorded on the board. language: js (itsybit-gwt), found from the repo when left out; dir: where the specs go (default tests/gwt).',
+  { name: 'report_progress', edits: true, description: 'While you build a plan you took with start_building: say where a slice (S-number or title) has got to, so the person sees it live on the slice and on the plan\'s spine, before any build book exists. step: started (you begin it), red (its spec fails for the right reason), green (its scenarios pass; tests {passing, total}), pr (a pull request is open; pr: its number, url or {number, url}) or stuck (say what is in the way in note). Report each slice at each step, as you go. Refused, each in one line: the plan is not checked out to you (start_building first); no such slice; stuck without a note; pr without a number or url; tests passing more than total; a step back after green (or pr): only stuck, or started (a new round), may. A Done slice shows no progress (Done wins). Signed with your name (as: the name of this session, as in start_building).',
+    inputSchema: { type: 'object', properties: { slice: S, step: { type: 'string', enum: ['started', 'red', 'green', 'pr', 'stuck'] }, note: S, pr: { type: ['number', 'string', 'object'] }, tests: { type: 'object', properties: { passing: { type: 'number' }, total: { type: 'number' } } }, as: S }, required: ['slice', 'step'] },
+    run: reportProgressTool },
+  { name: 'generate_specs', edits: true, description: 'Board to failing specs: write the open board\'s refined slices (not built yet) into an app\'s repo as Given/When/Then spec files, one per slice (chapter = feature, When = the exact command name, Then = the planned outcome), each beside a stub that throws NotBuiltYet. While a stub throws, its scenarios are pending ("not built yet"): CI and deploys aren\'t blocked, GWT_RUN_PENDING=1 runs them red. Spec files are generated-only: run it again after refined slices change and they are rewritten. A stub is written once: the builder writes the real slice there, and it is never overwritten. Recorded on the board. Then report each slice\'s step as you go with report_progress (started when you begin it, red once its spec fails for the right reason). language: js (itsybit-gwt), found from the repo when left out; dir: where the specs go (default tests/gwt).',
     inputSchema: { type: 'object', properties: { repo: S, app: S, language: S, dir: S }, required: ['repo'] },
     run: a => { notLiterature('specs'); return generateSpecsTool(a); } },
   { name: 'import_file', description: 'Bring a file in as a new local model and open it: a combined test export (-built.json, latest-built.json: built as ☰ → Import does, a snapshot with repo, commit and build), raw .test.json scenarios, an Event Book export with or without history (-plan.json, a board export), or a plan (docs/slices.json). Only files under the home folder. keep_model then puts it in the library.',

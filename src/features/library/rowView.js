@@ -5,10 +5,11 @@
 // on its own. Nothing here reads the books. A root carries data-component and data-key.
 // ===========================================
 
+import { planBuildProgressLine } from '../buildProgress/progress.parts.js';
 import { fitSpine, bookSpecOf } from './books.js';
 import { sectionHead, sectionBody, isFolded } from './folds.js';
 import { spineMeta } from './screen.js';
-import { noteTilt } from '../board/rowView.js';
+import { noteTilt } from '../board/board.parts.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -103,6 +104,7 @@ export function librarySpine(book, ui = {}) {
       ${sheetsOf(book)}
       <span class="ed-title">${label}</span>
       <span class="ed-m" aria-hidden="true">${spineMeta(book)}</span>
+      ${planBuildProgressLine(book.progress)}
       ${footSpan}
     </button>
     ${detailsButton(book)}
@@ -115,6 +117,7 @@ export function librarySpine(book, ui = {}) {
       style="--cloth:${book.cloth}" aria-label="${label}, ${editionLabel}, opened recently">
       ${sheetsOf(book)}
       <span class="ed-title">${label}</span>
+      ${planBuildProgressLine(book.progress)}
       ${footSpan}
     </button>
     ${detailsButton(book)}
@@ -129,6 +132,7 @@ export function librarySpine(book, ui = {}) {
       ${sheetsOf(book)}
       <span class="ed-title" style="font-size:${fit.size}px">${label}</span>
       <span class="ed-m" aria-hidden="true">${spineMeta(book)}</span>
+      ${planBuildProgressLine(book.progress)}
       ${footSpan}
     </button>
     ${detailsButton(book)}
@@ -151,7 +155,7 @@ export function librarySection(section, ui = {}, body = null) {
   const head = sectionHead(section.key, section.title, section.countText ?? String(section.count), section.count, folded, attrs);
   const note = !section.count && section.note ? `<p class="lb-section-note">${section.note}</p>` : '';
   return `${head}
-    ${note}${section.count ? sectionBody(section.key, section.count, body ?? libraryShelf(section, ui), 'book', folded, attrs) : ''}`;
+    ${note}${section.count ? sectionBody(section.key, section.count, body ?? libraryShelf(section, ui), section.noun || 'book', folded, attrs) : ''}`;
 }
 
 // A saved chapter on the reference shelf: a book of its own. ui.spec: how it is set (cloth, size, title fit).

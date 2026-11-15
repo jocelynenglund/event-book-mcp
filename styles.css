@@ -2872,10 +2872,26 @@ body.library-mode .burger-bookshelves { display: none; }
 .rv-chip { white-space: nowrap; }
 
 /* ---------- Verifying a shipped edition ---------- */
-.ol-vd { display: inline-flex; gap: 4px; flex: none; align-self: flex-start; margin-top: 6px; }
-.ol-vd-btn { min-width: 36px; min-height: 32px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font: 700 15px/1 var(--font-body); color: var(--ink-soft); cursor: pointer; }
+.ol-vd { display: flex; align-items: flex-start; gap: 8px; flex: 0 0 210px; width: 210px; align-self: flex-start; margin-top: 6px; }
+.ol-vd-sum { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 0; border: 0; background: none; text-align: left; font: 600 13px/1.25 var(--font-body); color: var(--ink-soft); cursor: pointer; overflow-wrap: anywhere; }
+span.ol-vd-sum { cursor: default; }
+.ol-vd-sum.works .ol-vd-head { color: var(--readmodel); }
+.ol-vd-sum.fails .ol-vd-head { color: #c0392b; }
+.ol-vd-from { font-weight: 500; font-size: 12px; color: var(--text-muted); }
+.ol-vd-note { font-weight: 500; font-size: 12px; color: #c0392b; }
+.ol-vd-btns { display: inline-flex; gap: 6px; flex: none; margin-left: auto; }
+.ol-vd-btn { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); font: 700 14px/1 var(--font-body); color: var(--ink-soft); cursor: pointer; }
 .ol-vd-btn.works.on { background: var(--readmodel); border-color: var(--readmodel); color: #fff; }
 .ol-vd-btn.fails.on { background: #c0392b; border-color: #c0392b; color: #fff; }
+.ol-slice-vd { font: 700 11px var(--font-body); white-space: nowrap; align-self: center; color: var(--text-muted); }
+.ol-slice-vd.works { color: var(--readmodel); }
+.ol-slice-vd.fails { color: #c0392b; }
+.ol-testers { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ol-tester { font-size: 14px; }
+.ol-tester.fails .ol-tester-v { color: #c0392b; }
+.ol-tester.works .ol-tester-v { color: var(--readmodel); }
+.ol-tester-at { font-size: 12px; color: var(--text-muted); }
+.ol-tester-note { margin-top: 2px; font-size: 13px; color: var(--ink-soft); }
 .ol-verify { margin: 4px 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 14px; }
 
 /* The bookshelves: the eventPAD brand in the header */
@@ -3607,3 +3623,53 @@ body.read-only .lt-sugg-bar { display: none; }
 .bd-find-title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .bd-find-sub { grid-column: 2; font-size: 12px; opacity: 0.7; }
 .bd-find-empty { padding: 10px 2px; opacity: 0.7; }
+
+/* Outline on a phone: each scenario is one full-width card. The ☆ sits in its top-right corner and the verdict
+   row (overall verdict on the left, the two small round ✓ ✗ on the right) and 💬 are one row along its bottom edge,
+   inside it (computers keep them beside it). The pinned breadcrumb sits where the Outline/Details tabs would
+   stick, so on a phone the tabs scroll away. */
+@media (max-width: 480px) {
+  .ol-scenario-row { position: relative; display: block; margin: 6px 0 0 0; }
+  .ol-scenario-row .ol-scenario { width: 100%; margin: 0; padding: 10px 12px 62px; }
+  .ol-scenario-row .ol-scenario-name { display: block; padding-right: 44px; }
+  .ol-scenario-row .ol-must { position: absolute; top: 8px; right: 8px; }
+  /* while verifying the card is the whole row (Given/When/Then, then the verdict row below it, inside the border):
+     the verdict row grows with its ✗ notes, 💬 stays in the corner */
+  .ol-scenario-row:has(.ol-vd) { background: var(--surface); border: 1px dashed var(--border-light); border-radius: 10px; }
+  .ol-scenario-row:has(.ol-vd) .ol-scenario { padding-bottom: 4px; background: none; border: 0; }
+  .ol-scenario-row .ol-vd { position: static; width: auto; min-height: 52px; box-sizing: border-box; padding: 4px 66px 8px 12px; display: flex; align-items: center; gap: 8px; margin: 0; }
+  .ol-scenario-row .ol-vd-btn { width: 40px; height: 40px; font-size: 17px; }
+  .ol-scenario-row .ol-cm { position: absolute; right: 10px; bottom: 10px; margin: 0; min-width: 48px; min-height: 44px; font-size: 16px; }
+  .ov-tabs { position: static; }
+  .ov-tabs::before { display: none; }
+}
+
+/* Retire built plans: the plan's mark and Retire, the folded Retired shelf, an edition's Built from */
+.rt-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.rt-mark { flex: 1 1 auto; font: 600 12px var(--font-mono); color: var(--text-muted); }
+.rt-rows { list-style: none; margin: 0; padding: 4px 16px 10px; display: flex; flex-direction: column; gap: 6px; }
+.rt-row { width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: 600 13px var(--font-body); cursor: pointer; }
+.rt-built-from { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.rt-built-label { font: 600 11px var(--font-mono); color: var(--text-muted); }
+.rt-plan { flex: 0 1 auto; }
+/* Build progress: a builder's reports on a plan's slices (features/buildProgress) */
+.bp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 12px/1.2 var(--font-body); cursor: pointer; }
+.bp-chip .bp-ago, .bp-step .bp-ago { font-weight: 400; color: var(--text-muted); }
+.bp-chip.bp-green, .bp-chip.bp-pr { border-color: #3f7a2f; }
+.bp-chip.bp-red { border-color: #b5541c; }
+.bp-chip.bp-stuck { border-color: #b5541c; background: #fbe9d4; color: #5a2a08; }
+.bp-chip.bp-stuck .bp-ago { color: #7a4a22; }
+.bd-head-progress { margin: 4px 0 0; }
+.bp-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bp-step { display: flex; flex-direction: column; gap: 2px; padding-left: 10px; border-left: 3px solid var(--border); }
+.bp-step.bp-green, .bp-step.bp-pr { border-left-color: #3f7a2f; }
+.bp-step.bp-red, .bp-step.bp-stuck { border-left-color: #b5541c; }
+.bp-note { color: var(--text-muted); font-size: 13px; }
+.bp-pr { font-size: 13px; color: var(--text); }
+.ed-progress { display: inline-flex; padding: 2px 5px; border-radius: 999px; background: #cfe8c4; color: #1f4a17; font: 700 10px/1.2 var(--font-mono); white-space: nowrap; box-shadow: 0 0 0 1.5px #3f7a2f; }
+.ed-progress-full { display: none; }
+.ed-spine .ed-progress { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); }
+.ed-cover .ed-progress { position: static; transform: none; align-self: stretch; display: block; margin-top: 6px; padding: 3px 6px; border-radius: 8px; white-space: normal; font-size: 9px; line-height: 1.3; }
+.ed-cover .ed-progress-short { display: none; }
+.ed-cover .ed-progress-full { display: inline; }
+.ed-spine.flat .ed-progress { position: static; transform: none; flex: none; margin-left: 6px; }

@@ -2,7 +2,7 @@
 // LIBRARY - Folding the bookshelves' sections, to hop between them
 // Published, Drafts, Not on this device and the
 // Reference shelf each fold under their header; per device. All open at first,
-// except a long list of books not on this device.
+// except a long list of books not on this device. The Retired shelf starts folded.
 // ===========================================
 
 const KEY = 'eventpad_shelf_folds';
@@ -25,7 +25,7 @@ function folds() {
 
 export function isFolded(section, count) {
   const f = folds();
-  return section in f ? !!f[section] : section === 'missing' && count > LONG;
+  return section in f ? !!f[section] : (section === 'missing' && count > LONG) || section === 'retired';
 }
 
 export function setFolded(section, folded) {

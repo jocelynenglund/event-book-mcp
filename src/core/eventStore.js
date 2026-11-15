@@ -13,7 +13,7 @@
 // ===========================================
 
 import { EventTypes, commentEventTypes } from './constants.js';
-import { isFrozen } from '../features/editions/rules.js';
+import { isFrozen, retiredOf } from '../features/editions/rules.js';
 
 // Re-export for convenience
 export { EventTypes };
@@ -426,7 +426,8 @@ function reviewBlocked() {
 }
 
 function frozenBlocked() {
-  import('../ui/toast.js').then(t => t.showToast('Published: start the next draft to change it')).catch(() => {});
+  const message = retiredOf(eventStream) ? 'Retired plans are read only' : 'Published: start the next draft to change it';
+  import('../ui/toast.js').then(t => t.showToast(message)).catch(() => {});
 }
 
 // Told after every new event (sync uses it to send changes a few seconds later)

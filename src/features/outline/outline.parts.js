@@ -1,13 +1,14 @@
 // ===========================================
-// OUTLINE - Row and chapter header, drawn from the Outline screen's objects alone
-// outlineRow(row, ui) takes one row of outlineScreen, outlineChapterHead(chapter, ui) one
-// chapter. ui is the device's local state (selecting, what is open); every part has a default,
+// OUTLINE - Row and chapter header, and the controls around them, each drawn from its own view
+// outlineRow(row, ui) takes an Outline Slice Row, outlineChapterHead(chapter, ui) an Outline Chapter
+// Heading, and each control the view named by its function. ui is the device's local state (selecting, what is open); every part has a default,
 // so a row draws on its own. Nothing here reads the book.
 // ===========================================
 
 import { waivedMark } from '../scenarioWaiver/view.js';
 import { renderGwt, pendingMark } from '../scenarios/view.js';
 import { refinedPill } from './refinedPill.js';
+import { sliceProgressChip } from '../buildProgress/progress.parts.js';
 import { propLabel } from '../../core/constants.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,13 +46,51 @@ function inlineComments(row, scn) {
     </button>`).join('')}</div>`;
 }
 
-// ✓ works / ✗ doesn't beside a scenario, the latest verdict lit
-function verdictButtons(row, scn) {
-  const v = scn.verdict;
-  return `<span class="ol-vd" role="group" aria-label="Verified in the shipped app">
-    <button class="ol-vd-btn works ${v === 'works' ? 'on' : ''}" data-outline-action="verdict" data-verdict="works" data-slice="${row.sliceId}" data-scenario="${scn.id}" aria-pressed="${v === 'works'}" aria-label="Works">✓</button>
-    <button class="ol-vd-btn fails ${v === 'fails' ? 'on' : ''}" data-outline-action="verdict" data-verdict="fails" data-slice="${row.sliceId}" data-scenario="${scn.id}" aria-pressed="${v === 'fails'}" aria-label="Doesn't work">✗</button>
+// The verdict row of a scenario while verifying: the overall verdict on the left (tap: who tested it),
+// two small round buttons on the right that light only this device's own verdict. Each part draws from its own view.
+
+// ✗ Doesn't · Ana +1, a ✗ note on its own line under it, "from edition 3" when carried over; nothing when untried.
+// view: Scenario Verdict
+export function scenarioVerdictSummary(view) {
+  const root = `data-component="Scenario verdict" data-key="${view.scenarioId}"`;
+  if (view.overall === 'untried') return `<span class="ol-vd-sum" ${root}></span>`;
+  const works = view.overall === 'works';
+  return `<button class="ol-vd-sum ${view.overall}" ${root} data-outline-action="testers" data-slice="${view.sliceId}" data-scenario="${view.scenarioId}"
+    aria-label="${works ? 'Works' : 'Does not work'}, tested by ${escapeHtml(view.lead)}${view.more ? ` and ${view.more} more` : ''}: see who tested it">
+    <span class="ol-vd-head">${works ? '✓ Works' : '✗ Doesn\'t'} · ${escapeHtml(view.lead)}${view.more ? ` +${view.more}` : ''}</span>${view.fromEdition ? `<span class="ol-vd-from"> from edition ${view.fromEdition}</span>` : ''}
+    ${view.notes.map(n => `<span class="ol-vd-note">✗ ${escapeHtml(n.note)}</span>`).join('')}
+  </button>`;
+}
+
+// ✓ and ✗ as small round buttons, lit only for this device's own verdict. view: Scenario Own Verdict
+export function scenarioVerdictButtons(view) {
+  const v = view.own;
+  const btn = (kind, mark, label) => `<button class="ol-vd-btn ${kind} ${v === kind ? 'on' : ''}" data-outline-action="verdict" data-verdict="${kind}" data-slice="${view.sliceId}" data-scenario="${view.scenarioId}" aria-pressed="${v === kind}" aria-label="${label}">${mark}</button>`;
+  return `<span class="ol-vd-btns" role="group" aria-label="Your verdict in the shipped app" data-component="Scenario verdict buttons" data-key="${view.scenarioId}">
+    ${btn('works', '✓', 'Works')}${btn('fails', '✗', 'Does not work')}
   </span>`;
+}
+
+// Who tested a scenario: each tester with verdict, time and note, ✗ first. view: Scenario Testers
+export function scenarioTestersSheet(view) {
+  return `
+    <div data-component="Scenario testers sheet" data-key="${view.scenarioId}">
+    <div class="sheet-title">Who tested <span class="bd-sheet-sub">${escapeHtml(view.name)}</span></div>
+    <ul class="ol-testers">${view.testers.map(t => `
+      <li class="ol-tester ${t.verdict}"><b>${escapeHtml(t.nickname)}</b> <span class="ol-tester-v">${t.verdict === 'works' ? '✓ Works' : '✗ Doesn\'t'}</span>
+        <span class="ol-tester-at">${escapeHtml(t.label)}${t.fromEdition ? ` · from edition ${t.fromEdition}` : ''}</span> ${t.note ? `<div class="ol-tester-note">${escapeHtml(t.note)}</div>` : ''}</li>`).join('')}
+    </ul>
+    </div>`;
+}
+
+// A slice's verdict in its row header: ✗ Fails · 2 notes, ✓ Works, To try. view: Slice Verdict
+export function sliceVerdictBadge(view) {
+  return `<span class="ol-slice-vd ${view.overall}" data-component="Slice verdict badge" data-key="${view.sliceId}">${escapeHtml(view.text)}</span>`;
+}
+
+// One scenario's verdict row: the summary on the left, the round buttons on the right
+function verdictRow(scn) {
+  return `<div class="ol-vd">${scenarioVerdictSummary(scn.verdict)}${scenarioVerdictButtons(scn.own)}</div>`;
 }
 
 // Must haves are the acceptance criteria: once a slice has some, they're what the outline
@@ -81,7 +120,7 @@ function scenarioParts(row, ui) {
           ${scn.scn.source?.file ? `<span class="ol-src">📄 ${escapeHtml(scn.scn.source.file.split('/').pop())}${scn.scn.source.line ? `:${scn.scn.source.line}` : ''}</span>` : ''}
           ${renderGwt(scn.scn, { elements: row.elements }, { values: !!(ui.showFields || ui.values) })}
         </button>
-        ${ui.verifying ? verdictButtons(row, scn) : ''}
+        ${ui.verifying && scn.verdict ? verdictRow(scn) : ''}
         ${commentButton(row, scn)}
       </div>${inlineComments(row, scn)}`).join('') + (must.length && extra
         ? `<button class="ol-more" data-outline-action="nice" data-slice="${row.sliceId}">${everything ? 'Only the must haves' : `+ ${extra} nice to ${extra === 1 ? 'have' : 'haves'}`}</button>` : '') + add('ol-more') : ''
@@ -100,7 +139,7 @@ function details(row, ui) {
   const valuesOn = !!(ui.showFields || ui.values);
   const values = list && !ui.showFields && row.scenarios.some(s => s.hasValues)
     ? `<button class="ol-gwt-toggle ol-values-pill ${valuesOn ? 'on' : ''}" data-outline-action="values-one" data-slice="${row.sliceId}" aria-pressed="${valuesOn}">${valuesOn ? '✓ values' : 'values'}</button>` : '';
-  return `<div class="ol-pills">${pill}${toggle}${values}${refined}${waivedMark({ waived: row.waived })}${commentButton(row, null)}</div>${inlineComments(row, null)}${fieldsOpen ? fieldList(row) : ''}${list}`;
+  return `<div class="ol-pills">${pill}${toggle}${values}${refined}${sliceProgressChip(row.progress)}${waivedMark({ waived: row.waived })}${commentButton(row, null)}</div>${inlineComments(row, null)}${fieldsOpen ? fieldList(row) : ''}${list}`;
 }
 
 // One slice: its row, then its pills and open scenarios. ui: selecting, selected, open, query (searching),
@@ -115,6 +154,7 @@ export function outlineRow(row, ui = {}) {
       <div class="ol-main" role="button" tabindex="0" data-outline-action="${ui.selecting ? 'toggle' : 'expand'}" data-slice="${row.sliceId}"${ui.selecting ? '' : ` aria-expanded="${!!ui.open}"`}>
         <span class="ol-name">${ui.selecting ? '' : `<button class="ol-kebab" aria-label="Edit ${escapeHtml(row.title)}" data-outline-action="edit" data-slice="${row.sliceId}">⋮</button>`}<span class="ol-name-text">${row.refined ? '<span class="ol-refined-badge" aria-label="Refined"></span> ' : ''}${escapeHtml(row.title)}</span>${row.ref ? `<span class="ol-ref" title="Its number for an agent">${row.ref}</span>` : ''}</span>
         <span class="ol-kind">${row.kind}</span>
+        ${ui.verifying && row.sliceVerdict ? sliceVerdictBadge(row.sliceVerdict) : ''}
         ${row.usage}
         <span class="ol-summary">${chainText(row)}</span>
         ${row.description ? `<span class="ol-desc">${escapeHtml(row.description)}</span>` : ''}
@@ -142,11 +182,11 @@ function chapterMeta(count) {
 
 // A chapter's header (or "Not in a chapter" when there are chapters). ui: searching, bookmarked.
 export function outlineChapterHead(chapter, ui = {}) {
-  const bands = chapter.folded ? `<span class="ol-bands">${chapter.rows.map(r =>
-    `<span class="bd-spine-band" data-slice-type="${r.band}"></span>`).join('')}</span>` : '';
+  const bands = chapter.folded ? `<span class="ol-bands">${chapter.bands.map(band =>
+    `<span class="bd-spine-band" data-slice-type="${band}"></span>`).join('')}</span>` : '';
   // The whole chapter's count has a `built` flag; while searching it is just the matches
   const count = 'built' in chapter.count ? chapterMeta(chapter.count) : chapter.count.slices;
-  if (chapter.loose) return `<div class="ol-chapter ol-loose" data-component="Outline chapter header" data-key="${chapter.id}"><span class="ol-chapter-name">${chapter.name}</span><span class="ol-count">${chapter.rows.length}</span></div>`;
+  if (chapter.loose) return `<div class="ol-chapter ol-loose" data-component="Outline chapter header" data-key="${chapter.id}"><span class="ol-chapter-name">${chapter.name}</span><span class="ol-count">${chapter.shown}</span></div>`;
   return `
       <div class="ol-chapter ${chapter.folded ? 'folded' : ''}" data-component="Outline chapter header" data-key="${chapter.id}">
         <button class="ol-fold" aria-label="${chapter.folded ? 'Open' : 'Fold'} ${escapeHtml(chapter.name)}" data-outline-action="fold" data-chapter="${chapter.id}">${chapter.folded ? '›' : '⌄'}</button>
@@ -161,10 +201,10 @@ export function outlineChapterHead(chapter, ui = {}) {
       </div>`;
 }
 
-// ---------- The controls around the rows: each drawn from its piece of the Outline screen ----------
+// ---------- The controls around the rows: each drawn from its own view ----------
 
 // The search box (made once and kept, so typing never loses focus; ✕ shows while there is a query)
-// view: screen.search, and the query typed (a device's own)
+// view: Outline Search Field
 export function outlineSearchBox(view) {
   return `<div class="ol-search-row" data-component="Outline search box" data-key="search">
         <input type="search" class="sheet-input ol-search" id="olSearch" placeholder="Search slices, events, commands…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" value="${escapeHtml(view.query || '')}">
@@ -172,7 +212,7 @@ export function outlineSearchBox(view) {
       </div>`;
 }
 
-// Above the chapters: how many slices match, Fields, Select / Done, and the open comments. view: screen.toolbar, and whether Fields is on and the outline is selecting (a device's own)
+// Above the chapters: how many slices match, Fields, Select / Done, and the open comments. view: Outline Toolbar Options, and whether Fields is on and the outline is selecting (a device's own)
 export function outlineToolbar(view) {
   return `<div class="ol-toolbar" data-component="Outline toolbar" data-key="toolbar">
       <span class="ol-total">${view.total}</span>
@@ -182,36 +222,36 @@ export function outlineToolbar(view) {
     </div>`;
 }
 
-// ＋ Do · ＋ See · ＋ Auto under a chapter. view: { kinds: screen.addKinds, chapterId } ('' for no chapter)
+// ＋ Do · ＋ See · ＋ Auto under a chapter. view: Outline Add Kinds
 export function outlineAddButtons(view) {
   const key = view.chapterId || '';
   return `<div class="ol-add-steps" data-component="Outline add buttons" data-key="${escapeHtml(key)}">${view.kinds.map(k =>
     `<button class="ol-add-step" data-outline-action="add-open" data-chapter="${escapeHtml(key)}" data-kind="${k.kind}">＋ ${k.label}</button>`).join('')}</div>`;
 }
 
-// ＋ Chapter at the end (not while searching or showing one stage). view: { canAddChapter }
+// ＋ Chapter at the end (not while searching or showing one stage). view: Outline Can Add Chapter
 export function outlineNewChapterButton(view) {
   return view?.canAddChapter ? `<button class="ol-add-chapter" data-component="Outline new chapter button" data-key="new-chapter" data-outline-action="new-chapter">＋ Chapter</button>` : '';
 }
 
-// The book's title along the bottom; tapping it goes to the book's front. view: { title }
+// The book's title along the bottom; tapping it goes to the book's front. view: Outline Book Name
 export function outlineBookTitle(view) {
   return `<button class="bd-book-title" data-component="Outline book title" data-key="title" data-book-title>${escapeHtml(view.title)}</button>`;
 }
 
-// Collapse all (every chapter and every slice's scenarios) or Expand all. view: screen.bar, and whether anything is open (a device's own folds)
+// Collapse all (every chapter and every slice's scenarios) or Expand all. view: Outline Fold All State
 export function outlineFoldAll(view) {
   if (!view?.sliceCount) return '';
   const close = view.anyOpen !== false;
   return `<button class="bd-fold-all" data-component="Outline fold all" data-key="fold-all" data-outline-action="collapse-all" data-fold="${close ? 'close' : 'open'}">${close ? '▾ Collapse all' : '▸ Expand all'}</button>`;
 }
 
-// 💬 N open along the bottom: tap for the list. view: { openComments }
+// 💬 N open along the bottom: tap for the list. view: Outline Open Comments Count
 export function outlineBarComments(view) {
   return view?.openComments ? `<button class="bd-fold-all bd-cm-open" data-component="Outline open comments" data-key="open-comments" data-outline-action="next-comment" aria-label="${view.openComments} open comments">💬 ${view.openComments} open</button>` : '';
 }
 
-// Selecting: move the selected slices to a chapter. view: { chapters: screen.chapterChoices, hasChapters, selected (a count) }
+// Selecting: move the selected slices to a chapter. view: Outline Move Targets, and how many are selected (a device's own)
 export function outlineMoveBar(view) {
   const off = view.selected ? '' : 'disabled';
   return `<div class="ol-movebar" data-component="Outline move bar" data-key="move-bar">

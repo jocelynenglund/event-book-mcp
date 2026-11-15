@@ -49,6 +49,7 @@
           <button class="burger-item" onclick="document.getElementById('importFileInput').click(); window.EventPad.toggleBurger()">⬆ Import…</button>
           <button class="burger-item" onclick="window.EventPad.openSettings(); window.EventPad.toggleBurger()">⚙ Settings…</button>
           <button class="burger-item" onclick="window.EventPad.showAbout(); window.EventPad.toggleBurger()">ⓘ About</button>
+          <button class="burger-item" onclick="document.dispatchEvent(new Event('itsybit-feedback:open')); window.EventPad.toggleBurger()">💬 Send feedback</button>
           <div class="burger-version" id="appVersion"><span style="font-size: 10px; opacity: 0.5;">v2026.04.12.08:38</span></div>
         </div>
       </div>
@@ -318,7 +319,7 @@
     // Only on the real site, so local runs and the browser tests never load it.
     if (/(^|\.)itsybit\.se$/.test(location.hostname)) {
       const fb = document.createElement('script');
-      fb.src = 'https://feedback.itsybit.se/widget.js'; fb.dataset.app = 'eventpad'; fb.defer = true;
+      fb.src = 'https://feedback.itsybit.se/widget.js'; fb.dataset.app = 'eventpad'; fb.dataset.launcher = 'none'; fb.defer = true;
       document.body.appendChild(fb);
     }
   </script>

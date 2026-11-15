@@ -8,8 +8,8 @@
 // Counts (stageFilterCounts.read.js), the chips are the Stage chips component (filter.parts.js).
 // ===========================================
 
-import { getScenariosForSlice } from '../../core/projections.js';
-import { verifyingEdition, verdictOf } from '../verify/command.js';
+import { verifyingEdition } from '../verify/command.js';
+import { sliceVerdict } from '../verify/sliceVerdict.read.js';
 import { sliceComments } from '../comments/read.js';
 
 const KEY = 'eventpad_status_filter';
@@ -30,11 +30,9 @@ export const stages = () => verify ? VERIFY : PLAN;
 // A choice made in the other mode reads as All here
 export const active = () => stages().some(([k]) => k === current) ? current : 'all';
 
-// A slice's verdict: ✗ when any scenario doesn't work, to try while any is untried, ✓ when all work
-function verdictStage(slice) {
-  const vs = getScenariosForSlice(slice.id, verify.state).map(s => verdictOf(verify.state, verify.edition, s.id)?.verdict);
-  return vs.includes('fails') ? 'fails' : !vs.length || vs.some(v => !v) ? 'untried' : 'works';
-}
+// A slice's verdict (each scenario's overall one, over its testers): ✗ when any scenario doesn't work,
+// to try while any is untried, ✓ when all work
+const verdictStage = slice => sliceVerdict(verify.state, verify.edition, slice.id).overall;
 export const stageOf = slice => verify ? verdictStage(slice) : slice.built ? 'done' : slice.refined ? 'ready' : 'refine';
 // An open thread on the slice itself or one of its scenarios
 const talkedAbout = slice => !!book && sliceComments(book, slice.id).open > 0;

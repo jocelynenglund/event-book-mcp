@@ -15,6 +15,8 @@
 // Pure: no browser, no files. Used by ☰ → Import and tools/model-from-code/eventpad.mjs.
 // ===========================================
 
+export const NO_SCREEN = 'Not on a screen';
+
 export const label = cls => String(cls).replace(/(?<=[a-z0-9])(?=[A-Z])/g, ' ');
 
 // A field's type from its value: an …Id is a guid only when its value is one (Secret Santa's ids are base36 strings)
@@ -40,6 +42,19 @@ export function scenariosOf(exp) {
 const codeOf = s => s.slice?.file ? `${s.slice.file}${s.slice.line ? `:${s.slice.line}` : ''}` : null;
 // A scenario's values: a plain object's fields; anything else (a malformed payload) whole, as one value
 const values = data => plain(data) ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, text(v)])) : data == null ? {} : { payload: text(data) };
+
+// The feature a code file belongs to: src/features/<feature>/… the folder humanized, the MCP tools "Agent tools",
+// tools/<x>.mjs the file humanized, src/core "Core"; anything else null (the slice keeps its test's chapter)
+const humanize = w => { const s = w.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').toLowerCase(); return s[0].toUpperCase() + s.slice(1); };
+export function featureOf(file) {
+  const f = String(file || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  let m;
+  if ((m = f.match(/^src\/features\/([^/]+)\//))) return humanize(m[1]);
+  if (/^tools\/eventpad-mcp\//.test(f)) return 'Agent tools';
+  if ((m = f.match(/^tools\/([^/]+?)\.[cm]?js$/))) return humanize(m[1]);
+  if (/^src\/core\//.test(f)) return 'Core';
+  return null;
+}
 
 // name, description: the model's; eventTypes: the app's event catalog (default: every
 // event the export mentions); codeFile(kind, name): where a command / view lives, for the
@@ -73,9 +88,35 @@ export function specFromScenarios(scenarios, { name, description, eventTypes, co
       else if (field.unsure && v !== null) { field.type = fieldType(k, v); delete field.unsure; }
     }));
   };
+  // A slice's chapter: the screen it is on (the first in its Used by), "Not on a screen" when its Used by
+  // is empty, else its test's chapter (rules with no UI). A slice is its test's chapter + its name, as before;
+  // the chapter is a heading only (Compare, editions and plans match slices by name)
+  const usedOf = s => (s.then || {}).usedBy || s.usedBy;
+  const homes = new Map();
+  const groupKey = s => `${s.chapter || 'Other'}\u0000${s.then?.view ? 'V' : 'C'}\u0000${s.then?.view || s.when}`;
+  for (const s of scenarios) {
+    const used = usedOf(s), key = groupKey(s);
+    // Only a UI test (a component test or a tap) puts its slice on a screen: an API book can carry the
+    // web's usedBy without them, and those slices stay in their feature's chapter
+    if (!Array.isArray(used) || !(s.then?.view ? s.then.componentAt : s.tapAt)) continue;
+    if (!homes.has(key)) homes.set(key, { used });
+  }
+  // Rules with no screen, in a UI book (some scenario is a component test or a tap): the chapter is the feature
+  // their code lives in, so the book has no one-slice chapters. An API book keeps its tests' chapters
+  const uiBook = scenarios.some(s => s.then?.componentAt || s.tapAt);
+  const codeFiles = new Map();
+  for (const s of scenarios) if (s.slice?.file && !codeFiles.has(groupKey(s))) codeFiles.set(groupKey(s), s.slice.file);
+  const screenNames = new Set([NO_SCREEN]);
+  homes.forEach(h => h.used.forEach(u => screenNames.add(u.screen || 'Other')));
+  const homeOf = s => {
+    const home = homes.get(groupKey(s));
+    if (home) return home.used.length ? (home.used[0].screen || 'Other') : NO_SCREEN;
+    const feature = uiBook ? featureOf(codeFiles.get(groupKey(s))) : null;
+    return feature ? (screenNames.has(feature) ? `${feature} (rules)` : feature) : (s.chapter || 'Other');
+  };
   for (const s of scenarios) {
     const then = s.then || {};
-    const ch = chapterOf(s.chapter || 'Other');
+    const ch = chapterOf(homeOf(s));
     const isView = !!then.view;
     const sliceName = isView ? then.view : s.when;
     if (!sliceName) continue;
@@ -165,6 +206,8 @@ export function specFromScenarios(scenarios, { name, description, eventTypes, co
 // What kind of file this is: an eventPAD model (events), a test export (one file's
 // scenarios, or a pipeline's combined file) or a plan (docs/slices.json)
 export function kindOf(json) {
+  // An Event Book plan file (plan.schema.json): chapters of steps with their scenarios, written by hand or by an LLM
+  if (json && !Array.isArray(json) && typeof json.format === 'string' && json.format.startsWith('eventbook-plan/')) return 'eventbook-plan';
   if (json && !Array.isArray(json) && Array.isArray(json.files)) return 'export';
   if (json && !Array.isArray(json) && Array.isArray(json.slices) && json.slices.some(s => s?.kind)) return 'plan';
   if (Array.isArray(json)) {

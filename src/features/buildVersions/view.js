@@ -17,6 +17,8 @@ import { hideAllSheets } from '../../ui/sheets.js';
 import { showBoard } from '../../ui/feed.js';
 import { openReplay } from '../replay/replay.js';
 import { showToast } from '../../ui/toast.js';
+import { builtFrom } from '../retire/builtFrom.read.js';
+import { builtFromList } from '../retire/retire.parts.js';
 
 const date = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString([], { day: 'numeric', month: 'short' }); };
 const when = e => [e.build != null ? `build ${e.build}` : '', e.commit, date(e.createdAt), e.scenarios != null ? `${e.scenarios} scenarios` : ''].filter(Boolean).join(' · ');
@@ -25,8 +27,9 @@ const whenHtml = (e, state) => [e.build != null ? `build ${escapeHtml(e.build)}`
   e.commit ? (url => url ? `<a class="bv-commit" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(e.commit)}</a>` : escapeHtml(e.commit))(commitUrl(state, e.commit)) : '',
   escapeHtml(date(e.createdAt)), e.scenarios != null ? `${e.scenarios} scenarios` : ''].filter(Boolean).join(' · ');
 
-// The details sheet's list of editions ('' for a book that isn't a build book)
-export function editionsSection(events, id) {
+// The details sheet's list of editions ('' for a book that isn't a build book). books: the device's books, for
+// the plans retired into each edition
+export function editionsSection(events, id, books = []) {
   if (!isBuildBook(events)) return '';
   const rows = buildEditions(events);
   const state = projectState(events);
@@ -38,6 +41,7 @@ export function editionsSection(events, id) {
           <div class="bv-edition-text"><b>Edition ${e.edition}</b><span>${whenHtml(e, state)}${i ? '' : ' · latest'}</span></div>
           ${i ? `<button class="bv-btn" data-bv-action="open" data-model="${escapeHtml(id)}" data-edition="${e.edition}">Open</button>` : ''}
           ${rows.length > 1 ? `<button class="bv-btn" data-bv-action="compare" data-model="${escapeHtml(id)}" data-edition="${e.edition}">Compare…</button>` : ''}
+          ${builtFromList(builtFrom(books, e.app, e.edition))}
         </div>`).join('')}
     </div>`;
 }

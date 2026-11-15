@@ -1,6 +1,6 @@
 // ===========================================
-// BOARD - Parts of the Board, drawn from the Board screen's objects alone
-// Each takes one part of boardScreen (a column, a card, a lane, a chapter…) and ui, the device's
+// BOARD - Parts of the Board, each drawn from its own view alone
+// Each takes the one view that feeds it (a header's fields, a lane's stickies, a chapter's heading…) and ui, the device's
 // local state (the grid place it sits in, what is open); every part has a default, so each draws
 // on its own. Nothing here reads the book. A root carries data-component and data-key.
 // ===========================================
@@ -8,6 +8,7 @@
 import { waivedMark } from '../scenarioWaiver/view.js';
 import { renderGwt } from '../scenarios/view.js';
 import { buildChip } from './buildChip.js';
+import { sliceProgressChip } from '../buildProgress/progress.parts.js';
 import { isNeat } from '../../ui/settings.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -74,6 +75,7 @@ export function boardSliceHeader(col, ui = {}) {
           </button>
           <button class="bd-more" aria-label="Edit this slice" data-action="slice-menu" data-slice="${col.sliceId}">⋮</button>
         </div>
+        ${col.progress ? `<div class="bd-head-progress">${sliceProgressChip(col.progress)}</div>` : ''}
         ${col.usage || col.waived ? `<button class="bd-head-chips" tabindex="-1" data-action="slice-page" data-slice="${col.sliceId}">${col.usage ? `<span class="bd-head-usage">${col.usage}</span>` : ''}${waivedMark({ waived: col.waived })}</button>` : ''}
       </div>
       <div class="bd-head-tools">
@@ -176,11 +178,11 @@ const spineFontSize = name => Math.round(Math.max(13, Math.min(20, 20 * 16 / Mat
 
 // A folded chapter: a book spine with its name down the side and a coloured band per slice
 export function boardSpine(chapter, ui = {}) {
-  const bands = chapter.spine.bands.map(kind => `<span class="bd-spine-band" data-slice-type="${kind}"></span>`).join('');
+  const bands = chapter.bands.map(kind => `<span class="bd-spine-band" data-slice-type="${kind}"></span>`).join('');
   return `
     <button class="bd-spine" data-component="Board spine" data-key="${chapter.id}" style="grid-column: ${ui.col}; grid-row: 1 / span 6" data-action="fold" data-chapter="${chapter.id}" aria-label="Open ${escapeHtml(chapter.name)}">
       <span class="bd-spine-name" style="font-size: ${spineFontSize(chapter.name)}px">${escapeHtml(chapter.name)}</span>
-      ${chapter.spine.meter}
+      ${chapter.meter}
       <span class="bd-spine-bands">${bands}</span>
       <span class="bd-spine-count">${chapter.slices}</span>
       <span class="bd-spine-wrap" aria-hidden="true"></span>
@@ -188,13 +190,18 @@ export function boardSpine(chapter, ui = {}) {
     </button>`;
 }
 
-// The lane labels down the left: the scenarios lane's toggle, and the comment lane's count
-export function boardLaneLabels(screen, ui = {}) {
-  const labels = ['UI', 'Commands · Views', 'Events'];
-  return `<div class="bd-label-head" ${at(1, 2)}></div>
-    ${labels.map((l, i) => `<div class="bd-label lane-${i}" ${at(1, i + 3)}><span>${l}</span></div>`).join('')}
-    <button class="bd-label lane-3 bd-gwt-toggle" data-component="Board scenarios toggle" data-key="gwt" ${at(1, 6)} data-action="toggle-gwt" aria-expanded="${!!ui.gwtOpen}" aria-label="${ui.gwtOpen ? 'Hide' : 'Show'} scenarios"><span>${ui.gwtOpen ? 'GWT ▾' : 'GWT ▸'}</span></button>
-    ${screen.hasComments ? `<button class="bd-label lane-cm" data-component="Board comments toggle" data-key="cm" ${at(1, 7)} data-action="next-comment" aria-label="${screen.openComments} open comments: go to the next"><span>💬 ${screen.openComments}</span></button>` : ''}`;
+// The labels down the left that only name a lane (the scenarios and comment lanes have toggles of their own)
+export const boardLaneLabels = () => `<div class="bd-label-head" ${at(1, 2)}></div>
+    ${['UI', 'Commands · Views', 'Events'].map((l, i) => `<div class="bd-label lane-${i}" ${at(1, i + 3)}><span>${l}</span></div>`).join('')}`;
+
+// The scenarios lane's label: a toggle that opens and closes every slice's scenarios
+export function boardScenariosToggle(view, ui = {}) {
+  return `<button class="bd-label lane-3 bd-gwt-toggle" data-component="Board scenarios toggle" data-key="gwt" ${at(1, 6)} data-action="toggle-gwt" aria-expanded="${!!ui.gwtOpen}" aria-label="${ui.gwtOpen ? 'Hide' : 'Show'} scenarios"><span>${view.label} ${ui.gwtOpen ? '▾' : '▸'}</span></button>`;
+}
+
+// The comment lane's label: the open count, and a tap goes to the next one (nothing until the book has comments)
+export function boardCommentsToggle(view) {
+  return view ? `<button class="bd-label lane-cm" data-component="Board comments toggle" data-key="cm" ${at(1, 7)} data-action="next-comment" aria-label="${view.open} open comments: go to the next"><span>💬 ${view.open}</span></button>` : '';
 }
 
 // The bar above the board: title, find, close all, replay, chat, usage, stage chips and the counts.

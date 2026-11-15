@@ -14,7 +14,7 @@ import { filled } from '../scenarios/view.js';
 import { paragraphsOf } from '../article/command.js';
 import { aliaser, shownEntries, scenarioHasIds } from '../scenarios/ids.js';
 import { sourceUrl, sourceLabel } from '../../core/source.js';
-import { sliceTypeLabels } from '../board/screen.js';
+import { sliceTypeLabels } from '../board/boardSliceHeaderFields.read.js';
 import { sliceUsageOf, eventUsageOf } from '../usage/view.js';
 import { specTrailOf } from '../specs/specTrail.read.js';
 import { laneOf, sliceActor } from '../board/command.js';

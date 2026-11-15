@@ -38,6 +38,9 @@ import { openReplay } from '../replay/replay.js';
 import { chooseBookKind } from '../literature/command.js';
 import { openBoardSheet } from '../board/sheets/shared.js';
 import { editionsSection } from '../buildVersions/view.js';
+import { readyToRetire } from '../retire/readyToRetire.read.js';
+import { retireBox, retiredShelfBox } from '../retire/retire.parts.js';
+import { retirePlan } from '../retire/command.js';
 import { usageSection } from '../usage/view.js';
 import { pressSection } from '../press/view.js';
 import { fillProductInsight } from '../productUsage/view.js';
@@ -130,6 +133,7 @@ export function renderLibrary() {
     ${libraryChips(screen.chips)}
     ${libraryTags(screen.tags)}
     ${screen.sections.map(section => librarySection(section, ui)).join('\n    ')}
+    ${retiredShelfBox(screen.retired, ui)}
     <p class="ed-legend">Kraft = draft · cloth = published edition · loose sheets = refined, not built yet. Foot mark (library books): ✏️ green = checked out here, yours to edit · ☁ = checked in, read only · 🔒 amber or the itsyBIT mark = checked out on another device or to Claude. None = only on this device.</p>
     ${accountBar()}
     <div id="syMissing"></div>
@@ -199,11 +203,12 @@ function openBookSheet(id) {
       </dl>
       <p class="lb-meta ed-meta">${bookMeta(listModels().find(m => m.id === id) || { id }, state, events)}</p>
       ${whyText ? `<p class="ed-why">${escapeHtml(whyText)}</p>` : ''}
+      ${build ? '' : retireBox(readyToRetire(events, id))}
       ${usageSection(events)}
       ${build ? '' : pressSection(state, id)}
       ${build ? '' : replaceHistory(events, id)}
       ${build && buildBookApp(name) === 'eventpad' && account()?.admin ? '<div class="us-insight pu-insight" id="puInsight"></div>' : ''}
-      ${editionsSection(events, id)}
+      ${editionsSection(events, id, booksOnDevice())}
       <div class="ed-actions">
         <button class="ed-btn primary" data-library-action="open" data-model="${id}">Open</button>
         <button class="ed-btn" data-library-action="compare-book" data-model="${id}">Compare…</button>
@@ -551,6 +556,17 @@ function handleClick(e) {
     hideAllSheets();
     showToast(`Published: ${ordinal(bookFacts(bookState(id)).edition.edition)} edition`);
     window.EventPad.showLibrary();
+  }
+  else if (a === 'retire') {
+    // Retiring is a change to the plan: a library book is checked out here first; held elsewhere, it can't be
+    readyToChange(id).then(why => {
+      if (why) { showToast(why); return; }
+      const refused = onBook(id, () => retirePlan());
+      if (refused) { showToast(refused); return; }
+      hideAllSheets();
+      showToast('Retired: it moved to the Retired shelf');
+      renderLibrary();
+    });
   }
   else if (a === 'next-draft') {
     const inLibrary = document.body.classList.contains('library-mode');

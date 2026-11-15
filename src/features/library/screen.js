@@ -9,6 +9,7 @@
 // ===========================================
 
 import { projectState } from '../../core/projections.js';
+import { planBuildProgress } from '../buildProgress/planBuildProgress.read.js';
 import { sliceActor } from '../board/command.js';
 import { detailsOf, editionShelves } from '../editions/shelves.js';
 import { isBuildBook, latestBuild } from '../buildVersions/rules.js';
@@ -21,6 +22,7 @@ import { bookshelfSections } from './sections.js';
 import { shelfOrder } from './propUp.js';
 import { tagCounts } from './tags.js';
 import { ordinal } from '../editions/rules.js';
+import { retiredShelf } from '../retire/retiredShelf.read.js';
 
 // Cloth for the published editions: deep colours with gold rules
 const CLOTHS = ['#2f5d8a', '#7a2f3a', '#2f6a4f', '#5a3f7a', '#8a5a2a'];
@@ -57,6 +59,8 @@ function bookOf({ id, updatedAt, events, state }, loan) {
     cloth: clothOf(id), height,
     // Refined, not built yet: a loose sheet each (up to 3)
     ready: Math.min(d.ready, 3),
+    // A builder has the plan: how far it has got
+    progress: planBuildProgress(state, id),
     slices, scenarios: Object.keys(state.scenarios).length, story,
     build,
     // 📈: a build book with usage data (the nightly usage import)
@@ -102,11 +106,14 @@ export function libraryScreen(books, {
   const tags = tagCounts(all);
   const tag = tags.some(x => x.tag === chosen) ? chosen : null;
   const wears = id => !tag || byId[id].tags.includes(tag);
-  const idsOf = pick => placed.filter(x => pick(x) && wears(x.id)).map(x => x.id);
+  // A retired plan has left Drafts and Published (and every other shelf): it has the Retired shelf
+  const retired = retiredShelf(books);
+  const retiredIds = new Set(retired.rows.map(r => r.id));
+  const idsOf = pick => placed.filter(x => pick(x) && wears(x.id) && !retiredIds.has(x.id)).map(x => x.id);
   const ids = {
     published: idsOf(x => x.section === 'published' && !sharedIds.has(x.id) && !away.has(x.id)),
     drafts: idsOf(x => x.section === 'drafts' && !sharedIds.has(x.id) && !away.has(x.id)),
-    onloan: all.filter(b => away.has(b.id) && wears(b.id)).map(b => b.id),
+    onloan: all.filter(b => away.has(b.id) && wears(b.id) && !retiredIds.has(b.id)).map(b => b.id),
     shared: idsOf(x => sharedIds.has(x.id) && !away.has(x.id))
   };
 
@@ -149,7 +156,8 @@ export function libraryScreen(books, {
     tag,
     // Which shelf each book is on, for the catalog
     shelfOf: Object.fromEntries([['published', 'Published'], ['drafts', 'Drafts'], ['onloan', 'On loan'], ['shared', 'Shared with me']]
-      .flatMap(([key, name]) => ids[key].map(id => [id, name]))),
+      .flatMap(([key, name]) => ids[key].map(id => [id, name])).concat([...retiredIds].map(id => [id, 'Retired']))),
+    retired,
     velocity: velocityOf(velocity, { open: velocityOpen, today }),
     reference: { count: refs.length, books: refs }
   };
