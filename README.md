@@ -17,7 +17,7 @@ It runs on your own machine. Your models stay in `~/.eventpad-mcp/store.json` (s
 Clone this repo, then add it to your agent. In Claude Code:
 
 ```sh
-git clone <this repo> ~/event-book-mcp
+git clone https://github.com/jocelynenglund/event-book-mcp.git ~/event-book-mcp
 claude mcp add --scope user event-book -- node ~/event-book-mcp/bin/event-book-mcp.mjs
 ```
 
