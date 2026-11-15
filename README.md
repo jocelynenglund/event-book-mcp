@@ -49,3 +49,7 @@ the live view"*.
 
 This repo is generated from Event Book's own source on each release, so the server runs
 the same commands as the app. Please report issues there rather than editing the copy here.
+
+## Licence
+
+MIT: build whatever you like with it.
