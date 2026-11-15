@@ -648,6 +648,13 @@ function lastGenerated() {
   return out;
 }
 
+// The harness's import name: the old GitHub Packages one where the repo still uses it, else itsybit-gwt from npmjs.org
+function gwtPackageOf(root) {
+  const pkg = path.join(root, 'package.json');
+  const text = fs.existsSync(pkg) ? fs.readFileSync(pkg, 'utf8') : '';
+  return { name: text.includes('"@jocelynenglund/itsybit-gwt"') ? '@jocelynenglund/itsybit-gwt' : gen.GWT_PACKAGE, installed: /"(@jocelynenglund\/)?itsybit-gwt"/.test(text) };
+}
+
 function generateSpecsTool({ repo, app, language, dir }) {
   const full = path.resolve(String(repo).replace(/^~(?=$|\/)/, os.homedir()));
   let root;
@@ -656,13 +663,14 @@ function generateSpecsTool({ repo, app, language, dir }) {
   const lang = language || harnessOf(root);
   if (!lang) throw new Error('Couldn\'t tell the repo\'s Given/When/Then harness: say language (js)');
   const st = state();
+  const gwt = gwtPackageOf(root);
   const existing = {}, generated = lastGenerated();
   const read = p => { const f = path.join(root, p); return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null; };
   // First what would be written, to know which files to read
-  const probe = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, dir });
+  const probe = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, dir, gwtPackage: gwt.name });
   if (probe.refused) throw new Error(probe.refused);
   probe.files.forEach(f => { const text = read(f.path); if (text !== null) existing[f.path] = text; });
-  const r = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, dir, existing });
+  const r = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, dir, existing, gwtPackage: gwt.name });
   const again = Object.keys(generated).some(p => r.files.some(f => f.path === p));
   // Specs are generated-only (rewritten); a stub already there is the builder's (kept)
   for (const f of r.files) {
@@ -680,6 +688,7 @@ function generateSpecsTool({ repo, app, language, dir }) {
   return `${again ? 'Regenerated' : 'Generated'} pending specs for ${count(r.slices.length, 'refined slice')} (${r.slices.join(', ')}) in ${root}:\n`
     + r.files.map(f => `  ${f.path}: ${label[f.state]}`).join('\n')
     + gen.waivedToSkip(st).map(s => `\n  ${pr.sliceTitle(s, st)}: no scenario (waived), no spec`).join('')
+    + (lang === 'js' && !gwt.installed ? `\nThe specs need the harness: npm install --save-dev ${gwt.name} (run them with node --test).` : '')
     + `\nSpec files are generated: don't edit them, generate again instead. Each slice's stub throws NotBuiltYet: while it does, its scenarios are pending (CI and deploys stay green; GWT_RUN_PENDING=1 runs them red). Write the real slice in the stub's file; generating again never overwrites it. Needs @jocelynenglund/itsybit-gwt 0.2.0.`;
 }
 

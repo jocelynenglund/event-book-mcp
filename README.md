@@ -37,7 +37,7 @@ the live view"*.
 | `import_file`: bring in a test export or a `docs/slices.json` plan from your repo | Nothing |
 | `share_link`: a link that opens a copy of the model, on any device | Uploads the model (without history) to Event Book's share service |
 | `connect_library`, `keep_model`, editing a ☁ book, `press_queue`, `start_building`, `finish_building` | An Event Book account (invite only for now) |
-| `generate_specs`: failing Given/When/Then specs in your repo | The specs use the itsybit-gwt (JS) or ItsyBIT.EventStore.Testing (.NET) harness |
+| `generate_specs {repo, language: "js"}`: a failing Given/When/Then spec and a stub for each refined slice, in your repo | `npm install --save-dev itsybit-gwt` there ([itsybit-gwt](https://www.npmjs.com/package/itsybit-gwt), MIT), then `node --test` |
 
 ## Settings
 
