@@ -295,6 +295,25 @@ export function setTodo(readModelId, todo) {
   appendEvent(EventTypes.ElementTodoSet, { elementId: readModelId, todo });
 }
 
+// ---------- Integration events (our events published to other systems) ----------
+
+// Publish an event to other systems (`to`: who consumes it), or stop. Only an event of ours: not another type,
+// not an external one. Nothing is recorded when nothing would change.
+export function setPublished(elementId, published, to = []) {
+  const el = projectState().elements[elementId];
+  if (!el || el.type !== 'event') return;
+  if (published && el.external) return;
+  const names = (to || []).map(n => String(n).trim()).filter(Boolean);
+  if (!published) {
+    if (!el.published) return;
+    appendEvent(EventTypes.ElementPublishedSet, { elementId, published: false });
+    return;
+  }
+  const same = el.published && (el.to || []).join('\u0000') === names.join('\u0000');
+  if (same) return;
+  appendEvent(EventTypes.ElementPublishedSet, { elementId, published: true, ...(names.length ? { to: names } : {}) });
+}
+
 // Link or unlink an event as updating a read model, without placing it in a slice
 export function setUpdatedBy(eventId, readModelId, on) {
   const state = projectState();

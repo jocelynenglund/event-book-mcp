@@ -24,6 +24,31 @@ export function fieldsOf(slice, state) {
   return names;
 }
 
+// The integration events (ours, published to other systems) of a model by name: a contract. Their fields are what
+// other systems rely on, so a change to one is more than a field change.
+const publishedEvents = state => new Map(Object.values(state.elements || {})
+  .filter(e => e.type === 'event' && e.published && !e.external).map(e => [norm(e.name), e]));
+const eventsNamed = (state, key) => Object.values(state.elements || {}).filter(e => e.type === 'event' && norm(e.name) === key);
+const fieldNames = els => new Map(els.flatMap(e => (e.properties || []).map(p => [norm(p.name), p.name])));
+
+// The contract changes going from `from` to `to`: for every event published in either, fields lost or added, or the event
+// gone (removed or renamed). One line each: "Order Placed: lost size, tax; added currency" or "Order Placed: removed".
+export function contractChanges(from, to) {
+  const a = publishedEvents(from), b = publishedEvents(to);
+  const out = [];
+  [...new Set([...a.keys(), ...b.keys()])].forEach(key => {
+    const was = eventsNamed(from, key), now = eventsNamed(to, key);
+    const name = (a.get(key) || b.get(key)).name;
+    if (!was.length) return;                                   // new in `to`: nothing to break yet
+    if (!now.length) { out.push(`${name}: removed`); return; }
+    const had = fieldNames(was), has = fieldNames(now);
+    const lost = [...had].filter(([k]) => !has.has(k)).map(([, n]) => n);
+    const added = [...has].filter(([k]) => !had.has(k)).map(([, n]) => n);
+    if (lost.length || added.length) out.push(`${name}: ${[lost.length ? `lost ${lost.join(', ')}` : '', added.length ? `added ${added.join(', ')}` : ''].filter(Boolean).join('; ')}`);
+  });
+  return out;
+}
+
 // A scenario in words that can be compared: its Given events, When command, Then
 function shape(scn, state) {
   const name = id => state.elements[id]?.name || '';

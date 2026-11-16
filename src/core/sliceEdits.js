@@ -13,7 +13,7 @@ export const scenarioEdits = new Set([T.ScenarioDeleted, T.ScenarioRenamed, T.Sc
   T.GivenSet, T.WhenSet, T.ThenEventSet, T.ThenRejectionSet, T.ThenReadModelSet]);
 // Every slice the sticky named in the event sits in: its fields, its name, its kind
 export const elementEdits = new Set([T.PropertyAdded, 'PropertyUpdated', T.PropertyRemoved, T.PropertyGeneratedSet,
-  T.ElementRenamed, T.ElementListSet, T.ElementTodoSet, T.ElementExternalSet]);
+  T.ElementRenamed, T.ElementListSet, T.ElementTodoSet, T.ElementExternalSet, T.ElementPublishedSet]);
 
 export function isSliceEdit(event) {
   return sliceEdits.has(event.type) || scenarioEdits.has(event.type) || elementEdits.has(event.type) ||

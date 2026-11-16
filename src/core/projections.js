@@ -168,9 +168,20 @@ export function projectState(eventStream = getEventStream()) {
         }
         break;
 
+      case EventTypes.ElementPublishedSet:
+        if (state.elements[event.data.elementId]) {
+          const el = state.elements[event.data.elementId];
+          el.published = !!event.data.published;
+          const to = Array.isArray(event.data.to) ? event.data.to.filter(Boolean) : [];
+          if (el.published && to.length) el.to = to; else delete el.to;
+        }
+        break;
+
       case EventTypes.ElementTableSet:
         if (state.elements[event.data.elementId]) {
-          state.elements[event.data.elementId].table = !!event.data.table;
+          // the table's name when the event has one (plan files), else just a mark
+          const t = event.data.table;
+          state.elements[event.data.elementId].table = typeof t === 'string' && t ? t : !!t;
         }
         break;
         

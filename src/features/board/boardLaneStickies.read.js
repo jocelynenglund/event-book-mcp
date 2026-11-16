@@ -66,6 +66,7 @@ function cardOf(el, slice, state, { trigger, first, shownFlowId }) {
     ...base, ref: false,
     label: elementLabel(el),
     attrs: externalAttr(el),
+    to: el.type === 'event' && el.published && !el.external ? (el.to || []).join(', ') : '',
     trigger: !!trigger,
     list: el.type === 'readModel' && !!el.list && !todo,
     otherFlow: !!outcome && otherFlow(el, slice, state, shownFlowId),

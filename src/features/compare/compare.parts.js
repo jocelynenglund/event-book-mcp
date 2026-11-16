@@ -40,6 +40,16 @@ export function compareConfirmDone(confirm) {
       </div>`;
 }
 
+// Integration events whose contract changed between the two books (Compare Contract; null: none)
+export function compareContractWarning(contract) {
+  if (!contract) return '';
+  return `
+      <div class="cp-contract" data-component="Compare contract warning" data-key="contract" role="alert">
+        <div class="cp-contract-title">${escapeHtml(contract.title)}</div>
+        <ul class="cp-contract-list">${contract.lines.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
+      </div>`;
+}
+
 export const compareChangeButton = () => `<button class="cp-change" data-component="Compare change button" data-key="change" data-compare-action="change">Compare with another book…</button>`;
 
 // A possible rename: the same slice under another name? Answered on the open shelf only

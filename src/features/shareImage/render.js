@@ -32,7 +32,9 @@ export const notes = {
   // Events from another system
   external:  { fill: '#fde58a', text: '#3d3005' },
   // A legacy table read as events: a shadowy orange
-  table:     { fill: '#c99a6c', text: '#2a1606' }
+  table:     { fill: '#c99a6c', text: '#2a1606' },
+  // One of our events published to other systems: event orange, a dark right edge and a ↗ tab (legend only)
+  published: { fill: '#ffc58a', text: '#4a2306' }
 };
 
 export const themes = {
@@ -211,6 +213,16 @@ function drawCard(ctx, card, m, x, y, tilt, t) {
   ctx.fillStyle = n.fill;
   ctx.fill();
   ctx.restore();
+  // An integration event: a solid dark right edge with a ↗ tab
+  if (card.kind === 'event' && card.published) {
+    ctx.save();
+    roundRect(ctx, 0, 0, L.cardW, m.h, 3); ctx.clip();
+    ctx.fillStyle = '#3b2410'; ctx.fillRect(L.cardW - 5, 0, 5, m.h);
+    roundRect(ctx, L.cardW - 24, 7, 24, 20, 4); ctx.fill();
+    ctx.fillStyle = '#ffe3c2'; ctx.font = `700 14px ${MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    ctx.fillText('\u2197', L.cardW - 12, 17.5);
+    ctx.restore();
+  }
   if (n.stroke) {
     roundRect(ctx, 0, 0, L.cardW, m.h, 3);
     ctx.strokeStyle = n.stroke;
@@ -796,8 +808,8 @@ export function renderModelImage(args = {}) {
   // Footer: legend, and the credit on the right
   const fy = lanesTop + bodyH + 26;
   // Only the kinds of sticky the picture has (yellow is explained only when there's some)
-  const pictured = new Set(slices.flatMap(s => s.lanes.flat().map(c => c.kind === 'event' && c.external ? 'external' : c.kind)));
-  const legend = [['command', 'Command'], ['event', 'Event'], ['external', 'External event'], ['readModel', 'Read model'], ['screen', 'Screen'], ['processor', 'Automation']]
+  const pictured = new Set(slices.flatMap(s => s.lanes.flat().map(c => c.kind === 'event' && c.external ? 'external' : c.kind === 'event' && c.published ? 'published' : c.kind)));
+  const legend = [['command', 'Command'], ['event', 'Event'], ['external', 'External event'], ['published', 'Integration event ↗'], ['readModel', 'Read model'], ['screen', 'Screen'], ['processor', 'Automation']]
     .filter(([type]) => pictured.has(type));
   let lx = L.pad;
   ctx.font = `600 14px ${BODY}`;

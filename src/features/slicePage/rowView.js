@@ -13,7 +13,7 @@ import { specTrailHtml } from '../specs/specs.parts.js';
 import { conversationView } from '../comments/comments.parts.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const external = el => `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}`;
+const external = el => `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
 
 // ‹ n / N ›
 export function slicePageNav(nav) {
@@ -65,6 +65,7 @@ export function slicePageSticky(s) {
     <button class="sp-sticky" data-component="Slice page sticky" data-key="${s.id}" data-type="${s.type}"${external(s)} data-slice-page="element" data-el="${s.id}" data-slice="${s.sliceId}">
       <span class="sp-sticky-kind">${escapeHtml(s.kind)}${usageChipHtml(s.used)}</span>
       <span class="sp-sticky-name">${escapeHtml(s.name)}</span>
+      ${s.to ? `<span class="sp-sticky-to">→ ${escapeHtml(s.to)}</span>` : ''}
       ${s.fields.length ? `<span class="sp-props">${s.fields.map(f => `
         <span class="sp-prop"><span>${escapeHtml(f.label)}</span><i>${escapeHtml(f.type)}</i></span>`).join('')}</span>` : ''}
     </button>`;
@@ -107,7 +108,7 @@ function valuesHtml(values) {
 
 function refHtml(r) {
   if (r.removed) return '<div class="sp-ref sp-missing">(removed)</div>';
-  return `<div class="sp-ref" data-type="${r.type}"${external(r)}><span class="sp-ref-name"><span class="sp-dot" aria-hidden="true"></span>${escapeHtml(r.name)}<span class="sp-ref-kind">${escapeHtml(r.kind)}</span></span>${valuesHtml(r.values)}</div>`;
+  return `<div class="sp-ref" data-type="${r.type}"${external(r)}><span class="sp-ref-name"><span class="sp-dot" aria-hidden="true"></span>${escapeHtml(r.name)}<span class="sp-ref-kind">${escapeHtml(r.kind)}</span>${r.to ? `<span class="sp-ref-to">→ ${escapeHtml(r.to)}</span>` : ''}</span>${valuesHtml(r.values)}</div>`;
 }
 
 // One scenario: its name (tap to edit), source, and the Given / When / Then steps
