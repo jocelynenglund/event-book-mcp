@@ -1176,9 +1176,11 @@ body:not(.board-mode) .wn-pill { bottom: 92px; }
 }
 .bd-chapter::before { left: 0; }
 .bd-chapter::after { right: 0; }
+/* A long name wraps instead of being cut to "1. Legacy …" in a one-slice chapter; the full name is
+   the header's title too */
 .bd-chapter-name {
   font: 700 22px var(--font-display); line-height: 1.1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; overflow-wrap: break-word; min-width: 0; flex: 0 1 auto;
 }
 .bd-chapter-count {
   font: 700 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
@@ -1479,13 +1481,17 @@ body:has(input:focus, textarea:focus) .wn-pill { display: none; }
 .board { --col-w: min(58vw, 232px); --spine-w: 54px; }
 .bd-chapter { display: flex; align-items: baseline; gap: 6px; padding-left: 0; }
 .bd-chapter-fold {
-  align-self: center; flex-shrink: 0;
+  align-self: flex-start; margin-top: 2px; flex-shrink: 0;
   width: 24px; height: 24px; border-radius: 50%; padding: 0; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font: 700 15px/1 var(--font-body);
 }
+/* One slice wide: the name takes the whole width and "1 slice" goes under it */
+.bd-chapter-narrow .bd-chapter-label { flex: 1 1 auto; grid-template-columns: auto minmax(0, 1fr); row-gap: 2px; }
+.bd-chapter-narrow .bd-chapter-count { grid-column: 2; }
+/* ⋮, the name (shrinks and wraps when the chapter is narrow), the count: all on the name's first line */
 .bd-chapter-label {
-  display: flex; align-items: baseline; gap: 10px; min-width: 0;
+  display: grid; grid-template-columns: auto minmax(0, max-content) auto; align-items: baseline; gap: 10px; min-width: 0;
   background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-align: left;
 }
 .bd-spine {
@@ -1561,7 +1567,7 @@ body .wn-pill, body:not(.board-mode) .wn-pill { bottom: calc(84px + env(safe-are
 
 /* Chapter header: fold ‹ · name · ＋ add a slice to this chapter */
 .bd-chapter-add {
-  align-self: center; flex-shrink: 0; margin-left: auto;
+  align-self: flex-start; flex-shrink: 0; margin-left: auto;
   width: 26px; height: 26px; border-radius: 8px; padding: 0; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font: 700 14px/1 var(--font-body);
@@ -3583,7 +3589,7 @@ body.read-only .lt-sugg-bar { display: none; }
 /* A chapter's name opens its menu (rename, move, delete): the ⋮ says so, as on slices */
 .ch-more { display: inline-block; margin-right: 6px; color: var(--text-muted); font-weight: 700; font-size: 0.85em; vertical-align: 0.05em; }
 /* On the board the label's own text is small: the ⋮ takes a slice ⋮'s size, centred by the fold button */
-.bd-chapter-label .ch-more { font: 700 20px/1 var(--font-body); align-self: center; margin-right: 0; }
+.bd-chapter-label .ch-more { font: 700 20px/1 var(--font-body); align-self: baseline; margin-right: 0; }
 
 /* A slice's number (S3): what she and an agent both call it */
 .ol-ref { margin-left: 6px; font: 600 11px var(--font-mono); color: var(--text-muted); letter-spacing: .03em; white-space: nowrap; }
@@ -3673,3 +3679,27 @@ body.read-only .lt-sugg-bar { display: none; }
 .ed-cover .ed-progress-short { display: none; }
 .ed-cover .ed-progress-full { display: inline; }
 .ed-spine.flat .ed-progress { position: static; transform: none; flex: none; margin-left: 6px; }
+
+/* INTEGRATION EVENTS (ours, published to other systems): event orange, a solid dark right border and a ↗ tab */
+:root { --note-published-edge: #3b2410; }
+.bd-card[data-type="event"][data-published],
+.bd-chip[data-type="event"][data-published],
+.gwt-ref[data-type="event"][data-published],
+.sp-ref[data-type="event"][data-published],
+.sp-sticky[data-type="event"][data-published] { position: relative; border-right: 5px solid var(--note-published-edge); }
+.bd-card[data-type="event"][data-published]::after,
+.bd-chip[data-type="event"][data-published]::after,
+.gwt-ref[data-type="event"][data-published]::after,
+.sp-ref[data-type="event"][data-published]::after,
+.sp-sticky[data-type="event"][data-published]::after { content: "\2197"; position: absolute; top: 7px; right: 0; width: 17px; height: 17px; display: grid; place-items: center; border-radius: 4px 0 0 4px; background: var(--note-published-edge); color: #ffe3c2; font: 700 12px/1 var(--font-mono, monospace); }
+.dt-card[data-type="event"][data-published] { border-right: 5px solid var(--note-published-edge); }
+.dt-link-el[data-published] { border-right: 3px solid var(--note-published-edge); padding: 0 4px; }
+.bd-card-to, .sp-sticky-to, .sp-ref-to { font-size: 11px; font-weight: 600; opacity: .8; }
+.sp-ref-to { display: block; margin-top: 2px; }
+.bd-type-icon-published { background: var(--note-event); }
+.bd-type-icon-published.on { background: var(--note-published-edge); color: #ffe3c2; }
+.em-consumers-field { padding: 6px 16px 10px; }
+.cp-contract { margin: 10px 0; padding: 10px 14px; border-left: 5px solid #c0392b; background: rgba(192, 57, 43, .10); border-radius: 6px; }
+.cp-contract-title { font-weight: 700; color: #a52a1c; }
+.cp-contract-list { margin: 6px 0 0; padding-left: 18px; }
+.bv-contract .ed-sheet-kicker { color: #a52a1c; }

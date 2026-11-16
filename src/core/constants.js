@@ -5,6 +5,7 @@ export const EventTypes = {
   ElementDeleted: 'ElementDeleted',
   ElementExternalSet: 'ElementExternalSet', // an event that comes from another system
   ElementTableSet: 'ElementTableSet',       // an event that is really a legacy table (read as events), shadowy orange { elementId, table }
+  ElementPublishedSet: 'ElementPublishedSet', // one of our events published to other systems (an integration event, a contract) { elementId, published, to? }
   ConnectionRemoved: 'ConnectionRemoved',
   ElementRenamed: 'ElementRenamed',
   ElementTodoSet: 'ElementTodoSet',
@@ -91,6 +92,7 @@ export const EventTypes = {
   WhenSet: 'WhenSet',
   ThenEventSet: 'ThenEventSet',
   ThenRejectionSet: 'ThenRejectionSet',
+  ThenNothingSet: 'ThenNothingSet',          // accepted but nothing changes (an idempotent command): { scenarioId, reason }
   ThenReadModelSet: 'ThenReadModelSet',
 
   // Model events
@@ -146,13 +148,15 @@ export const typeIcons = {
 export function elementLabel(el) {
   if (el.type === 'readModel' && el.list) return 'Read model · list';
   if (el.type === 'event' && el.table) return 'Legacy table';
+  if (el.type === 'event' && el.published && !el.external) return 'Integration event';
   return el.type === 'event' && el.external ? 'External event' : typeLabels[el.type];
 }
 
-// data-external / data-table attributes: external events yellow, legacy tables a shadowy orange
+// data-external / data-table / data-published attributes: external events yellow, legacy tables a shadowy orange,
+// integration events (published to other systems) orange with a ↗ tab and a solid right border
 export function externalAttr(el) {
   if (el.type !== 'event') return '';
-  return `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}`;
+  return `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
 }
 
 // Element type labels

@@ -68,7 +68,7 @@ export function scenarioShape(scn, state) {
   const name = id => state.elements[id]?.name || '';
   const t = scn.then;
   return JSON.stringify([scn.name, (scn.given || []).map(g => name(g.elementId)).filter(Boolean), scn.when?.commandId ? name(scn.when.commandId) : '',
-    t?.type === 'event' ? name(t.eventId) : t?.type === 'rejection' ? 'rejected' : t?.type === 'readModel' ? name(t.readModelId) : '']);
+    t?.type === 'event' ? name(t.eventId) : t?.type === 'rejection' ? 'rejected' : t?.type === 'nothing' ? 'nothing' : t?.type === 'readModel' ? name(t.readModelId) : '']);
 }
 
 export function projectState(eventStream = getEventStream()) {
@@ -168,9 +168,20 @@ export function projectState(eventStream = getEventStream()) {
         }
         break;
 
+      case EventTypes.ElementPublishedSet:
+        if (state.elements[event.data.elementId]) {
+          const el = state.elements[event.data.elementId];
+          el.published = !!event.data.published;
+          const to = Array.isArray(event.data.to) ? event.data.to.filter(Boolean) : [];
+          if (el.published && to.length) el.to = to; else delete el.to;
+        }
+        break;
+
       case EventTypes.ElementTableSet:
         if (state.elements[event.data.elementId]) {
-          state.elements[event.data.elementId].table = !!event.data.table;
+          // the table's name when the event has one (plan files), else just a mark
+          const t = event.data.table;
+          state.elements[event.data.elementId].table = typeof t === 'string' && t ? t : !!t;
         }
         break;
         
@@ -674,6 +685,15 @@ export function projectState(eventStream = getEventStream()) {
         }
         break;
         
+      case EventTypes.ThenNothingSet:
+        if (state.scenarios[event.data.scenarioId]) {
+          state.scenarios[event.data.scenarioId].then = {
+            type: 'nothing',
+            reason: event.data.reason
+          };
+        }
+        break;
+
       case EventTypes.ThenReadModelSet:
         if (state.scenarios[event.data.scenarioId]) {
           state.scenarios[event.data.scenarioId].then = {

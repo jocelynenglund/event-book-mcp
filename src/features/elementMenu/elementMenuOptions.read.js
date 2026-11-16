@@ -1,5 +1,5 @@
 // ELEMENT MENU - Element Menu Options (SV): what the ⋮ on a sticky offers, in the order the menu lists them:
-// a processor's inputs, a read model's list and to-do marks, what wakes a processor, external / legacy table on an event,
+// a processor's inputs, a read model's list and to-do marks, what wakes a processor, external / legacy table / integration event on an event,
 // then comment (in a slice), properties, connect, remove from slice (in a slice) and delete.
 // Each: { key, call (the EventPad function it runs), passThis, icon, iconClass, iconBg, title, desc, danger }.
 import { elementMenuState } from './elementMenuState.read.js';
@@ -26,6 +26,8 @@ export function elementMenuOptions(book, elementId, sliceId = null) {
       el.external ? 'Happens in this system (orange)' : 'Comes from another system (yellow)', { iconBg: null, iconClass: `bd-type-icon-external${el.external ? ' on' : ''}` }),
     el.type === 'event' && option('table', 'menuToggleTable', '▦', el.table ? 'Not a legacy table' : 'Mark as legacy table',
       el.table ? 'A real event again (orange)' : 'A table in an old database, read as events (shadowy orange)', { iconBg: null, iconClass: `bd-type-icon-table${el.table ? ' on' : ''}` }),
+    el.type === 'event' && !el.external && option('published', 'menuTogglePublished', '↗', el.published ? 'Not an integration event' : 'Mark as integration event',
+      el.published ? 'Private to this system again' : 'Published to other systems: its fields are a contract (outward arrow)', { iconBg: null, iconClass: `bd-type-icon-published${el.published ? ' on' : ''}` }),
     sliceId && option('comment', 'menuComment', '💬', 'Comment', 'On this slice, for whoever reads the plan'),
     option('properties', 'menuProperties', '📝', 'Properties', props.length ? `${props.length} · ${props.map(p => p.name).join(', ')}` : 'No properties'),
     option('connect', 'menuConnect', '🔗', 'Connect', 'Link to other elements'),

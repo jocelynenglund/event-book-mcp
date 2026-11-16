@@ -70,11 +70,13 @@ function pickOther(id, edition) {
 }
 
 const line = (t, text) => `<div class="cp-line ${t === '−' ? 'minus' : 'plus'}"><i>${t}</i><span>${escapeHtml(text)}</span></div>`;
+const warning = lines => lines.length
+  ? `<div class="bv-group bv-contract"><div class="ed-sheet-kicker">⚠ contract changed</div><div class="cp-scns">${lines.map(x => `<div class="cp-line minus"><i>⚠</i><span>${escapeHtml(x)}</span></div>`).join('')}</div></div>` : '';
 function changesHtml(c) {
   if (unchanged(c)) return '<p class="ed-why" style="color: var(--text-muted)">Nothing changed between these builds.</p>';
   const group = (title, removed, added) => (removed.length || added.length)
     ? `<div class="bv-group"><div class="ed-sheet-kicker">${title}</div><div class="cp-scns">${removed.map(x => line('−', x)).join('')}${added.map(x => line('+', x)).join('')}</div></div>` : '';
-  return group('Slices', c.slicesRemoved, c.slicesAdded) + group('Scenarios', c.scenariosRemoved, c.scenariosAdded) + group('Fields', c.fieldsRemoved, c.fieldsAdded) + group('Code', c.codeRemoved, c.codeAdded);
+  return group('Slices', c.slicesRemoved, c.slicesAdded) + group('Scenarios', c.scenariosRemoved, c.scenariosAdded) + group('Fields', c.fieldsRemoved, c.fieldsAdded) + group('Code', c.codeRemoved, c.codeAdded) + warning(c.contractChanged || []);
 }
 
 function showChanges(id, a, b) {

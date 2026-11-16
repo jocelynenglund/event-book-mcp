@@ -13,7 +13,7 @@
 // ===========================================
 
 import { projectState, getScenariosForSlice, getOrderedSlices, sliceTitle } from '../../core/projections.js';
-import { compareModels, fieldsOf, sliceKey } from '../compare/diff.js';
+import { compareModels, contractChanges, fieldsOf, sliceKey } from '../compare/diff.js';
 import { snapshotEvents } from '../snapshot/command.js';
 
 const PUBLISHED = 'EditionPublished', BUILT_LOG = 'SlicesBuilt', NEXT = 'NextDraftStarted', SNAPSHOT = 'ModelSnapshot';
@@ -74,7 +74,7 @@ const codeFile = s => (s?.description || '').match(/^Code: (\S+?)(?::\d+)?$/m)?.
 const screenLines = s => (s?.description || '').split('\n').filter(l => /^(Used by|Seen on): /.test(l));
 
 export function modelChanges(from, to) {
-  const out = { slicesAdded: [], slicesRemoved: [], scenariosAdded: [], scenariosRemoved: [], fieldsAdded: [], fieldsRemoved: [], codeAdded: [], codeRemoved: [], screensChanged: [] };
+  const out = { slicesAdded: [], slicesRemoved: [], scenariosAdded: [], scenariosRemoved: [], fieldsAdded: [], fieldsRemoved: [], codeAdded: [], codeRemoved: [], screensChanged: [], contractChanged: contractChanges(from, to) };
   const names = (id, st) => getScenariosForSlice(id, st).map(x => x.name);
   // Each slice counts once, by its key (as Compare matches): a name in several chapters is one slice, so a
   // build compared with itself is unchanged

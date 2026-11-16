@@ -148,7 +148,7 @@ import { toggleEventLog, copyEvent, copyAllEvents, exportModel, importModel } fr
 import { exportForEventmodelers } from './features/eventmodelers/export.js';
 import { openPropertySheet, saveProperty, deleteProperty, initProperties } from './features/properties/sheet.js';
 import { deleteElement } from './features/deleteElement/command.js';
-import { openElementMenu, menuRename, menuProperties, menuConnect, menuDelete, menuRemoveFromSlice, menuToggleExternal, menuToggleTable, menuComment, menuToggleTrigger, menuToggleTodo, menuToggleList, menuUpdatedBy, menuProcessorInputs, menuShowElement, menuSetElementFlow } from './features/elementMenu/sheet.js';
+import { openElementMenu, menuRename, menuProperties, menuConnect, menuDelete, menuRemoveFromSlice, menuToggleExternal, menuTogglePublished, menuToggleTable, menuComment, menuToggleTrigger, menuToggleTodo, menuToggleList, menuUpdatedBy, menuProcessorInputs, menuShowElement, menuSetElementFlow } from './features/elementMenu/sheet.js';
 import { 
   openAddScenarioSheet, 
   openEditScenarioSheet, 
@@ -239,6 +239,7 @@ window.EventPad = {
   menuDelete,
   menuRemoveFromSlice,
   menuToggleExternal,
+  menuTogglePublished,
   menuToggleTable,
   menuComment,
   menuToggleTrigger,

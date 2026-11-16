@@ -65,10 +65,14 @@ function valuesOf(values, el, alias, hideIds) {
 // A list's rows as text, one cell per field
 const rowsOf = rows => rows.map(r => Object.fromEntries(Object.entries(r || {}).map(([k, v]) => [k, show(v)])));
 
+// An integration event (ours, published to other systems) and who it goes to
+const publishedOf = el => el.type === 'event' && !!el.published && !el.external;
+const toOf = el => (publishedOf(el) ? (el.to || []).join(', ') : '');
+
 // A sticky named in a scenario, with the values it was given ('removed' when the model lost it)
 function refOf(el, values, alias, hideIds) {
   if (!el) return { removed: true };
-  return { type: el.type, external: !!el.external, table: !!el.table, name: el.name, kind: elementLabel(el), values: valuesOf(values, el, alias, hideIds) };
+  return { type: el.type, external: !!el.external, table: !!el.table, published: publishedOf(el), to: toOf(el), name: el.name, kind: elementLabel(el), values: valuesOf(values, el, alias, hideIds) };
 }
 
 function scenarioOf(scn, state, hideIds) {
@@ -91,7 +95,7 @@ function scenarioOf(scn, state, hideIds) {
 
 function stickyOf(el, sliceId, usageState) {
   return {
-    id: el.id, sliceId, type: el.type, external: !!el.external, table: !!el.table, kind: elementLabel(el), name: el.name,
+    id: el.id, sliceId, type: el.type, external: !!el.external, table: !!el.table, published: publishedOf(el), to: toOf(el), kind: elementLabel(el), name: el.name,
     used: eventUsageOf(el, usageState),
     fields: (el.properties || []).map(p => ({ label: propLabel(p), type: p.type || 'string' }))
   };

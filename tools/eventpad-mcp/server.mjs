@@ -109,6 +109,9 @@ function findSlice(ref, st = state()) {
 }
 
 const chapterId = name => chapterIdIn(name);
+// What an event is beyond a plain event: an old table read as events, another system's, or one of ours published to other systems
+const eventMark = el => (el.table ? ` (legacy table${typeof el.table === 'string' ? ': ' + el.table : ''})` : '') + (el.external ? ' (external)' : '')
+  + (el.published && !el.external ? ` (integration${el.to?.length ? ' → ' + el.to.join(', ') : ''})` : '');
 const props = el => (el.properties?.length ? ` (${el.properties.map(p => p.name + (p.type && p.type !== 'string' ? ':' + p.type : '')).join(', ')})` : '');
 
 // A literature book's outline: paragraphs in order, each with its sentences numbered (where scenarios would be)
@@ -161,9 +164,9 @@ function outline({ chapter, scenarios = false } = {}) {
       const parts = [
         ...of('screen').map(e => `screen ${e.name}`), ...of('processor').map(e => `⚙ ${e.name}`),
         ...of('command').map(e => `cmd ${e.name}${props(e)}`),
-        ...(s.type === 'SV' ? of('event').map(e => `evt ${e.name}`) : []),
-        ...of('readModel').map(e => `rm ${e.name}${props(e)}`),
-        ...(s.type !== 'SV' ? of('event').map(e => `evt ${e.name}${props(e)}`) : [])
+        ...(s.type === 'SV' ? of('event').map(e => `evt ${e.name}${eventMark(e)}`) : []),
+        ...of('readModel').map(e => `rm ${e.name}${e.list ? ' (list)' : ''}${props(e)}`),
+        ...(s.type !== 'SV' ? of('event').map(e => `evt ${e.name}${eventMark(e)}${props(e)}`) : [])
       ];
       const scns = [...pr.getScenariosForSlice(s.id, st)].sort((a, b) => !!b.mustHave - !!a.mustHave);
       const must = scns.filter(x => x.mustHave).length;
@@ -197,7 +200,7 @@ function gwtText(x, st) {
   const given = (x.given || []).map(g => name(g.elementId) + vals(g.values)).join(', ') || 'nothing';
   const when = x.when?.commandId ? ` | When ${name(x.when.commandId)}${vals(x.when.values)}` : '';
   const t = x.then;
-  const then = t?.type === 'event' ? name(t.eventId) + vals(t.values) : t?.type === 'rejection' ? `rejected: ${t.reason}`
+  const then = t?.type === 'event' ? name(t.eventId) + vals(t.values) : t?.type === 'rejection' ? `rejected: ${t.reason}` : t?.type === 'nothing' ? `nothing (${t.reason})`
     : t?.type === 'readModel' ? name(t.readModelId) + (t.rows?.length ? ' ' + JSON.stringify(t.rows) : vals(t.values)) : 'not set';
   return `Given ${given}${when} | Then ${then}`;
 }
@@ -913,7 +916,7 @@ const tools = [
   { name: 'outline', description: 'The open model as a short outline: chapters (with "N of M refined"), slices (S-numbers to refer to them; "☐ ready" once refined, ready to build; "☑ done" once confirmed built from the tests), stickies with fields, scenario counts. scenarios:true lists each Given/When/Then (★ must have, ✓ nice to have).',
     inputSchema: { type: 'object', properties: { chapter: S, scenarios: { type: 'boolean' } } }, run: outline },
   { name: 'add_steps', edits: true,
-    description: 'Add steps to a chapter (made if new), in order. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model), description. Stickies with the same name are reused.',
+    description: 'Add steps to a chapter (made if new), in order. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, table?, external?, published?, to?}: table is the name of a legacy table (old storage read as events), external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model), description. Stickies with the same name are reused.',
     inputSchema: { type: 'object', properties: { chapter: S, steps: { type: 'array', items: { type: 'object' } } }, required: ['steps'] },
     run: ({ chapter, steps }) => {
       notLiterature('steps');
@@ -923,7 +926,7 @@ const tools = [
       return `Added ${ids.length} step${ids.length === 1 ? '' : 's'}: ${ids.map(id => `${refs.get(id)} ${pr.sliceTitle(st.slices[id], st)}`).join(', ')}`;
     } },
   { name: 'add_scenarios', edits: true,
-    description: 'Add Given/When/Then scenarios to a slice (S-number or title). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command), then {event, values} | {rejected: reason} | {readModel?, values | rows} (a See slice), mustHave (true: an acceptance criterion; otherwise a nice to have).',
+    description: 'Add Given/When/Then scenarios to a slice (S-number or title). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command), then {event, values} | {rejected: reason: the command is refused with a reason the caller sees} | {nothing: why: accepted but changes nothing, e.g. the same call twice or an automation with nothing to do; the reason is required, one line; not with event/rejected/readModel} | {readModel?, values | rows} (a See slice), mustHave (true: an acceptance criterion; otherwise a nice to have).',
     inputSchema: { type: 'object', properties: { slice: S, scenarios: { type: 'array', items: { type: 'object' } } }, required: ['slice', 'scenarios'] },
     run: ({ slice, scenarios }) => {
       notLiterature('scenarios');
@@ -1139,7 +1142,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.2.0' },
+      serverInfo: { name: 'eventpad', version: '0.3.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

@@ -1,6 +1,6 @@
 // ===========================================
 // ELEMENT MENU - Parts of a sticky's ⋮ menu, each drawn from its view alone
-// (Element Menu State, Element Menu Options, Element Menu Readers, Element Menu Flow Choices).
+// (Element Menu State, Element Menu Options, Element Menu Readers, Element Menu Flow Choices, Element Menu Consumers).
 // A root carries data-component and data-key.
 // ===========================================
 
@@ -62,11 +62,21 @@ export function flowChoicesSection(flows) {
     </div>`;
 }
 
-// The whole menu: flows, readers, then the options
-export function elementMenuBody({ flows, readers, options }) {
+// An integration event: who it goes to, comma-separated, saved when the field changes (Element Menu Consumers)
+export function elementMenuConsumers(c) {
+  return `
+    <div class="em-consumers-field" data-component="Element menu consumers" data-key="${c.elementId}">
+      <label class="bd-sheet-label" for="emConsumers">Published to</label>
+      <input type="text" class="em-name" id="emConsumers" value="${escapeName(c.to)}" placeholder="Billing, CRM (who consumes it)" aria-label="Consumers" autocomplete="off" enterkeyhint="done">
+    </div>`;
+}
+
+// The whole menu: flows, readers, the options, then (an integration event) who it is published to
+export function elementMenuBody({ flows, readers, options, consumers }) {
   return `
     ${flows ? flowChoicesSection(flows) : ''}
     ${readers ? readersSection(readers) : ''}
+    ${consumers ? elementMenuConsumers(consumers) : ''}
     ${options.map(elementMenuOption).join('')}
   `;
 }

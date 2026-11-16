@@ -15,12 +15,13 @@ import { openPropertySheet } from '../properties/sheet.js';
 import { openThread } from '../comments/sheet.js';
 import { deleteElement } from '../deleteElement/command.js';
 import { showActions } from '../connect/actionSheet.js';
-import { removeFromSlice, setTrigger, setTodo, setElementFlow } from '../board/command.js';
+import { removeFromSlice, setPublished, setTrigger, setTodo, setElementFlow } from '../board/command.js';
 import { isReadOnly, openElementReadSheet } from '../readOnly/sheet.js';
 import { elementMenuState } from './elementMenuState.read.js';
 import { elementMenuOptions } from './elementMenuOptions.read.js';
 import { elementMenuReaders } from './elementMenuReaders.read.js';
 import { elementMenuFlowChoices } from './elementMenuFlowChoices.read.js';
+import { elementMenuConsumers } from './elementMenuConsumers.read.js';
 import { elementMenuTrigger } from './elementMenuTrigger.read.js';
 import { elementMenuTitle, elementMenuBody } from './elementMenu.parts.js';
 
@@ -57,8 +58,14 @@ export function openElementMenu(elementId, sliceId = null) {
   options.innerHTML = elementMenuBody({
     flows: elementMenuFlowChoices(book, elementId, currentSliceId),   // an outcome event can belong to a flow
     readers: elementMenuReaders(book, elementId),                     // an event: the read models it updates
-    options: elementMenuOptions(book, elementId, currentSliceId)
+    options: elementMenuOptions(book, elementId, currentSliceId),
+    consumers: elementMenuConsumers(book, elementId)                  // an integration event: who it goes to
   });
+  const consumersInput = document.getElementById('emConsumers');
+  if (consumersInput) {
+    consumersInput.onchange = () => saveConsumers(consumersInput);
+    consumersInput.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); consumersInput.blur(); } };
+  }
 
   showSheet('elementMenuSheet');
 }
@@ -80,6 +87,13 @@ function saveMenuName(input) {
   appendEvent(EventTypes.ElementRenamed, { elementId: el.elementId, name });
   render();
   showToast('Renamed');
+}
+
+function saveConsumers(input) {
+  if (!elementMenuConsumers(load(), currentElementId)) return;
+  setPublished(currentElementId, true, input.value.split(','));
+  render();
+  showToast('Saved');
 }
 
 export function menuProperties() {
@@ -166,6 +180,17 @@ export function menuComment() {
   hideAllSheets();
   const sliceId = currentSliceId;
   if (sliceId) setTimeout(() => openThread(sliceId, null), 150);
+}
+
+// Integration event: published to other systems (outbound), or private again. Turning it on keeps the menu open for who it goes to.
+export function menuTogglePublished() {
+  const el = elementMenuState(load(), currentElementId);
+  if (!el) return;
+  const sliceId = currentSliceId;
+  setPublished(el.elementId, !el.published);
+  render();
+  if (!el.published) openElementMenu(el.elementId, sliceId);   // now on: show the consumers field
+  else hideAllSheets();
 }
 
 export function menuToggleTable() {

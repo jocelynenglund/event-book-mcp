@@ -4,10 +4,11 @@
 
 import { readModelEvents, getCurrentModelId, openModel, canEditCurrent } from '../../core/eventStore.js';
 import { comparePage } from './comparePage.read.js';
+import { compareContract } from './compareContract.read.js';
 import { comparePicker } from './comparePicker.read.js';
 import { compareBuiltBook } from './compareBuiltBook.read.js';
 import { comparePublishedEdition } from './comparePublishedEdition.read.js';
-import { compareHeading, compareChip, compareConfirmDone, compareChangeButton, compareRow, comparePick } from './compare.parts.js';
+import { compareHeading, compareChip, compareConfirmDone, compareChangeButton, compareContractWarning, compareRow, comparePick } from './compare.parts.js';
 import { confirmSlicesDone, keepSlicesPlanned, matchSlices, keepSlicesApart } from './command.js';
 import { publishEdition } from '../editions/command.js';
 import { showToast } from '../../ui/toast.js';
@@ -41,6 +42,7 @@ export function renderCompare() {
       <div class="cp-chips">
         ${page.chips.map(compareChip).join('\n        ')}
       </div>
+      ${compareContractWarning(compareContract({ planEvents: readModelEvents(current.planId), builtEvents: readModelEvents(current.builtId) }))}
       ${compareConfirmDone(page.confirm)}
       ${builtAsPlannedSection(page.planned)}
       ${compareChangeButton()}

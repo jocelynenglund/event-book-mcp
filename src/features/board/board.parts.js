@@ -55,6 +55,7 @@ export function boardCard(card, ui = {}) {
     <button class="bd-card" ${mark} style="--tilt: ${noteTilt(card.tiltKey)}deg" data-type="${card.type}"${card.attrs}${card.otherFlow ? ' data-other-flow="true"' : ''}${card.trigger ? ' data-trigger="true"' : ''}${card.todo ? ' data-todo="true"' : ''}${card.list ? ' data-list="true"' : ''} data-action="element-read" data-el="${card.elementId}" data-slice="${card.sliceId}">
       <span class="bd-card-kind">${card.trigger ? '⚡ Trigger · ' : ''}${card.todo ? '☑ To-do list' : card.label}${card.outcome ? ` · ↳ ${escapeHtml(card.outcome)}` : ''}</span>
       <span class="bd-card-title"><span class="bd-card-more" role="button" aria-label="Edit ${escapeHtml(card.name)}" data-action="element" data-el="${card.elementId}" data-slice="${card.sliceId}">⋮</span><span class="bd-card-name">${escapeHtml(card.name)}</span></span>
+      ${card.to ? `<span class="bd-card-to">→ ${escapeHtml(card.to)}</span>` : ''}
       ${props}
       ${updates}
     </button>`;
@@ -154,9 +155,9 @@ export function boardChapterHead(chapter, ui = {}) {
         ${chapter.flows.map(f => `<button class="bd-flow ${chapter.shownFlow === f.id ? 'active' : ''}" data-action="show-flow" data-chapter="${chapter.id}" data-flow="${f.id}">↳ ${escapeHtml(f.name)}</button>`).join('')}
       </div>` : '';
   return `
-    <div class="bd-chapter ${chapter.flows.length ? 'has-flows' : ''}" data-component="Board chapter header" data-key="${chapter.id}" ${at(ui.col, 1, Math.max(chapter.slices, 1))}>
+    <div class="bd-chapter ${chapter.flows.length ? 'has-flows' : ''}${chapter.slices <= 1 ? ' bd-chapter-narrow' : ''}" data-component="Board chapter header" data-key="${chapter.id}" ${at(ui.col, 1, Math.max(chapter.slices, 1))}>
       <button class="bd-chapter-fold" aria-label="Fold ${escapeHtml(chapter.name)}" data-action="fold" data-chapter="${chapter.id}">‹</button>
-      <button class="bd-chapter-label" data-action="chapter-menu" data-chapter="${chapter.id}">
+      <button class="bd-chapter-label" data-action="chapter-menu" data-chapter="${chapter.id}" title="${escapeHtml(chapter.name)}">
         <span class="ch-more" aria-hidden="true">⋮</span>
         <span class="bd-chapter-name">${ui.bookmarked ? '<span class="ch-mark" aria-label="Bookmarked">🔖</span> ' : ''}${escapeHtml(chapter.name)}</span>
         <span class="bd-chapter-count">${plural(chapter.slices, 'slice', 'slices')}</span>
