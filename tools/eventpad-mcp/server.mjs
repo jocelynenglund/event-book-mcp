@@ -200,7 +200,7 @@ function gwtText(x, st) {
   const given = (x.given || []).map(g => name(g.elementId) + vals(g.values)).join(', ') || 'nothing';
   const when = x.when?.commandId ? ` | When ${name(x.when.commandId)}${vals(x.when.values)}` : '';
   const t = x.then;
-  const then = t?.type === 'event' ? name(t.eventId) + vals(t.values) : t?.type === 'rejection' ? `rejected: ${t.reason}`
+  const then = t?.type === 'event' ? name(t.eventId) + vals(t.values) : t?.type === 'rejection' ? `rejected: ${t.reason}` : t?.type === 'nothing' ? `nothing (${t.reason})`
     : t?.type === 'readModel' ? name(t.readModelId) + (t.rows?.length ? ' ' + JSON.stringify(t.rows) : vals(t.values)) : 'not set';
   return `Given ${given}${when} | Then ${then}`;
 }
@@ -926,7 +926,7 @@ const tools = [
       return `Added ${ids.length} step${ids.length === 1 ? '' : 's'}: ${ids.map(id => `${refs.get(id)} ${pr.sliceTitle(st.slices[id], st)}`).join(', ')}`;
     } },
   { name: 'add_scenarios', edits: true,
-    description: 'Add Given/When/Then scenarios to a slice (S-number or title). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command), then {event, values} | {rejected: reason} | {readModel?, values | rows} (a See slice), mustHave (true: an acceptance criterion; otherwise a nice to have).',
+    description: 'Add Given/When/Then scenarios to a slice (S-number or title). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command), then {event, values} | {rejected: reason: the command is refused with a reason the caller sees} | {nothing: why: accepted but changes nothing, e.g. the same call twice or an automation with nothing to do; the reason is required, one line; not with event/rejected/readModel} | {readModel?, values | rows} (a See slice), mustHave (true: an acceptance criterion; otherwise a nice to have).',
     inputSchema: { type: 'object', properties: { slice: S, scenarios: { type: 'array', items: { type: 'object' } } }, required: ['slice', 'scenarios'] },
     run: ({ slice, scenarios }) => {
       notLiterature('scenarios');
@@ -1142,7 +1142,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.2.0' },
+      serverInfo: { name: 'eventpad', version: '0.3.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});
