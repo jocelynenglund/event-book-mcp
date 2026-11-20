@@ -71,14 +71,6 @@ export function renameChapter(chapterId, name) {
   appendEvent(EventTypes.ChapterRenamed, { chapterId, name });
 }
 
-export function moveChapter(chapterId, toIndex) {
-  const state = projectState();
-  const from = state.chapterOrder.indexOf(chapterId);
-  if (from < 0 || toIndex < 0 || toIndex >= state.chapterOrder.length || toIndex === from) return false;
-  appendEvent(EventTypes.ChapterMoved, { chapterId, toIndex });
-  return true;
-}
-
 export function deleteChapter(chapterId) {
   appendEvent(EventTypes.ChapterDeleted, { chapterId });
 }

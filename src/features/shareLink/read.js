@@ -20,7 +20,7 @@ export function shareLinkSnapshot(source, scope = null) {
     !inferred(id) && (whole || (wanted.chapters || []).includes(s.chapterId) || (wanted.slices || []).includes(id))));
   const kept = {
     elements: book.elements, connections: book.connections, scenarios: book.scenarios, slices,
-    sliceOrder: book.sliceOrder.filter(id => id in slices), chapters: book.chapters, chapterOrder: book.chapterOrder,
+    sliceOrder: book.sliceOrder.filter(id => id in slices), chapters: book.chapters, chapterOrder: book.chapterOrder, parts: book.parts, arranged: book.arranged,
     flows: book.flows, modelName: book.modelName, modelDescription: book.modelDescription, preface: book.preface,
     tags: book.tags, updateRoles: book.updateRoles, modelSource: book.modelSource, sliceDecisions: book.sliceDecisions, follow: book.follow
   };
@@ -39,6 +39,7 @@ export function shareLinkSnapshot(source, scope = null) {
       connections: book.connections.filter(c => used.has(c.from) && used.has(c.to)),
       chapters: Object.fromEntries(Object.entries(book.chapters).filter(([id]) => chapterIds.has(id))),
       chapterOrder: book.chapterOrder.filter(id => chapterIds.has(id)),
+      parts: book.parts.filter(p => chapterIds.has(p.firstChapter)),
       flows: Object.fromEntries(Object.entries(book.flows || {}).filter(([, f]) => chapterIds.has(f.chapterId))),
       updateRoles: Object.fromEntries(Object.entries(book.updateRoles || {}).filter(([k]) => k.split('>').every(id => used.has(id)))),
       sliceDecisions: (book.sliceDecisions || []).filter(d => d.sliceId in slices),

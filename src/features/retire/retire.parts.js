@@ -10,9 +10,10 @@ const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;'
 // In a plan's details: what it is built into (or how far it is), and Retire once every slice is built.
 // v: a Ready To Retire view. Nothing for a plan with nothing built.
 export function retireBox(v) {
-  if (!v.text) return '';
+  if (!v.text && !v.canAnyway) return '';
   return `<div class="rt-box" data-component="Retire box" data-key="${escapeHtml(v.modelId)}">
-      <span class="rt-mark">${escapeHtml(v.text)}${v.retired ? ' · retired' : ''}</span>
+      ${v.text ? `<span class="rt-mark">${escapeHtml(v.text)}${v.retired && !/^retired/.test(v.text) ? ' · retired' : ''}</span>` : ''}
+      ${v.canAnyway && !v.ready ? `<button class="ed-btn" data-library-action="retire-anyway" data-model="${escapeHtml(v.modelId)}">Retire anyway: I know it's built</button>` : ''}
       ${v.ready ? `<button class="ed-btn" data-library-action="retire" data-model="${escapeHtml(v.modelId)}">Retire plan</button>` : ''}
     </div>`;
 }
@@ -33,5 +34,17 @@ export function builtFromList(v) {
   return `<div class="rt-built-from" data-component="Built from" data-key="${escapeHtml(`${v.app}-${v.edition}`)}">
       <span class="rt-built-label">Built from</span>
       ${v.plans.map(p => `<button class="bv-btn rt-plan" data-library-action="open" data-model="${escapeHtml(p.id)}">${escapeHtml(p.title)}</button>`).join('\n      ')}
+    </div>`;
+}
+
+// The confirm sheet for Retire anyway. v: a Retire Anyway Confirm view.
+export function retireAnywaySheet(v) {
+  return `<div class="ed-sheet-card rt-anyway" data-component="Retire anyway sheet" data-key="${escapeHtml(v.modelId)}">
+      <p class="rt-anyway-text">${escapeHtml(v.text)}</p>
+      <ul class="rt-anyway-list">${v.unconfirmed.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>
+      <div class="ed-actions">
+        <button class="ed-btn primary" data-library-action="retire-anyway-go" data-model="${escapeHtml(v.modelId)}">Retire</button>
+        <button class="ed-btn" data-library-action="close">Cancel</button>
+      </div>
     </div>`;
 }

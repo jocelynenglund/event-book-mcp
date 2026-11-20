@@ -6,6 +6,7 @@ import { getEventStream, EventTypes, storedEvents, readModelEvents } from './eve
 import { byName } from './constants.js';
 import { isSliceEdit, editedSlices } from './sliceEdits.js';
 import { editionOf } from '../features/editions/rules.js';
+import { chapterMoved, chaptersArranged, partStarted, partRenamed, partRemoved, chapterRemoved, layoutByName, layoutOnSnapshot } from '../features/arrange/arrangement.js';
 
 // Element ordering hierarchy (top to bottom)
 // Screens/Processors → Commands/ReadModels → Events
@@ -31,7 +32,7 @@ export function sortSliceElements(elements, state) {
 // The open model by default; the library passes other models' events
 // What changes a book's structure: its chapters and slices (Approve Structure is taken back by them)
 const STRUCTURAL = new Set([EventTypes.SliceCreated, EventTypes.SliceDeleted, EventTypes.SliceNamed, EventTypes.SliceMoved, EventTypes.SliceChapterSet,
-  EventTypes.ChapterCreated, EventTypes.ChapterRenamed, EventTypes.ChapterMoved, EventTypes.ChapterDeleted]);
+  EventTypes.ChapterCreated, EventTypes.ChapterRenamed, EventTypes.ChapterMoved, EventTypes.ChaptersArranged, EventTypes.ChapterDeleted]);
 
 // A book's state for the shelves (read only: don't change what it gives back), projected once
 // and remembered until its events change: appended or undone in place (length, last event),
@@ -81,6 +82,8 @@ export function projectState(eventStream = getEventStream()) {
     sliceOrder: [],    // slice ids, left to right on the board
     chapters: {},      // id -> { id, name }
     chapterOrder: [],  // chapter ids, left to right
+    parts: [],         // { id, name, firstChapter }: names over runs of chapters, by place (features/arrange)
+    arranged: false,   // the chapters were laid out by someone: a build's snapshot keeps that layout
     flows: {},         // id -> { id, chapterId, name }
     modelName: null,
     modelDescription: null,
@@ -126,7 +129,10 @@ export function projectState(eventStream = getEventStream()) {
       // The model as it stood, in one go (a copy: later events change it)
       case EventTypes.ModelSnapshot: {
         const snap = JSON.parse(JSON.stringify(event.data.state || {}));
+        const layout = layoutByName(state);
         Object.keys(state).forEach(k => { if (k in snap) state[k] = snap[k]; });
+        // A build's snapshot (no layout of its own) comes onto the chapters as laid out, matched by name
+        if (layout && !snap.arranged) layoutOnSnapshot(state, layout);
         state.pendingSlice = null;
         Object.values(state.slices).forEach(s => s.elements.forEach(id => everSliced.add(id)));
         break;
@@ -347,17 +353,15 @@ export function projectState(eventStream = getEventStream()) {
         if (state.chapters[event.data.chapterId]) state.chapters[event.data.chapterId].name = event.data.name;
         break;
 
-      case EventTypes.ChapterMoved: {
-        const from = state.chapterOrder.indexOf(event.data.chapterId);
-        if (from >= 0) {
-          state.chapterOrder.splice(from, 1);
-          const to = Math.max(0, Math.min(event.data.toIndex, state.chapterOrder.length));
-          state.chapterOrder.splice(to, 0, event.data.chapterId);
-        }
-        break;
-      }
+      case EventTypes.ChapterMoved: chapterMoved(state, event.data); break;   // old books
+
+      case EventTypes.ChaptersArranged: chaptersArranged(state, event.data); break;
+      case EventTypes.PartStarted: partStarted(state, event.data); break;
+      case EventTypes.PartRenamed: partRenamed(state, event.data); break;
+      case EventTypes.PartRemoved: partRemoved(state, event.data); break;
 
       case EventTypes.ChapterDeleted:
+        chapterRemoved(state, event.data.chapterId);
         delete state.chapters[event.data.chapterId];
         state.chapterOrder = state.chapterOrder.filter(id => id !== event.data.chapterId);
         // Its slices stay in the model, just without a chapter
@@ -486,7 +490,8 @@ export function projectState(eventStream = getEventStream()) {
         state.follow = null;
         break;
       case EventTypes.PlanRetired:
-        state.retired = { app: event.data.app || null, edition: event.data.edition ?? null, retiredAt: event.data.retiredAt || event.timestamp || null };
+        state.retired = { app: event.data.app || null, edition: event.data.edition ?? null, retiredAt: event.data.retiredAt || event.timestamp || null,
+          ...(event.data.byOwner ? { byOwner: true, unconfirmed: event.data.unconfirmed || [] } : {}) };
         break;
 
       case EventTypes.StructureApproved:
@@ -602,6 +607,8 @@ export function projectState(eventStream = getEventStream()) {
       case EventTypes.SpecsGenerated:
       case EventTypes.SpecsRegenerated:
         (event.data.slices || []).forEach(id => { (state.specs ||= {})[id] = { app: event.data.app || null, at: event.timestamp || null }; });
+        // The spec file each slice was generated into: what pairs the plan with the built code exactly
+        (event.data.specs || []).forEach(x => { if (x?.sliceId && x.file) Object.assign((state.specs ||= {})[x.sliceId] ||= { app: event.data.app || null, at: event.timestamp || null }, { file: x.file, language: x.language || null }); });
         break;
 
       case EventTypes.SliceBuiltCleared:

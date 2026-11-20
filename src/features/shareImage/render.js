@@ -5,6 +5,7 @@
 // ===========================================
 
 import { heatOf } from '../usage/rules.js';
+import { pictureLegend } from './legend.js';
 import { shotOf } from './shotOf.js';
 import { sliceTypeLabels, laneLabels, noteTilt } from '../board/view.js';
 
@@ -152,8 +153,19 @@ function arrow(ctx, x, y1, y2, color) {
   arrowHead(ctx, x, y2, 0, dir);
 }
 
+// A scenario line's swatch, in its sticky's colour; a legacy table gets a dashed edge, an integration event a dark right edge
+export function drawSwatch(ctx, x, y, size, line) {
+  const n = line.table ? notes.table : line.external ? notes.external : notes[line.type] || notes.screen;
+  ctx.save();
+  roundRect(ctx, x, y, size, size, 2);
+  ctx.fillStyle = n.fill; ctx.fill();
+  if (line.table) { ctx.setLineDash([2.5, 1.5]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.6)'; ctx.lineWidth = 1; ctx.stroke(); }
+  else if (line.published) { ctx.clip(); ctx.fillStyle = '#3b2410'; ctx.fillRect(x + size - Math.max(3, size / 4), y, size, size); }
+  ctx.restore();
+}
+
 // Measure a card (from the shot): returns { h, nameLines, propLines, tags, slim }
-function measureCard(ctx, card) {
+export function measureCard(ctx, card) {
   ctx.font = `700 ${L.nameSize}px ${DISPLAY}`;
   if (card.slim) {
     const lines = wrap(ctx, `☑ ${card.name} ↺`, L.cardW - 24, 2);
@@ -168,10 +180,14 @@ function measureCard(ctx, card) {
   ctx.font = `700 11.5px ${MONO}`;
   const tags = card.tags.map(tag => ({ ...tag, lines: wrap(ctx, tag.text, L.cardW - 38, 4) }));
   const tagsH = tags.reduce((sum, tag) => sum + tag.lines.length * 14 + 6, 0);
+  // An integration event's consumers: one wrapped line "→ Billing, CRM" under the name
+  ctx.font = `600 ${L.propSize}px ${MONO}`;
+  const toLines = card.to ? wrap(ctx, `\u2192 ${card.to}`, L.cardW - 24, 2) : [];
   const h = 11 + L.kindSize + 5 + nameLines.length * L.nameLine
+    + (toLines.length ? 3 + toLines.length * L.propLine : 0)
     + (propLines.length ? 5 + propLines.length * L.propLine : 0)
     + (tags.length ? 8 + tagsH : 0) + 12;
-  return { h, nameLines, propLines, tags, slim: false, todo: card.todo, list: card.list };
+  return { h, nameLines, toLines, propLines, tags, slim: false, todo: card.todo, list: card.list };
 }
 
 function drawCard(ctx, card, m, x, y, tilt, t) {
@@ -223,6 +239,12 @@ function drawCard(ctx, card, m, x, y, tilt, t) {
     ctx.fillText('\u2197', L.cardW - 12, 17.5);
     ctx.restore();
   }
+  // A legacy table: a dashed darker edge, like the board's sticky
+  if (card.kind === 'event' && card.table) {
+    roundRect(ctx, 0.75, 0.75, L.cardW - 1.5, m.h - 1.5, 3);
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.setLineDash([]);
+  }
   if (n.stroke) {
     roundRect(ctx, 0, 0, L.cardW, m.h, 3);
     ctx.strokeStyle = n.stroke;
@@ -258,6 +280,14 @@ function drawCard(ctx, card, m, x, y, tilt, t) {
 
   ctx.font = `700 ${L.nameSize}px ${DISPLAY}`;
   m.nameLines.forEach(line => { ctx.fillText(line, 12, ty); ty += L.nameLine; });
+
+  if (m.toLines?.length) {
+    ty += 3;
+    ctx.font = `600 ${L.propSize}px ${MONO}`;
+    ctx.globalAlpha = 0.85;
+    m.toLines.forEach(line => { ctx.fillText(line, 12, ty); ty += L.propLine; });
+    ctx.globalAlpha = 1;
+  }
 
   if (m.propLines.length) {
     ty += 5;
@@ -388,7 +418,7 @@ function drawGwt(ctx, m, x, y, tilt, t) {
     const tx = 12 + GWT.kwW;
     if (l.type) {
       roundRect(ctx, tx, ty + 3, GWT.swatch, GWT.swatch, 2);
-      ctx.fillStyle = (l.external ? notes.external : notes[l.type] || notes.screen).fill; ctx.fill();
+      drawSwatch(ctx, tx, ty + 3, GWT.swatch, l);
     }
     ctx.font = `${l.type ? 700 : 500} 13px ${BODY}`;
     ctx.fillStyle = l.reject ? '#b4442f' : l.type ? notes.screen.text : '#75675a';
@@ -808,9 +838,7 @@ export function renderModelImage(args = {}) {
   // Footer: legend, and the credit on the right
   const fy = lanesTop + bodyH + 26;
   // Only the kinds of sticky the picture has (yellow is explained only when there's some)
-  const pictured = new Set(slices.flatMap(s => s.lanes.flat().map(c => c.kind === 'event' && c.external ? 'external' : c.kind === 'event' && c.published ? 'published' : c.kind)));
-  const legend = [['command', 'Command'], ['event', 'Event'], ['external', 'External event'], ['published', 'Integration event ↗'], ['readModel', 'Read model'], ['screen', 'Screen'], ['processor', 'Automation']]
-    .filter(([type]) => pictured.has(type));
+  const legend = pictureLegend(slices);
   let lx = L.pad;
   ctx.font = `600 14px ${BODY}`;
   legend.forEach(([type, label]) => {
@@ -818,6 +846,7 @@ export function renderModelImage(args = {}) {
     ctx.fillStyle = notes[type].fill;
     ctx.fill();
     if (notes[type].stroke) { ctx.strokeStyle = notes[type].stroke; ctx.lineWidth = 1; ctx.stroke(); }
+    if (type === 'table') { roundRect(ctx, lx + 0.75, fy + 0.75, 13.5, 13.5, 3); ctx.setLineDash([3, 2]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.55)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); }
     ctx.fillStyle = t.muted;
     ctx.fillText(label, lx + 22, fy);
     lx += 22 + ctx.measureText(label).width + 18;

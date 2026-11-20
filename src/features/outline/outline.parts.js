@@ -180,6 +180,14 @@ function chapterMeta(count) {
   return `<span class="ol-refined-count ${count.all ? 'all' : ''}">${count.label}</span>`;
 }
 
+// A part's heading over its chapters: its name (tap: rename or remove it) and what it holds. ui: editable
+export function outlinePartHeading(part, ui = {}) {
+  const name = ui.editable
+    ? `<button class="ol-part-name" data-outline-action="part-menu" data-part="${part.partId}" aria-label="${escapeHtml(part.name)}: rename or remove the part">${escapeHtml(part.name)}</button>`
+    : `<span class="ol-part-name">${escapeHtml(part.name)}</span>`;
+  return `<div class="ol-part" data-component="Outline part heading" data-key="${part.partId}">${name}<span class="ol-count">${part.counts}</span></div>`;
+}
+
 // A chapter's header (or "Not in a chapter" when there are chapters). ui: searching, bookmarked.
 export function outlineChapterHead(chapter, ui = {}) {
   const bands = chapter.folded ? `<span class="ol-bands">${chapter.bands.map(band =>
@@ -195,8 +203,8 @@ export function outlineChapterHead(chapter, ui = {}) {
           <span class="ol-count">${count}${bands}</span>
         </div>
         <div class="ol-step" ${ui.searching ? 'hidden' : ''}>
-          <button aria-label="Chapter earlier" data-outline-action="chapter-up" data-chapter="${chapter.id}" data-to="${chapter.index - 1}" ${chapter.first ? 'disabled' : ''}>↑</button>
-          <button aria-label="Chapter later" data-outline-action="chapter-down" data-chapter="${chapter.id}" data-to="${chapter.index + 1}" ${chapter.last ? 'disabled' : ''}>↓</button>
+          <button aria-label="Chapter earlier" data-outline-action="chapter-up" data-chapter="${chapter.id}" ${chapter.first ? 'disabled' : ''}>↑</button>
+          <button aria-label="Chapter later" data-outline-action="chapter-down" data-chapter="${chapter.id}" ${chapter.last ? 'disabled' : ''}>↓</button>
         </div>
       </div>`;
 }

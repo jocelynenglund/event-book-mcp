@@ -39,8 +39,9 @@ import { chooseBookKind } from '../literature/command.js';
 import { openBoardSheet } from '../board/sheets/shared.js';
 import { editionsSection } from '../buildVersions/view.js';
 import { readyToRetire } from '../retire/readyToRetire.read.js';
-import { retireBox, retiredShelfBox } from '../retire/retire.parts.js';
-import { retirePlan } from '../retire/command.js';
+import { retireBox, retiredShelfBox, retireAnywaySheet } from '../retire/retire.parts.js';
+import { retireAnywayConfirm } from '../retire/retireAnywayConfirm.read.js';
+import { retirePlan, retirePlanAnyway } from '../retire/command.js';
 import { usageSection } from '../usage/view.js';
 import { pressSection } from '../press/view.js';
 import { fillProductInsight } from '../productUsage/view.js';
@@ -565,6 +566,20 @@ function handleClick(e) {
       if (refused) { showToast(refused); return; }
       hideAllSheets();
       showToast('Retired: it moved to the Retired shelf');
+      renderLibrary();
+    });
+  }
+  else if (a === 'retire-anyway') {
+    // The owner's word: the app's own sheet lists what isn't confirmed, nothing happens until Retire
+    openBoardSheet(retireAnywaySheet(retireAnywayConfirm(readModelEvents(id), id)));
+  }
+  else if (a === 'retire-anyway-go') {
+    readyToChange(id).then(why => {
+      if (why) { showToast(why); return; }
+      const refused = onBook(id, () => retirePlanAnyway());
+      if (refused) { showToast(refused); return; }
+      hideAllSheets();
+      showToast('Retired on your word: it moved to the Retired shelf');
       renderLibrary();
     });
   }

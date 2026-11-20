@@ -1,7 +1,7 @@
 // ===========================================
 // OUTLINE - Layout (SV: Outline Layout)
 // Where things sit on the Outline: which chapters, in what order, which slices each one shows (after a search
-// or a stage filter), which slice is first and last, and the lines above (verify, rounds). No component draws
+// or a stage filter), the part each stands in, which slice is first and last, and the lines above (verify, rounds). No component draws
 // from this: each part of the screen reads its own view, handed the slices it is about.
 // Local UI state (folds) comes in as a question: folded(id).
 // ===========================================
@@ -12,6 +12,8 @@ import { verifyingEdition, verificationResults } from '../verify/command.js';
 import { shows, filtering as staged, filterFor } from '../filter/status.js';
 import { isLiterature } from '../literature/rules.js';
 import { slicesFound } from '../search/read.js';
+import { chapterParts } from '../arrange/chapterParts.read.js';
+import { chapterArrangeOptions } from '../arrange/chapterArrangeOptions.read.js';
 
 const norm = t => String(t || '').toLowerCase();
 
@@ -29,18 +31,25 @@ export function outlineLayout(state, { query = '', folded = () => false } = {}) 
   // Searching or showing one stage: chapters open, the ones with nothing to show are left out
   const filtering = !!(words.length || staged());
   let shown = 0;
+  // Each chapter's part; a part's heading goes over the first of its chapters shown
+  const partOf = new Map(chapterParts(state).flatMap(g => g.chapterIds.map(id => [id, g.partId])));
+  let lastPart = null;
   const chapters = groups.flatMap(({ chapter, slices: inChapter }) => {
     // Searching: the slices Slices Found names (a chapter's name finds all its slices)
     const found = !words.length ? inChapter : inChapter.filter(sl => hits.has(sl.id));
     const slices = found.filter(shows);
     if (filtering && !slices.length) return [];
     shown += slices.length;
-    const index = chapter ? state.chapterOrder.indexOf(chapter.id) : -1;
+    // How far the chapter can step earlier or later among the chapters and the part bookends
+    const steps = chapter && chapterArrangeOptions(state, chapter.id);
+    const partId = partOf.get(chapter?.id) ?? null;
+    const partHeading = partId && partId !== lastPart ? partId : null;
+    lastPart = partId;
     return [{
       id: chapter?.id || null,
       name: chapter?.name || 'Not in a chapter',
       loose: !chapter,
-      index, first: index === 0, last: index === state.chapterOrder.length - 1,
+      first: !steps?.canEarlier, last: !steps?.canLater, partId, partHeading,
       folded: !!chapter && !filtering && !!folded(chapter.id),
       inChapter, slices,
       rows: slices.map(s => ({ slice: s, first: s.id === firstId && !canLeaveFirst, last: s.id === lastId }))

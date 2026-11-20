@@ -6,7 +6,7 @@
 // ===========================================
 
 import { shotOf } from './shotOf.js';
-import { DISPLAY, BODY, MONO, notes, themes, sliceAccent, wrap, roundRect, drawGrain, MAX_SIDE } from './render.js';
+import { DISPLAY, BODY, MONO, notes, themes, sliceAccent, wrap, roundRect, drawSwatch, drawGrain, MAX_SIDE } from './render.js';
 
 const W = 1080;
 const PAD = 64;
@@ -206,8 +206,7 @@ function drawSliceCard(ctx, card, x, y, t) {
       ctx.fillStyle = t.muted; ctx.font = `700 13px ${MONO}`;
       ctx.fillText(line.kw.toUpperCase(), cx + 4, ty + 3);
       const sx = cx + 96;
-      const note = line.type ? (line.external ? notes.external : notes[line.type]) : null;
-      if (note) { ctx.fillStyle = note.fill; roundRect(ctx, sx, ty + 4, 12, 12, 2); ctx.fill(); }
+      if (line.type) drawSwatch(ctx, sx, ty + 4, 12, line);
       ctx.fillStyle = line.reject ? '#c0392b' : t.text; ctx.font = `500 18px ${BODY}`;
       line.wrapped.forEach((l, i) => { ctx.fillText(l, sx + 18, ty + i * 24); });
       ty += line.wrapped.length * 24 + 2;

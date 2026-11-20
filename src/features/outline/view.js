@@ -14,6 +14,9 @@ import { refinedPillTap } from './refinedPill.js';
 import { outlineLayout } from './outlineLayout.read.js';
 import { outlineSliceRow } from './outlineSliceRow.read.js';
 import { outlineChapterHeading } from './outlineChapterHeading.read.js';
+import { outlinePartHeading as partHeadingView } from './outlinePartHeading.read.js';
+import { stepChapter } from '../arrange/command.js';
+import { openPartMenu } from '../arrange/sheet.js';
 import { outlineSearchField } from './outlineSearchField.read.js';
 import { outlineToolbarOptions } from './outlineToolbarOptions.read.js';
 import { outlineAddKinds } from './outlineAddKinds.read.js';
@@ -22,7 +25,7 @@ import { outlineBookName } from './outlineBookName.read.js';
 import { outlineFoldAllState } from './outlineFoldAllState.read.js';
 import { outlineOpenCommentsCount } from './outlineOpenCommentsCount.read.js';
 import { outlineMoveTargets } from './outlineMoveTargets.read.js';
-import { outlineRow, outlineChapterHead, outlineSearchBox, outlineToolbar, outlineAddButtons, outlineNewChapterButton, outlineBookTitle,
+import { outlineRow, outlineChapterHead, outlinePartHeading, outlineSearchBox, outlineToolbar, outlineAddButtons, outlineNewChapterButton, outlineBookTitle,
   outlineFoldAll, outlineBarComments, outlineMoveBar, outlineAddSheet, outlineEditSheet, outlineVerdictSheet, scenarioTestersSheet } from './outline.parts.js';
 import { outlineStepPlan } from './outlineStepPlan.read.js';
 import { outlineMovePlan } from './outlineMovePlan.read.js';
@@ -35,7 +38,7 @@ import { setMustHave } from '../scenarios/command.js';
 import { render, showSlicePage } from '../../ui/feed.js';
 import { showToast } from '../../ui/toast.js';
 import { escapeHtml, isChapterFolded, toggleChapterFolded, setAllChaptersFolded, isChapterBookmarked } from '../board/view.js';
-import { moveSlice, placeSlices, setSliceChapter, moveChapter, createChapter, createSlice, addToSlice, describeSlice,
+import { moveSlice, placeSlices, setSliceChapter, createChapter, createSlice, addToSlice, describeSlice,
   createAutomation, setTrigger, linkReads, setTodo, newId, markSliceRefined, clearSliceRefined } from '../board/command.js';
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
 import { addOutlineProperties, reoutlineSlice } from './command.js';
@@ -230,7 +233,8 @@ export function renderOutline() {
         ? chapter.rows.map(r => outlineRow(rows[r.slice.id], rowUi(rows[r.slice.id]))).join('')
         : `<div class="ol-empty">No slices yet — add the first step below, or move some here</div>`;
     const add = chapter.folded || selecting || layout.filtering ? '' : outlineAddButtons(outlineAddKinds(state, { chapterId: chapter.id || '' }));
-    return `<section class="ol-section">${head}${body}${add}</section>`;
+    const part = chapter.partHeading ? outlinePartHeading(partHeadingView(state, chapter.partHeading), { editable: !isReadOnly() }) : '';
+    return `${part}<section class="ol-section">${head}${body}${add}</section>`;
   }).join('');
 
   const moveBar = selecting ? outlineMoveBar({ ...outlineMoveTargets(state), selected: selected.size }) : '';
@@ -335,7 +339,8 @@ function handleClick(e) {
   }
   else if (a === 'fold') { toggleChapterFolded(t.dataset.chapter); renderOutline(); }
   else if (a === 'chapter-menu') openChapterMenu(t.dataset.chapter);
-  else if (a === 'chapter-up' || a === 'chapter-down') { moveChapter(t.dataset.chapter, Number(t.dataset.to)); render(); }
+  else if (a === 'chapter-up' || a === 'chapter-down') { const refused = stepChapter(t.dataset.chapter, a === 'chapter-up' ? -1 : 1); if (refused) showToast(refused); render(); }
+  else if (a === 'part-menu') openPartMenu(t.dataset.part);
   else if (a === 'new-chapter') openChapterPicker(null);
   else if (a === 'search-clear') { query = ''; const box = document.getElementById('olSearch'); if (box) box.value = ''; renderOutline(); }
   else if (a === 'add-open') { adding = t.dataset.chapter; addKind = t.dataset.kind || addKind; openAddSheet(); }

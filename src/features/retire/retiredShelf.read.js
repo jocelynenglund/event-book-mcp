@@ -15,8 +15,8 @@ export function retiredShelf(books) {
     const r = retiredOf(b.events);
     if (!r) return [];
     const title = (b.state || projectState(b.events)).modelName || 'Untitled model';
-    const into = `built into ${r.app || 'its app'}${r.edition != null ? ` edition ${r.edition}` : ''}`;
-    return [{ id: b.id, title, app: r.app, edition: r.edition, at: r.retiredAt || '', text: [title, into, dateOf(r.retiredAt)].filter(Boolean).join(' · ') }];
+    const into = r.byOwner ? `retired on your word${r.unconfirmed?.length ? ` · ${r.unconfirmed.length} not confirmed` : ''}` : `built into ${r.app || 'its app'}${r.edition != null ? ` edition ${r.edition}` : ''}`;
+    return [{ id: b.id, title, app: r.app, edition: r.edition, ...(r.byOwner ? { byOwner: true } : {}), at: r.retiredAt || '', text: [title, into, dateOf(r.retiredAt)].filter(Boolean).join(' · ') }];
   }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   return { count: rows.length, rows: rows.map(({ at, ...row }) => row) };
 }

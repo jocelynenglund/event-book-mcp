@@ -9,6 +9,7 @@
 
 import { getBoardGroups, chapterFlows, sliceFlow } from '../../core/projections.js';
 import { shows, filtering as staged, emptyText, filterFor } from '../filter/status.js';
+import { chapterParts } from '../arrange/chapterParts.read.js';
 
 // Each to-do list's first slice, left to right (shared with the poster)
 export function firstAppearances(groups, state) {
@@ -30,8 +31,9 @@ export function withFlows(groups, state, flowOf) {
   });
 }
 
-// folded(id): is this chapter folded (a device setting). flowOf(id, state): the flow shown in a chapter, or null.
-export function boardLayout(state, { folded = () => false, flowOf = () => null } = {}) {
+// folded(id): is this chapter folded (a device setting). partFolded(id): is this part folded into its bookend (the same).
+// flowOf(id, state): the flow shown in a chapter, or null. arrangeable: chapters and parts can be dragged here.
+export function boardLayout(state, { folded = () => false, partFolded = () => false, flowOf = () => null, arrangeable = false } = {}) {
   filterFor(state);
   const allGroups = withFlows(getBoardGroups(state), state, flowOf);
   // Moving still steps past the slices a stage hides, so neighbours come from the whole chapter
@@ -42,8 +44,11 @@ export function boardLayout(state, { folded = () => false, flowOf = () => null }
   const sliceCount = groups.reduce((n, g) => n + g.slices.length, 0);
   const hasComments = Object.values(state.comments || {}).some(c => !c.deleted);
 
+  // Each chapter's part, and the one whose bookend it follows; a folded part hides its chapters (a stage filter opens them)
+  const partOf = new Map(chapterParts(state).flatMap(g => g.chapterIds.map((id, i) => [id, { partId: g.partId, startsPart: i === 0 ? g.partId : null }])));
   const chapters = groups.map(({ chapter, slices }) => {
-    const base = { id: chapter?.id || null, loose: !chapter, slices };
+    const { partId = null, startsPart = null } = partOf.get(chapter?.id) || {};
+    const base = { id: chapter?.id || null, loose: !chapter, slices, partId, startsPart, hiddenByPart: !!partId && !filtering && partFolded(partId) };
     if (chapter && !filtering && folded(chapter.id)) return { ...base, folded: true, empty: false, columns: [] };
     const movable = neighbours.get(chapter?.id ?? '') || [];
     return { ...base, folded: false, empty: !!chapter && !slices.length,
@@ -54,7 +59,7 @@ export function boardLayout(state, { folded = () => false, flowOf = () => null }
   });
 
   return {
-    filtering, hasChapters: state.chapterOrder.length > 0, hasComments, chapters,
+    filtering, hasChapters: state.chapterOrder.length > 0, hasParts: state.parts.length > 0, arrangeable, hasComments, chapters,
     // What the parts need to draw their own views: the first slice of each to-do list, the flow shown in a chapter
     todoFirst: firstAppearances(groups, state),
     shownFlowId: chapterId => flowOf(chapterId, state)?.id,
