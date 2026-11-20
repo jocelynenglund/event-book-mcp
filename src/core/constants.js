@@ -63,7 +63,7 @@ export const EventTypes = {
   BuildAttached: 'BuildAttached',             // the deploy's build edition, attached to the plan being built { app, edition, commit, build, scenarios, repo, workflow }
   PlanCheckedInWithBuild: 'PlanCheckedInWithBuild', // back with its build: built slices Done { edition, commit, done, missing }
   SliceProgressReported: 'SliceProgressReported', // a builder says where a slice is: started, red, green, pr or stuck { sliceId, step, note, pr: { number, url }, tests: { passing, total }, by, at } (features/buildProgress)
-  SpecsGenerated: 'SpecsGenerated',          // refined slices written as pending specs in the app's repo { app, repo, language, slices: [sliceId], files: [{ path, hash }] }
+  SpecsGenerated: 'SpecsGenerated',          // refined slices written as pending specs in the app's repo { app, repo, language, slices: [sliceId], specs: [{ sliceId, file, language }] (the spec file each slice went into, repo-relative), files: [{ path, hash }] }
   SpecsRegenerated: 'SpecsRegenerated',       // the same, again after the slices changed: untouched files rewritten, hand-edited ones proposed
   SliceMarkedReady: 'SliceMarkedReady',       // older models: read as SliceMarkedRefined
   SliceReadyCleared: 'SliceReadyCleared',     // older models: read as SliceRefinedCleared
@@ -108,7 +108,11 @@ export const EventTypes = {
   // Chapter events (named groups of slices, e.g. "MVP", "Additional features")
   ChapterCreated: 'ChapterCreated',
   ChapterRenamed: 'ChapterRenamed',
-  ChapterMoved: 'ChapterMoved',
+  ChapterMoved: 'ChapterMoved',               // one chapter to a place (old books; new moves record ChaptersArranged)
+  ChaptersArranged: 'ChaptersArranged',       // the whole chapter order in one go, with where each part starts { order: [chapterId], parts?: [{ partId, firstChapter }], arrangedBy }
+  PartStarted: 'PartStarted',                 // a part: a name over a run of chapters, from its first chapter to the next part { partId, name, firstChapter }
+  PartRenamed: 'PartRenamed',                 // { partId, name }
+  PartRemoved: 'PartRemoved',                 // its chapters stay and join the part before { partId }
   ChapterDeleted: 'ChapterDeleted',
   SliceChapterSet: 'SliceChapterSet',
   // Flows: named ways through a chapter (e.g. "Capture failed"); a slice is on

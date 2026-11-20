@@ -16,6 +16,16 @@ import { boardSpineBands } from './boardSpineBands.read.js';
 import { boardScenariosLabel } from './boardScenariosLabel.read.js';
 import { boardCommentsLabel } from './boardCommentsLabel.read.js';
 import { boardCounts } from './boardCounts.read.js';
+import { boardPartBookend } from '../arrange/boardPartBookend.read.js';
+import { boardPartBand } from '../arrange/boardPartBand.read.js';
+import { arrangeSlots } from '../arrange/arrangeSlots.read.js';
+import { partBookend, partBand } from '../arrange/arrange.parts.js';
+import { isPartFolded } from '../arrange/partFolds.js';
+import { armDrag } from '../arrange/drag.js';
+import { dropChapter, dropPart } from '../arrange/command.js';
+import { canArrangeCurrent, canEditCurrent } from '../../core/eventStore.js';
+import { showToast } from '../../ui/toast.js';
+import { toastWithUndo } from '../undo/command.js';
 import { boardSliceHeader, boardLane, boardScenarios, boardComments, boardChapterHead, boardEmptyChapter, boardSpine, boardLaneLabels, boardScenariosToggle, boardCommentsToggle, boardStats, noteTilt } from './board.parts.js';
 import { getEventStream, historyOf } from '../../core/eventStore.js';
 import { usageButton } from '../usage/view.js';
@@ -120,6 +130,14 @@ export function toggleChapterFolded(chapterId) {
   renderBoard();
 }
 
+// A chapter or a part let go on the shelf (Arrange Slots says where it may land)
+function dropOnShelf(kind, key, slot) {
+  const refused = (kind === 'part' ? dropPart : dropChapter)(key, slot);
+  renderBoard();
+  if (refused) showToast(refused);
+  else if (canEditCurrent()) toastWithUndo('Chapters arranged');
+}
+
 export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -194,8 +212,9 @@ export function renderBoard() {
   }
   // One replay of the book per draw: the layout and each part's own view read from it
   const state = projectState();
-  const layout = boardLayout(state, { folded: isChapterFolded, flowOf: shownFlowOf });
+  const layout = boardLayout(state, { folded: isChapterFolded, partFolded: isPartFolded, flowOf: shownFlowOf, arrangeable: canArrangeCurrent() });
   board.classList.toggle('has-chapters', layout.hasChapters);
+  board.classList.toggle('has-parts', layout.hasParts);
   board.classList.toggle('gwt-open', gwtOpen);
   renderStats(boardCounts(state, { folded: isChapterFolded }));
 
@@ -204,18 +223,32 @@ export function renderBoard() {
   // Column widths: lane labels, then a slice width per column or a narrow spine
   const widths = ['26px'];
   let col = 2;
+  // The part band runs over the open chapters of one part that sit side by side
+  let band = null;
+  const endBand = () => { if (band) html += partBand(boardPartBand(state, band.partId), band); band = null; };
+  const draggable = layout.arrangeable;
   layout.chapters.forEach(chapter => {
+    if (chapter.startsPart) {
+      endBand();
+      html += partBookend(boardPartBookend(state, chapter.startsPart, { folded: isPartFolded }), { col: col++, draggable });
+      widths.push('38px');
+    }
+    if (chapter.hiddenByPart) return;
     if (chapter.folded) {
+      endBand();
       const spine = boardSpineBands(state, chapter);
-      html += boardSpine(spine, { col: col++ });
+      html += boardSpine(spine, { col: col++, draggable });
       // A spine's own width, wider when its name needs a second line. Not max-content: Safari
       // sizes vertical text by its full length, so the spine took the whole board there
       const len = spine.name.length;
       widths.push(len > 60 ? '100px' : len > 26 ? '76px' : '52px');
       return;
     }
-    widths.push(...Array(Math.max(chapter.columns.length, 1)).fill('var(--col-w)'));
-    if (!chapter.loose) html += boardChapterHead(boardChapterHeading(state, chapter, shownFlowOf), { col, bookmarked: isChapterBookmarked(chapter.id) });
+    const span = Math.max(chapter.columns.length, 1);
+    widths.push(...Array(span).fill('var(--col-w)'));
+    if (chapter.partId && band?.partId === chapter.partId) band.span += span;
+    else { endBand(); if (chapter.partId) band = { partId: chapter.partId, col, span }; }
+    if (!chapter.loose) html += boardChapterHead(boardChapterHeading(state, chapter, shownFlowOf), { col, bookmarked: isChapterBookmarked(chapter.id), draggable });
     if (chapter.empty) {
       html += boardEmptyChapter(boardChapterToAddTo(state, chapter), { col });
       col++;
@@ -229,6 +262,7 @@ export function renderBoard() {
       col++;
     });
   });
+  endBand();
 
   // New slices and chapters come from the floating + button; an empty board points at it
   if (layout.emptyHint !== null) {
@@ -247,5 +281,6 @@ export function renderBoard() {
 
   board.style.gridTemplateColumns = widths.join(' ');
   board.innerHTML = html;
+  armDrag(board, { slotsFor: (kind, key) => arrangeSlots(state, kind, key), onDrop: dropOnShelf });
   pinHeads(board);
 }

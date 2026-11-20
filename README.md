@@ -31,13 +31,13 @@ the live view"*.
 
 | | Needs |
 |---|---|
-| Modelling: `new_model`, `add_steps`, `add_scenarios`, `outline`, `edit_slice`, renames, moves, comments | Nothing: all on your machine |
+| Modelling: `new_model`, `add_steps`, `add_scenarios`, `outline`, `edit_slice`, `arrange_chapters` (order and parts), renames, moves, comments | Nothing: all on your machine |
 | `live_view`: Event Book on `http://localhost:7979/?live`, following the model as it's built | Nothing: served from this repo |
 | `export_file`, then ☰ → Import in [Event Book](https://eventbook.itsybit.se/) | Nothing: Event Book keeps books in your browser |
 | `import_file`: bring in a test export, a `docs/slices.json` plan, or a plan file (`eventbook-plan/1`, below) | Nothing |
 | `share_link`: a link that opens a copy of the model, on any device | Uploads the model (without history) to Event Book's share service |
-| `connect_library`, `keep_model`, editing a ☁ book, `press_queue`, `start_building`, `finish_building` | An Event Book account (invite only for now) |
-| `generate_specs {repo, language: "js"}`: a failing Given/When/Then spec and a stub for each refined slice, in your repo | `npm install --save-dev itsybit-gwt` there ([itsybit-gwt](https://www.npmjs.com/package/itsybit-gwt), MIT), then `node --test` |
+| `connect_library`, `keep_model`, editing a ☁ book, `press_queue`, `start_building`, `finish_building`, `retire_plan` (for ☁ plans) | An Event Book account (invite only for now) |
+| `generate_specs {repo, language: "js"}`: a failing Given/When/Then spec and a stub for each refined slice, in your repo; the plan remembers each slice's spec file, so the built code pairs with it exactly, whatever the names | `npm install --save-dev itsybit-gwt` there ([itsybit-gwt](https://www.npmjs.com/package/itsybit-gwt), MIT), then `node --test` |
 
 ## Plan without this server
 

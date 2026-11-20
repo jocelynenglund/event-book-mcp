@@ -23,6 +23,9 @@ import { openModelNameSheet, openSliceInfo, openSliceMenu, onSheetAction as slic
 import { onSheetAction as processorAction } from './sheets/processor.js';
 import { openFindSheet, onSheetAction as findAction, onSheetInput as findInput } from './sheets/find.js';
 import { openReferencePicker } from '../references/sheet.js';
+import { openPartMenu, onSheetAction as arrangeAction } from '../arrange/sheet.js';
+import { togglePartFolded } from '../arrange/partFolds.js';
+import { canArrangeCurrent } from '../../core/eventStore.js';
 
 export { openNewSliceSheet } from './sheets/newSlice.js';
 export { openChapterPicker, openChapterMenu } from './sheets/chapters.js';
@@ -41,7 +44,7 @@ function handleBoardClick(e) {
   const t = e.target.closest('[data-action]');
   if (!t) return;
   const { action, slice, el, to } = t.dataset;
-  if (isReadOnly() && readOnlyTap(action, t)) return;
+  if (isReadOnly() && !(action === 'part-menu' && canArrangeCurrent()) && readOnlyTap(action, t)) return;
   if (action === 'new-slice') openNewSliceSheet(t.dataset.chapter || undefined);
   else if (action === 'chapter-menu') openChapterMenu(t.dataset.chapter);
   else if (action === 'fold') {
@@ -54,6 +57,8 @@ function handleBoardClick(e) {
       if (first) scrollToSlice(first);
     }
   }
+  else if (action === 'part-menu') openPartMenu(t.dataset.part);
+  else if (action === 'fold-part') { togglePartFolded(t.dataset.part); render(); }
   else if (action === 'insert') {
     openNewSliceSheet(undefined, t.dataset.before ? { before: t.dataset.before } : { after: t.dataset.after });
   }
@@ -93,7 +98,7 @@ function handleBoardClick(e) {
 
 // Not checked out here: a tap reads (a sticky's sheet, the slice page, the scenarios);
 // what would change the model does nothing. Folding, flows and ⓘ are left to the board.
-const readOnlyReads = new Set(['chapter-menu', 'fold', 'show-flow', 'toggle-gwt', 'slice-info', 'slice-page', 'progress-history', 'comment', 'next-comment']);
+const readOnlyReads = new Set(['chapter-menu', 'fold', 'fold-part', 'show-flow', 'toggle-gwt', 'slice-info', 'slice-page', 'progress-history', 'comment', 'next-comment']);
 function readOnlyTap(action, t) {
   const { slice, el } = t.dataset;
   if (readOnlyReads.has(action)) return false;
@@ -122,7 +127,7 @@ function revealComment(c) {
 }
 
 // Taps inside the board sheet: each sheet module answers its own
-const sheetActions = [readSheetAction, newSliceAction, chapterAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction];
+const sheetActions = [readSheetAction, newSliceAction, chapterAction, arrangeAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction];
 
 function handleSheetClick(e) {
   const t = e.target.closest('[data-board-action]');

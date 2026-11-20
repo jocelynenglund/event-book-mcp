@@ -93,13 +93,12 @@ export function chapterPickerView(book, sliceId) {
   return { sliceId: slice ? sliceId : null, sliceName: slice ? slice.name || 'this slice' : null, options };
 }
 
-// A chapter's menu: its name, place among the chapters, and its flows
+// A chapter's menu: its name and its flows (where it can move is Chapter Arrange Options)
 export function chapterMenuView(book, chapterId) {
   const chapter = book.chapters[chapterId];
   if (!chapter) return null;
-  const index = book.chapterOrder.indexOf(chapterId);
   return {
-    chapterId, name: chapter.name, index, first: index === 0, last: index === book.chapterOrder.length - 1,
+    chapterId, name: chapter.name,
     flows: chapterFlows(chapterId, book).map(f => ({ id: f.id, name: f.name }))
   };
 }

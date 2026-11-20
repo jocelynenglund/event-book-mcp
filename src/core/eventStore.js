@@ -401,6 +401,11 @@ export function setEditGuard(guard, blocked) { editGuard = guard; editBlocked = 
 // A published edition is frozen too: only the next draft (a copy) can be changed.
 // Frozen is read from the history itself, so it follows the model wherever it goes.
 export const isFrozenCurrent = () => isFrozen(eventStream);
+// Arranging chapters and parts also goes onto a published book (it changes no model): it needs the book
+// checked out here, not that it be a draft
+export function canArrangeCurrent() {
+  return typeGuard(currentModelId, EventTypes.ChaptersArranged) !== false && (!editGuard || editGuard(currentModelId));
+}
 export function canEditCurrent() {
   if (typeGuard(currentModelId, null) === false) return false;
   return (!editGuard || editGuard(currentModelId)) && !isFrozen(eventStream);
@@ -443,7 +448,9 @@ export function setAppendRule(fn) { appendRule = fn; }
 // A newer build that changes nothing moves the latest edition (ModelSourceSet + EditionPublished, buildVersions/rules.js);
 // a person publishing twice is refused by Publish Edition itself (editions/rules.js)
 const ON_PUBLISHED = new Set([EventTypes.NextDraftStarted, EventTypes.UsageImported, EventTypes.ModelDescribed, EventTypes.BookPrefaceWritten, EventTypes.BookTagged,
-  EventTypes.ModelSourceSet, EventTypes.EditionPublished]);
+  EventTypes.ModelSourceSet, EventTypes.EditionPublished,
+  // How the chapters are laid out is the reader's, on a published book too
+  EventTypes.ChaptersArranged, EventTypes.PartStarted, EventTypes.PartRenamed, EventTypes.PartRemoved]);
 
 export function appendEvent(type, data) {
   // A comment is talk, not a change: it goes onto a read-only or published book too

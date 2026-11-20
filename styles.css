@@ -1176,12 +1176,28 @@ body:not(.board-mode) .wn-pill { bottom: 92px; }
 }
 .bd-chapter::before { left: 0; }
 .bd-chapter::after { right: 0; }
-/* A long name wraps instead of being cut to "1. Legacy …" in a one-slice chapter; the full name is
-   the header's title too */
+/* The name keeps to one line ("1. Legacy …") so the header stays short; hovering or focusing it
+   unfurls the whole name in a card over the board, without moving anything */
+.bd-chapter-namebox { position: relative; min-width: 0; display: block; }
 .bd-chapter-name {
+  display: block;
   font: 700 22px var(--font-display); line-height: 1.1;
-  white-space: normal; overflow-wrap: break-word; min-width: 0; flex: 0 1 auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.bd-chapter-namebox::after {
+  content: attr(data-full);
+  position: absolute; top: -7px; left: -9px; z-index: 40;
+  width: max-content; max-width: min(440px, 80vw); padding: 6px 8px;
+  font: 700 22px var(--font-display); line-height: 1.1; white-space: normal; overflow-wrap: break-word;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.14);
+  visibility: hidden; opacity: 0; transform: translateY(-2px); pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease, visibility 0s linear .12s;
+}
+@media (hover: hover) {
+  .bd-chapter-label:hover .bd-chapter-namebox::after { visibility: visible; opacity: 1; transform: none; transition-delay: .25s, .25s, 0s; }
+}
+.bd-chapter-label:focus-visible .bd-chapter-namebox::after { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
 .bd-chapter-count {
   font: 700 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--text-muted); white-space: nowrap;
@@ -1232,7 +1248,7 @@ body:not(.board-mode) .wn-pill { bottom: 92px; }
 .bd-add.more { min-height: 24px; }
 .bd-new { padding: 16px 12px; }
 .bd-chapter { margin: 6px 8px 0 10px; padding: 0 4px 6px; }
-.bd-chapter-name { font-size: 19px; }
+.bd-chapter-name, .bd-chapter-namebox::after { font-size: 19px; }
 
 /* ═══════════ DETAILS VIEW ═══════════ */
 .details-view { padding: 10px 14px 40px; max-width: 640px; margin: 0 auto; }
@@ -1481,17 +1497,13 @@ body:has(input:focus, textarea:focus) .wn-pill { display: none; }
 .board { --col-w: min(58vw, 232px); --spine-w: 54px; }
 .bd-chapter { display: flex; align-items: baseline; gap: 6px; padding-left: 0; }
 .bd-chapter-fold {
-  align-self: flex-start; margin-top: 2px; flex-shrink: 0;
+  align-self: center; flex-shrink: 0;
   width: 24px; height: 24px; border-radius: 50%; padding: 0; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font: 700 15px/1 var(--font-body);
 }
-/* One slice wide: the name takes the whole width and "1 slice" goes under it */
-.bd-chapter-narrow .bd-chapter-label { flex: 1 1 auto; grid-template-columns: auto minmax(0, 1fr); row-gap: 2px; }
-.bd-chapter-narrow .bd-chapter-count { grid-column: 2; }
-/* ⋮, the name (shrinks and wraps when the chapter is narrow), the count: all on the name's first line */
 .bd-chapter-label {
-  display: grid; grid-template-columns: auto minmax(0, max-content) auto; align-items: baseline; gap: 10px; min-width: 0;
+  display: flex; align-items: baseline; gap: 10px; min-width: 0;
   background: none; border: none; padding: 0; cursor: pointer; color: var(--text); text-align: left;
 }
 .bd-spine {
@@ -1567,7 +1579,7 @@ body .wn-pill, body:not(.board-mode) .wn-pill { bottom: calc(84px + env(safe-are
 
 /* Chapter header: fold ‹ · name · ＋ add a slice to this chapter */
 .bd-chapter-add {
-  align-self: flex-start; flex-shrink: 0; margin-left: auto;
+  align-self: center; flex-shrink: 0; margin-left: auto;
   width: 26px; height: 26px; border-radius: 8px; padding: 0; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font: 700 14px/1 var(--font-body);
@@ -3589,7 +3601,7 @@ body.read-only .lt-sugg-bar { display: none; }
 /* A chapter's name opens its menu (rename, move, delete): the ⋮ says so, as on slices */
 .ch-more { display: inline-block; margin-right: 6px; color: var(--text-muted); font-weight: 700; font-size: 0.85em; vertical-align: 0.05em; }
 /* On the board the label's own text is small: the ⋮ takes a slice ⋮'s size, centred by the fold button */
-.bd-chapter-label .ch-more { font: 700 20px/1 var(--font-body); align-self: baseline; margin-right: 0; }
+.bd-chapter-label .ch-more { font: 700 20px/1 var(--font-body); align-self: center; margin-right: 0; }
 
 /* A slice's number (S3): what she and an agent both call it */
 .ol-ref { margin-left: 6px; font: 600 11px var(--font-mono); color: var(--text-muted); letter-spacing: .03em; white-space: nowrap; }
@@ -3703,3 +3715,61 @@ body.read-only .lt-sugg-bar { display: none; }
 .cp-contract-title { font-weight: 700; color: #a52a1c; }
 .cp-contract-list { margin: 6px 0 0; padding-left: 18px; }
 .bv-contract .ed-sheet-kicker { color: #a52a1c; }
+
+/* ═══════════ PARTS AND ARRANGING: BOOKENDS, BANDS, DRAGGING ═══════════ */
+/* A part's bookend: a taller, darker block than a spine, the part's name running up it. No colour per part. */
+.bd-bookend {
+  scroll-snap-align: start;
+  position: relative; box-sizing: border-box;
+  margin: 2px 4px 2px 8px; padding: 10px 0 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  border-radius: 4px 12px 12px 4px;
+  background: linear-gradient(90deg, #4f3d29 0%, #6a5336 30%, #5f4a31 72%, #4a3a27 100%);
+  box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.18), 3px 4px 10px -5px rgba(40, 26, 10, 0.6);
+  color: #f6ecd6;
+}
+.bd-bookend-fold {
+  flex-shrink: 0; width: 24px; height: 24px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); color: inherit;
+  font: 700 15px/1 var(--font-body);
+}
+.bd-bookend-name {
+  flex: 1; min-height: 0; padding: 0; cursor: pointer; color: inherit; background: none; border: none;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font: 700 19px var(--font-display); line-height: 1.05; text-align: left; white-space: normal; overflow-wrap: anywhere;
+}
+.bd-bookend-count {
+  writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap;
+  font: 700 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.75;
+}
+.bd-bookend.folded { background: linear-gradient(90deg, #3f3120, #5a4630 40%, #4f3d29); }
+/* The part's name, a thin band over the headers of its open chapters (headers leave room for it) */
+.board.has-parts .bd-chapter { margin-top: 26px; }
+.bd-part-band {
+  align-self: start; z-index: 2; pointer-events: none; box-sizing: border-box;
+  margin: 4px 10px 0 12px; padding-top: 3px; height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-top: 3px solid var(--text);
+  font: 700 11px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
+}
+/* Anything on the shelf that can be grabbed */
+.board [data-drag] { cursor: grab; }
+.board [data-drag].dragging { opacity: 0.4; }
+.board { position: relative; }
+.bd-drop-marker {
+  position: absolute; top: 0; width: 3px; border-radius: 2px; z-index: 30; pointer-events: none;
+  background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.bd-drag-ghost {
+  position: fixed; z-index: 400; pointer-events: none; max-width: 260px; padding: 6px 12px; border-radius: 10px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 8px 20px -8px rgba(40, 26, 15, 0.5);
+  font: 700 16px var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+body.arranging { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: grabbing; }
+.bd-arrange .bd-move-row { margin-bottom: 8px; }
+/* Outline: a part's heading over its chapters */
+.ol-part {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: 22px 0 2px; padding: 8px 2px 0;
+  border-top: 3px solid var(--text);
+}
+.ol-part-name { padding: 0; background: none; border: none; color: var(--text); font: 700 21px var(--font-display); text-align: left; }
+button.ol-part-name { cursor: pointer; }

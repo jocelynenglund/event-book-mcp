@@ -28,7 +28,8 @@ export function editionOf(events) {
 export function retiredOf(events) {
   for (let i = events.length - 1; i >= 0; i--) {
     const ev = events[i];
-    if (ev.type === 'PlanRetired') return { app: ev.data?.app || null, edition: ev.data?.edition ?? null, retiredAt: ev.data?.retiredAt || ev.timestamp || null };
+    if (ev.type === 'PlanRetired') return { app: ev.data?.app || null, edition: ev.data?.edition ?? null, retiredAt: ev.data?.retiredAt || ev.timestamp || null,
+      ...(ev.data?.byOwner ? { byOwner: true, unconfirmed: ev.data.unconfirmed || [] } : {}) };
     if (ev.type === SNAPSHOT && ev.data?.state?.retired) return ev.data.state.retired;
   }
   return null;

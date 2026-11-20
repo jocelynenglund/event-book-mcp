@@ -147,7 +147,7 @@ export function boardComments(col, ui = {}) {
   return `<div class="bd-cell lane-cm" data-component="Board comments" data-key="${col.sliceId}" ${at(ui.col, 7)}>${threads}</div>`;
 }
 
-// A chapter's header over its columns. ui: col, bookmarked
+// A chapter's header over its columns. ui: col, bookmarked, draggable (it can be dragged along the shelf)
 export function boardChapterHead(chapter, ui = {}) {
   const chips = chapter.flows.length ? `
       <div class="bd-flows">
@@ -155,11 +155,11 @@ export function boardChapterHead(chapter, ui = {}) {
         ${chapter.flows.map(f => `<button class="bd-flow ${chapter.shownFlow === f.id ? 'active' : ''}" data-action="show-flow" data-chapter="${chapter.id}" data-flow="${f.id}">↳ ${escapeHtml(f.name)}</button>`).join('')}
       </div>` : '';
   return `
-    <div class="bd-chapter ${chapter.flows.length ? 'has-flows' : ''}${chapter.slices <= 1 ? ' bd-chapter-narrow' : ''}" data-component="Board chapter header" data-key="${chapter.id}" ${at(ui.col, 1, Math.max(chapter.slices, 1))}>
+    <div class="bd-chapter ${chapter.flows.length ? 'has-flows' : ''}" data-component="Board chapter header" data-key="${chapter.id}"${ui.draggable ? ' data-drag="chapter"' : ''} ${at(ui.col, 1, Math.max(chapter.slices, 1))}>
       <button class="bd-chapter-fold" aria-label="Fold ${escapeHtml(chapter.name)}" data-action="fold" data-chapter="${chapter.id}">‹</button>
       <button class="bd-chapter-label" data-action="chapter-menu" data-chapter="${chapter.id}" title="${escapeHtml(chapter.name)}">
         <span class="ch-more" aria-hidden="true">⋮</span>
-        <span class="bd-chapter-name">${ui.bookmarked ? '<span class="ch-mark" aria-label="Bookmarked">🔖</span> ' : ''}${escapeHtml(chapter.name)}</span>
+        <span class="bd-chapter-namebox" data-full="${escapeHtml(chapter.name)}"><span class="bd-chapter-name">${ui.bookmarked ? '<span class="ch-mark" aria-label="Bookmarked">🔖</span> ' : ''}${escapeHtml(chapter.name)}</span></span>
         <span class="bd-chapter-count">${plural(chapter.slices, 'slice', 'slices')}</span>
       </button>
       <button class="bd-chapter-add" aria-label="Add a slice to ${escapeHtml(chapter.name)}" data-action="new-slice" data-chapter="${chapter.id}">＋</button>${chips}
@@ -177,11 +177,11 @@ export function boardEmptyChapter(chapter, ui = {}) {
 // (about 16 characters at full size); very long ones also wrap onto a second line
 const spineFontSize = name => Math.round(Math.max(13, Math.min(20, 20 * 16 / Math.max(name.length, 1))));
 
-// A folded chapter: a book spine with its name down the side and a coloured band per slice
+// A folded chapter: a book spine with its name down the side and a coloured band per slice. ui: col, draggable
 export function boardSpine(chapter, ui = {}) {
   const bands = chapter.bands.map(kind => `<span class="bd-spine-band" data-slice-type="${kind}"></span>`).join('');
   return `
-    <button class="bd-spine" data-component="Board spine" data-key="${chapter.id}" style="grid-column: ${ui.col}; grid-row: 1 / span 6" data-action="fold" data-chapter="${chapter.id}" aria-label="Open ${escapeHtml(chapter.name)}">
+    <button class="bd-spine" data-component="Board spine" data-key="${chapter.id}"${ui.draggable ? ' data-drag="chapter"' : ''} style="grid-column: ${ui.col}; grid-row: 1 / span 6" data-action="fold" data-chapter="${chapter.id}" aria-label="Open ${escapeHtml(chapter.name)}">
       <span class="bd-spine-name" style="font-size: ${spineFontSize(chapter.name)}px">${escapeHtml(chapter.name)}</span>
       ${chapter.meter}
       <span class="bd-spine-bands">${bands}</span>

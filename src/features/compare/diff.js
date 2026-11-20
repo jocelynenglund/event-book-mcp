@@ -145,9 +145,24 @@ export function compareModels(plan, built) {
   const decisions = (plan.sliceDecisions || []).filter(d => d.otherShelf === other);
   const decided = (p, b, same) => decisions.some(d => d.sliceId === p.id && d.same === same && norm(d.otherSliceName) === sliceKey(b, built));
 
-  // By name first; then renames remembered as the same slice; then possible renames
+  // The spec file generated for a plan slice pairs it exactly with the built slice that has a scenario in that file,
+  // whatever the names; then by name; then renames remembered as the same slice; then possible renames
   const pairOf = new Map();
-  planSlices.forEach(p => { const b = byKey.get(sliceKey(p, plan)); if (b) { pairOf.set(p.id, { b }); used.add(b.id); } });
+  const specPath = f => String(f || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  const builtBySpec = new Map();
+  Object.values(built.scenarios || {}).forEach(x => {
+    const f = specPath(x.source?.file);
+    if (f && built.slices[x.sliceId] && !builtBySpec.has(f)) builtBySpec.set(f, built.slices[x.sliceId]);
+  });
+  planSlices.forEach(p => {
+    const f = specPath(plan.specs?.[p.id]?.file);
+    const b = f && builtBySpec.get(f);
+    if (b && b.type === p.type && !used.has(b.id)) { pairOf.set(p.id, { b, exact: true }); used.add(b.id); }
+  });
+  planSlices.filter(p => !pairOf.has(p.id)).forEach(p => {
+    const b = byKey.get(sliceKey(p, plan));
+    if (b && !used.has(b.id)) { pairOf.set(p.id, { b }); used.add(b.id); }
+  });
   planSlices.filter(p => !pairOf.has(p.id)).forEach(p => {
     const b = builtSlices.find(x => !used.has(x.id) && x.type === p.type && decided(p, x, true));
     if (b) { pairOf.set(p.id, { b, renamed: true }); used.add(b.id); }
@@ -191,6 +206,7 @@ export function compareModels(plan, built) {
     const pending = tests.length > 0 && tests.every(x => waiting.has(x.id));
     const issues = scenarios.some(x => x.mustHave && !x.tested) || scenarios.some(x => x.mismatches.length) || fields.missing.length || fields.extra.length;
     return { ...row, status: pending ? 'pending' : issues ? 'differs' : 'built', builtChapter: chapterName(b, built), scenarios, extraTests, fields,
+      ...(pair.exact ? { exact: true } : {}),
       ...(pair.renamed ? { renamed: { from: mainName(p, plan), to: mainName(b, built) } } : {}) };
   });
 

@@ -10,7 +10,7 @@ import { projectState } from '../../core/projections.js';
 
 // What a snapshot keeps: the projected state, less what's worked out again on load
 const KEEP = ['elements', 'slices', 'connections', 'scenarios', 'sliceOrder', 'chapters', 'chapterOrder',
-  'flows', 'modelName', 'modelDescription', 'preface', 'tags', 'updateRoles', 'modelSource', 'sliceDecisions', 'follow'];
+  'parts', 'arranged', 'flows', 'modelName', 'modelDescription', 'preface', 'tags', 'updateRoles', 'modelSource', 'sliceDecisions', 'follow'];
 
 export function snapshotEvents(events) {
   const state = projectState(events);

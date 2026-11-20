@@ -8,7 +8,7 @@ import { showToast } from '../../../ui/toast.js';
 import { render } from '../../../ui/feed.js';
 import { toastWithUndo } from '../../undo/command.js';
 import { secondTap } from '../../../ui/secondTap.js';
-import { createChapter, renameChapter, moveChapter, deleteChapter, setSliceChapter, createFlow, renameFlow, deleteFlow, setSliceFlow } from '../command.js';
+import { createChapter, renameChapter, deleteChapter, setSliceChapter, createFlow, renameFlow, deleteFlow, setSliceFlow } from '../command.js';
 import { escapeHtml, toggleChapterFolded, isChapterFolded, showFlow, isChapterBookmarked, toggleChapterBookmark } from '../view.js';
 import { openNewSliceSheet } from './newSlice.js';
 import { saveReference } from '../../references/store.js';
@@ -19,6 +19,9 @@ import { chapterOption, flowOption, chapterShareOption } from './parts.js';
 import { readOnlyChapterMenu } from '../../readOnly/readOnlyChapterMenu.read.js';
 import { readOnlyChapterMenuBox } from '../../readOnly/readOnly.parts.js';
 import { openShareSheet } from '../../shareImage/sheet.js';
+import { chapterArrangeOptions } from '../../arrange/chapterArrangeOptions.read.js';
+import { chapterArrangeBox } from '../../arrange/arrange.parts.js';
+import { canArrangeCurrent } from '../../../core/eventStore.js';
 
 // The book, through one sheet's view: the sheets read nothing of it but what their view holds
 const viewOf = (view, ...args) => view(projectState(), ...args);
@@ -59,7 +62,9 @@ export function openChapterMenu(chapterId) {
   // Not checked out here: nothing to change, only to share
   if (isReadOnly()) {
     const ro = viewOf(readOnlyChapterMenu, chapterId);
-    if (ro) openBoardSheet(readOnlyChapterMenuBox(ro));
+    // A published book can still be arranged where it is checked out
+    const arrange = canArrangeCurrent() && viewOf(chapterArrangeOptions, chapterId);
+    if (ro) openBoardSheet(readOnlyChapterMenuBox(ro) + (arrange ? chapterArrangeBox(arrange) : ''));
     return;
   }
   const v = viewOf(chapterMenuView, chapterId);
@@ -111,10 +116,7 @@ export function openChapterMenu(chapterId) {
         <div class="sheet-option-icon" style="background: var(--surface-hover);">＋</div>
         <div class="sheet-option-text"><div class="sheet-option-title">Add a slice here</div></div>
       </div>
-      <div class="bd-move-row">
-        <button class="sheet-btn secondary" data-board-action="move-chapter" data-to="${v.index - 1}" ${v.first ? 'disabled' : ''}>◀ Earlier</button>
-        <button class="sheet-btn secondary" data-board-action="move-chapter" data-to="${v.index + 1}" ${v.last ? 'disabled' : ''}>Later ▶</button>
-      </div>
+      ${chapterArrangeBox(viewOf(chapterArrangeOptions, chapterId))}
       <div class="sheet-option" data-board-action="delete-chapter" style="border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px;">
         <div class="sheet-option-icon" style="background: #c0392b;">🗑️</div>
         <div class="sheet-option-text">
@@ -221,9 +223,6 @@ export function onSheetAction(a, t) {
   else if (a === 'fold-chapter') { toggleChapterFolded(menuChapterId); hideAllSheets(); }
   else if (a === 'bookmark-chapter') { toggleChapterBookmark(menuChapterId); hideAllSheets(); }
   else if (a === 'new-slice-in-chapter') openNewSliceSheet(menuChapterId);
-  else if (a === 'move-chapter') {
-    if (moveChapter(menuChapterId, Number(t.dataset.to))) { render(); openChapterMenu(menuChapterId); }
-  }
   else if (a === 'delete-chapter') {
     if (!secondTap(t)) return true;
     if (viewOf(chapterMenuView, menuChapterId)) {

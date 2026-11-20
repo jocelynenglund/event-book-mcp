@@ -63,6 +63,7 @@ const src = new URL('../../src/', import.meta.url);
 const es = await import(new URL('core/eventStore.js', src));
 const pr = await import(new URL('core/projections.js', src));
 const c = await import(new URL('features/board/command.js', src));
+const arr = await import(new URL('features/arrange/command.js', src));
 const sc = await import(new URL('features/scenarios/command.js', src));
 const ol = await import(new URL('features/outline/command.js', src));
 const cm = await import(new URL('features/comments/command.js', src));
@@ -73,6 +74,8 @@ const { commentEventTypes } = await import(new URL('core/constants.js', src));
 const { snapshotEvents } = await import(new URL('features/snapshot/command.js', src));
 const gen = await import(new URL('features/specs/generate.js', src));
 const ps = await import(new URL('features/press/command.js', src));
+const rt = await import(new URL('features/retire/rules.js', src));
+const pbv = await import(new URL('features/buildVersions/rules.js', src));
 const bp = await import(new URL('features/buildProgress/command.js', src));
 const { sliceProgress } = await import(new URL('features/buildProgress/sliceProgress.read.js', src));
 const ar = await import(new URL('features/article/command.js', src));
@@ -156,6 +159,8 @@ function outline({ chapter, scenarios = false } = {}) {
     if (chapter && g.chapter?.name.toLowerCase() !== chapter.toLowerCase()) return;
     if (!g.slices.length && !g.chapter) return;
     const refined = g.slices.filter(s => s.refined).length;
+    const part = st.parts.find(p => p.firstChapter === g.chapter?.id);
+    if (part) lines.push('', `# Part: ${part.name}`);
     lines.push('', `## ${g.chapter ? g.chapter.name : 'Not in a chapter'}${g.slices.length ? ` · ${pr.refinedLabel(refined, g.slices.length)}` : ''}`);
     g.slices.forEach(s => {
       const els = s.elements.map(id => st.elements[id]).filter(Boolean);
@@ -616,6 +621,76 @@ async function finishBuildingTool({ as }) {
   return `${text}\n${await closeModel()}`;
 }
 
+// ---------- Retiring a shipped plan ----------
+
+// The built books on offer, local and in the library: { name, events, source }. One book per app, named "<app> · built".
+// `want`: one of them by id or name (against); else the ones whose app is the plan's (press, follow, name, repo).
+async function builtBookFor(plan, against) {
+  const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const books = [];
+  for (const m of es.listModels()) {
+    const events = es.readModelEvents(m.id);
+    const name = pr.projectState(events).modelName || '';
+    books.push({ id: m.id, name, events, source: 'local' });
+  }
+  const [cloud] = await cloudShelves();
+  for (const row of cloud || []) {
+    if (books.some(b => links()[b.id]?.serverId === row.modelId)) continue;   // pulled already: the local copy may be older, so fetch fresh below
+    books.push({ id: `cloud:${row.modelId}`, name: row.name || '', serverId: row.modelId, source: 'library' });
+  }
+  let picks;
+  if (against) {
+    const sid = lib.parseCloudId(against);
+    picks = books.filter(b => b.id === against || b.serverId === sid || b.serverId === against || norm(b.name) === norm(against));
+    if (!picks.length) throw new Error(`No model "${against}" to compare with`);
+  } else {
+    const st = pr.projectState(plan);
+    const apps = new Set([st.press?.app, st.follow?.app, pbv.appOfPlan(st), String(st.modelSource?.repo || '').replace(/\/+$/, '').split('/').pop()].filter(Boolean).map(norm));
+    if (apps.has('eventbook')) apps.add('eventpad');
+    picks = books.filter(b => { const a = pbv.buildBookApp(b.name); return a && apps.has(norm(a)); });
+    if (!picks.length) throw new Error(`No built book for ${pbv.appOfPlan(st) || 'this plan'} (looked for "<app> · built" in this machine's store${cloud ? ' and the library' : '; connect_library to look in the library too'}): say against {model}`);
+  }
+  // Newest build wins: the latest edition's date, else the commit's date
+  const loaded = [];
+  for (const b of picks) {
+    let events = b.events;
+    if (!events) { const r = await api('GET', `${modelPath(b.serverId)}/events?after=0`); events = lib.dropUndone(r.events, r.undone); }
+    const st = pr.projectState(events);
+    const last = [...events].reverse().find(e => e.type === es.EventTypes.EditionPublished)?.data;
+    const commit = String(last?.commit || st.modelSource?.commit || '').slice(0, 7);
+    if (!commit) { if (against) throw new Error(`${b.name} has no commit (it isn't a build)`); continue; }
+    loaded.push({ name: b.name, state: st, commit, edition: last?.edition ?? null, at: String(last?.createdAt || st.modelSource?.createdAt || '') });
+  }
+  if (!loaded.length) throw new Error('The built books found have no build in them yet');
+  return loaded.sort((a, b) => b.at.localeCompare(a.at))[0];
+}
+
+// retire_plan: every slice matched in the app's built book → marked built at its commit, then retired (read only from then on)
+async function retirePlanTool({ model, against }) {
+  const opened = tools.find(t => t.name === 'open_model');
+  await opened.run({ model, edit: true });
+  let result, linked = false;
+  try {
+    linked = !!links()[es.getCurrentModelId()];
+    const plan = es.getEventStream();
+    const name = state().modelName || 'Untitled model';
+    if (state().retired) result = `${name} is already retired: nothing changed.`;
+    else result = await writeBack(async () => {
+      const built = await builtBookFor(plan, against);
+      const st = state();
+      if (st.press?.stage === 'building') throw new Error(`${name} is being built by ${st.press.builder}: nothing was changed (stop_press is theirs to do)`);
+      const r = rt.retireShipped(es.getEventStream(), built.state, { modelId: es.getCurrentModelId(), commit: built.commit, edition: built.edition });
+      if (r.already) return `${name} is already retired: nothing changed.`;
+      if (r.refused) throw new Error(`Not retired: ${name}: ${r.refused}`);
+      // Still waiting at the press: it is shipped, so it leaves the queue (the phone's Take back does the same)
+      if (st.press?.stage === 'press') { const why = ps.stopPress(); if (why) throw new Error(why); }
+      for (const e of r.events) if (!es.appendEvent(e.type, e.data)) throw new Error('Read only: nothing was changed');
+      return `Retired ${name}: ${count(r.confirmed, 'slice')} confirmed against ${built.name} @ ${built.commit}, on the Retired shelf`;
+    });
+  } catch (e) { await closeModel().catch(() => {}); throw e; }
+  return `${result.split('\n')[0]}${linked ? `\n${await closeModel()}` : ''}`;
+}
+
 // report_progress: the builder says where a slice has got to; each refusal is one line
 function reportProgressTool({ slice, step, note, pr: prIn, tests, as }) {
   const st = state();
@@ -670,10 +745,10 @@ function generateSpecsTool({ repo, app, language, dir }) {
   const existing = {}, generated = lastGenerated();
   const read = p => { const f = path.join(root, p); return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null; };
   // First what would be written, to know which files to read
-  const probe = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, dir, gwtPackage: gwt.name });
+  const probe = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, modelId: es.getCurrentModelId(), dir, gwtPackage: gwt.name });
   if (probe.refused) throw new Error(probe.refused);
   probe.files.forEach(f => { const text = read(f.path); if (text !== null) existing[f.path] = text; });
-  const r = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, dir, existing, gwtPackage: gwt.name });
+  const r = gen.generateSpecs(st, { app, language: lang, shelf: st.modelName, modelId: es.getCurrentModelId(), dir, existing, gwtPackage: gwt.name });
   const again = Object.keys(generated).some(p => r.files.some(f => f.path === p));
   // Specs are generated-only (rewritten); a stub already there is the builder's (kept)
   for (const f of r.files) {
@@ -686,7 +761,7 @@ function generateSpecsTool({ repo, app, language, dir }) {
   // Recorded with what was written, so a later run can tell hand edits apart
   const files = r.files.filter(f => f.state !== 'kept').map(f => ({ path: f.path, hash: gen.contentHash(f.content) }));
   es.appendEvent(again ? es.EventTypes.SpecsRegenerated : es.EventTypes.SpecsGenerated,
-    { app: app || path.basename(root), repo: root, language: lang, slices, files });
+    { app: app || path.basename(root), repo: root, language: lang, slices, specs: r.specs, files });
   const label = { new: 'written', regenerated: 'rewritten', unchanged: 'unchanged', kept: 'yours, left as it is' };
   return `${again ? 'Regenerated' : 'Generated'} pending specs for ${count(r.slices.length, 'refined slice')} (${r.slices.join(', ')}) in ${root}:\n`
     + r.files.map(f => `  ${f.path}: ${label[f.state]}`).join('\n')
@@ -1026,10 +1101,26 @@ const tools = [
       if (position !== undefined) {
         const to = Math.round(position) - 1;
         if (to < 0 || to >= st.chapterOrder.length) throw new Error(`position is 1 to ${st.chapterOrder.length}`);
-        c.moveChapter(ch.id, to);
+        const order = st.chapterOrder.filter(id => id !== ch.id);
+        order.splice(to, 0, ch.id);
+        const why = arr.arrangeChapters(order);
+        if (why) throw new Error(why);
       }
       const now = state();
       return `Chapters: ${now.chapterOrder.map((id, i) => `${i + 1}. ${now.chapters[id].name}`).join(', ')}`;
+    } },
+  { name: 'arrange_chapters', edits: true, description: 'Lay the chapters out: order lists every chapter once, by name (the shelf and the Outline follow it; one undo puts it back). parts (optional) groups them: each { name, starts: the chapter it starts at } starts a part there, or moves the part of that name; a part runs up to the next part\'s first chapter, and chapters before the first part are in no part. Parts not listed stay as they are.',
+    inputSchema: { type: 'object', properties: { order: { type: 'array', items: S }, parts: { type: 'array', items: { type: 'object', properties: { name: S, starts: S }, required: ['name', 'starts'] } } }, required: ['order'] },
+    run: ({ order, parts = [] }) => {
+      const st = state();
+      const idOf = name => Object.values(st.chapters).find(x => x.name.trim().toLowerCase() === String(name).trim().toLowerCase())?.id
+        || (() => { throw new Error(`No chapter "${name}" (chapters: ${st.chapterOrder.map(id => st.chapters[id]?.name).join('; ')})`); })();
+      const fail = why => { if (why) throw new Error(why); };
+      const starts = parts.map(p => ({ name: p.name, first: idOf(p.starts), part: st.parts.find(x => x.name === p.name) }));
+      // Existing parts move with the order, new ones start once it is in place
+      fail(arr.arrangeChapters(order.map(idOf), starts.filter(x => x.part).map(x => ({ partId: x.part.id, firstChapter: x.first }))));
+      starts.filter(x => !x.part).forEach(x => fail(arr.startPart(x.first, x.name)));
+      return outline();
     } },
   { name: 'add_comment', edits: true, talk: true, description: 'Comment on a slice, or on one of its scenarios (scenario: its name; part: given, when or then); in a literature book on one of a paragraph\'s sentences (scenario: its number in the outline, or the start of it). Signed "ItsyBOT · <as>" (as: the name of this session, e.g. Harry; else EVENTPAD_AGENT_NAME, else plain "ItsyBOT"). Works on a shelf the person has checked out too: comments are talk, not changes.',
     inputSchema: { type: 'object', properties: { slice: S, scenario: S, part: S, text: S, as: S }, required: ['slice', 'text'] },
@@ -1105,10 +1196,13 @@ const tools = [
   { name: 'finish_building', description: 'The open plan you are building, back with its build: the newest edition of the app\'s build book (published by the deploy) is attached, the slices it sent to press that the build has go Done, and it is checked back in with a build summary for the person. Slices not Done yet keep their last reported step (report_progress) until the build has them. Post the build first (systemctl --user start eventpad-models.service): a build made before building started, or at the commit you started from, is refused. On a plan already checked in (open_model {edit:true} first), it attaches a newer build of its app if the library has one.',
     inputSchema: { type: 'object', properties: { as: S } },
     run: finishBuildingTool },
+  { name: 'retire_plan', description: 'Put away a plan that has shipped: every slice is looked up in the app\'s built book (matched as Compare matches: a change by its command, a view by its read model; differing details count), each not yet Done is marked built at that build\'s commit, and the plan is retired (PlanRetired, onto the Retired shelf, read only from then on). Refined is not needed (the build is the confirmation) and never set. The built book: against {a model id or name}, else the newest "<app> · built" book (this machine\'s store or the library) for the plan\'s app; one book only. Any slice the build lacks: refused, naming it and the "maybe renamed" suggestion, nothing changed. Already retired: nothing changed. A plan waiting at the press leaves the queue; one being built is refused. A ☁ plan is checked out to you for it (refused while another device holds it) and checked back in. Needs connect_library only for ☁ books.',
+    inputSchema: { type: 'object', properties: { model: S, against: S }, required: ['model'] },
+    run: retirePlanTool },
   { name: 'report_progress', edits: true, description: 'While you build a plan you took with start_building: say where a slice (S-number or title) has got to, so the person sees it live on the slice and on the plan\'s spine, before any build book exists. step: started (you begin it), red (its spec fails for the right reason), green (its scenarios pass; tests {passing, total}), pr (a pull request is open; pr: its number, url or {number, url}) or stuck (say what is in the way in note). Report each slice at each step, as you go. Refused, each in one line: the plan is not checked out to you (start_building first); no such slice; stuck without a note; pr without a number or url; tests passing more than total; a step back after green (or pr): only stuck, or started (a new round), may. A Done slice shows no progress (Done wins). Signed with your name (as: the name of this session, as in start_building).',
     inputSchema: { type: 'object', properties: { slice: S, step: { type: 'string', enum: ['started', 'red', 'green', 'pr', 'stuck'] }, note: S, pr: { type: ['number', 'string', 'object'] }, tests: { type: 'object', properties: { passing: { type: 'number' }, total: { type: 'number' } } }, as: S }, required: ['slice', 'step'] },
     run: reportProgressTool },
-  { name: 'generate_specs', edits: true, description: 'Board to failing specs: write the open board\'s refined slices (not built yet) into an app\'s repo as Given/When/Then spec files, one per slice (chapter = feature, When = the exact command name, Then = the planned outcome), each beside a stub that throws NotBuiltYet. While a stub throws, its scenarios are pending ("not built yet"): CI and deploys aren\'t blocked, GWT_RUN_PENDING=1 runs them red. Spec files are generated-only: run it again after refined slices change and they are rewritten. A stub is written once: the builder writes the real slice there, and it is never overwritten. Recorded on the board. Then report each slice\'s step as you go with report_progress (started when you begin it, red once its spec fails for the right reason). language: js (itsybit-gwt), found from the repo when left out; dir: where the specs go (default tests/gwt).',
+  { name: 'generate_specs', edits: true, description: 'Board to failing specs: write the open board\'s refined slices (not built yet) into an app\'s repo as Given/When/Then spec files, one per slice (chapter = feature, When = the exact command name, Then = the planned outcome), each beside a stub that throws NotBuiltYet. While a stub throws, its scenarios are pending ("not built yet"): CI and deploys aren\'t blocked, GWT_RUN_PENDING=1 runs them red. Spec files are generated-only: run it again after refined slices change and they are rewritten. A stub is written once: the builder writes the real slice there, and it is never overwritten. Recorded on the board, with the spec file of each slice (SpecsGenerated specs: {sliceId, file, language}, repo-relative) and its header says "Event Book slice <id> · plan <modelId>": Compare, retire_plan and the build book then pair the slice with the built code exactly, by the scenarios that sit in that spec file, whatever the names (a slice with no generated spec still pairs by name). Then report each slice\'s step as you go with report_progress (started when you begin it, red once its spec fails for the right reason). language: js (itsybit-gwt), found from the repo when left out; dir: where the specs go (default tests/gwt).',
     inputSchema: { type: 'object', properties: { repo: S, app: S, language: S, dir: S }, required: ['repo'] },
     run: a => { notLiterature('specs'); return generateSpecsTool(a); } },
   { name: 'import_file', description: 'Bring a file in as a new local model and open it: a combined test export (-built.json, latest-built.json: built as ☰ → Import does, a snapshot with repo, commit and build), raw .test.json scenarios, an Event Book export with or without history (-plan.json, a board export), or a plan (docs/slices.json). Only files under the home folder. keep_model then puts it in the library.',
@@ -1142,7 +1236,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.3.0' },
+      serverInfo: { name: 'eventpad', version: '0.4.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

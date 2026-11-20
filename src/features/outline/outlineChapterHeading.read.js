@@ -1,6 +1,6 @@
 // ===========================================
 // OUTLINE - Chapter heading (SV: Outline Chapter Heading)
-// What a chapter's header draws: its name, where it stands among the chapters, whether it is folded, the
+// What a chapter's header draws: its name, whether it can step earlier or later, whether it is folded, the
 // count under the name (how far its slices are, what a build book holds, or what a search matched), and
 // the bands a folded chapter shows for its slices. chapter: one of the Outline Layout's chapters.
 // built: a build book. searching: the search box has words.
@@ -20,9 +20,9 @@ function metaOf(inChapter, state, built) {
 }
 
 export function outlineChapterHeading(state, chapter, { built = false, searching = false } = {}) {
-  const { id, name, loose, index, first, last, folded, inChapter, slices } = chapter;
+  const { id, name, loose, first, last, folded, inChapter, slices } = chapter;
   return {
-    id, name, loose, index, first, last, folded,
+    id, name, loose, first, last, folded,
     shown: slices.length,
     // Under the name: the whole chapter's count, or (searching) what matched
     count: inChapter.length && !searching ? metaOf(inChapter, state, built) : { slices: slices.length },
