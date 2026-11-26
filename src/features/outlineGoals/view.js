@@ -14,15 +14,17 @@ import { chapterLadder } from './chapterLadder.read.js';
 import { outlineGoalCard, outlineSummaryPills, provenPill, acceptanceCriteriaList, chapterBriefCard, chapterDraftChips, chapterLadderRungs } from './outlineGoals.parts.js';
 import { goalsUi } from './uiState.js';
 import { ensureOutlineGoalsStyles } from './styles.js';
+import { installOutlineGoalsGuards } from './wire.js';
 
 export { outlineGoalsClick, outlineGoalsKey } from './wire.js';
 
 // ui: editable (the book can be changed here), anyScenarios (the pill of proven criteria waits for a first scenario),
-// filtering (searching or one stage shown: only the slices are)
+// searching (a text search is on: only the slices matching it are shown; a stage filter hides slices only)
 export function outlineGoalsFor(state, ui = {}) {
   ensureOutlineGoalsStyles();
+  installOutlineGoalsGuards();
   const editable = ui.editable !== false;
-  if (ui.filtering) return { top: '', chapter: () => '' };
+  if (ui.searching) return { top: '', chapter: () => '' };
   const proven = criteriaProven(state);
   const top = `<div class="og-top">
       ${outlineGoalCard(outlineGoal(state), { editable })}
@@ -31,8 +33,8 @@ export function outlineGoalsFor(state, ui = {}) {
     </div>`;
   const chapter = ch => !ch.id || ch.folded ? '' : `<div class="og-chapter">
       ${chapterBriefCard(chapterBrief(state, ch.id), { editable, editing: goalsUi.editingChapter === ch.id })}
-      ${chapterDraftChips(chapterDraftEvents(state, ch.id), { editable, drafting: goalsUi.draftingChapter === ch.id })}
-      ${chapterLadderRungs(chapterLadder(state, ch.id))}
+      ${chapterDraftChips(chapterDraftEvents(state, ch.id), { editable, drafting: goalsUi.draftingChapter === ch.id, menu: goalsUi.draftMenu?.chapterId === ch.id ? goalsUi.draftMenu.name : null })}
+      ${chapterLadderRungs(chapterLadder(state, ch.id), { open: goalsUi.ladderOpen.has(ch.id) })}
     </div>`;
   return { top, chapter };
 }

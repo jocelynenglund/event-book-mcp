@@ -9,6 +9,13 @@ alternate ending is its own slice; Clone makes it, and the board, the Outline an
   goes right after the original in its chapter. One action, one undo.
 - **A scenario's "Give this its own ending"** (its row in the slice's scenarios drawer): the slice is cloned (screen and command, no events) and the
   scenario **moves** into the clone (`ScenarioMoved`); with an ending, its Then becomes that event. Then the scenario's editor opens.
+- **Automations** (2026-11-26, "an alternate ending for Authorize at PayEx"): the change half of an automation (its slice with the processor and the
+  command) is cloned like any change: the processor, the command and the screen if any are reused (one processor, so its trigger and read links are
+  shared); the clone is an automation of its own (actor processor), NOT paired with the original's view half. The view half is not offered ("Clone
+  the change half of an automation"); inferred slices (au_inferred_) still are not. "Give this its own ending" works for such slices too.
+- **Flows** (the older feature, `FlowCreated`, `SliceFlowSet`: named ways through a chapter, slice ⋮ → Flow: "Main line" or e.g. "Capture failed",
+  a slice has `flowId`): a clone is put in its original's flow (`SliceFlowSet`), so a clone of a slice in "Capture failed" is in "Capture failed". An
+  original on the main line leaves its clone on the main line. The two are separate: Flow groups slices by path, a clone records "alternate of".
 - **Board**: an alternate's header wears "alt · alternate of S5" (a tap goes to S5 and flashes it); the original wears "S5 · 2 endings". Moved away from
   its original, the alternate still says what it is an alternate of.
 - **Outline**: an alternate's row is indented, with "alternate ending" in small muted text.

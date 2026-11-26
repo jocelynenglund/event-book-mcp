@@ -1445,6 +1445,10 @@ body:has(input:focus, textarea:focus) .wn-pill { display: none; }
   border: 1.5px dashed var(--text-muted); background: transparent; color: var(--text);
   font: 700 18px var(--font-display);
 }
+.ol-chapter-hint { font-size: 14px; color: var(--text-muted); padding: 8px 4px 4px; }
+.ol-loose-line { font-size: 13px; color: var(--text-muted); padding: 8px 4px; text-align: center; }
+.ol-loose-kinds { white-space: nowrap; }
+.ol-loose-add { background: none; border: 0; padding: 8px 4px; color: var(--text-muted); font: 700 13px var(--font-body); text-decoration: underline; cursor: pointer; }
 .ol-movebar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
@@ -2539,7 +2543,7 @@ body.board-mode:has(.bd-stats:not(:empty)) .fab-menu { bottom: calc(var(--stats-
 body.read-only .fab, body.read-only .fab-menu,
 body.read-only .bd-add, body.read-only .bd-insert, body.read-only .bd-move,
 body.read-only .bd-chapter-add, body.read-only .bd-chapter-empty, body.read-only .bd-gwt-count.add,
-body.read-only .ol-add-steps, body.read-only .ol-add-chapter, body.read-only .ol-refined-pill,
+body.read-only .ol-add-steps, body.read-only .ol-add-chapter, body.read-only .ol-chapter-first, body.read-only .ol-refined-pill,
 body.read-only .ol-select[data-outline-action="select"],
 body.read-only .ol-step [data-outline-action="up"], body.read-only .ol-step [data-outline-action="down"],
 body.read-only .ol-step [data-outline-action="chapter-up"], body.read-only .ol-step [data-outline-action="chapter-down"],
@@ -3050,6 +3054,9 @@ span.ol-vd-sum { cursor: default; }
 .st-chip { height: 18px; padding: 0 8px; border: none; border-radius: 9px; background: none; color: var(--text-muted); font: inherit; letter-spacing: 0.04em; cursor: pointer; white-space: nowrap; }
 .st-chip.on { background: var(--text); color: var(--surface); }
 .st-chip .st-n { opacity: 0.7; }
+.st-note { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0; padding: 2px 4px 2px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text-muted); font-size: 12px; }
+.st-note b { color: var(--text); font-weight: 600; }
+.st-note-x { min-width: 28px; min-height: 28px; border: none; border-radius: 14px; background: none; color: var(--text-muted); font: inherit; cursor: pointer; }
 
 /* A review that lets you add scenarios: ＋ Scenario on the board even though the book is read-only */
 body.read-only.can-add-scenarios .bd-gwt-count.add { display: inline-block !important; }
@@ -3378,17 +3385,17 @@ body:not(.library-mode) .header .title-share { flex: none; }
 .ed-history { margin: 10px 0; }
 .ed-history-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; margin: 6px 0; font-size: 14px; }
 
-/* ═══════════ LEGACY TABLES (an old database read as events): a shadowy orange ═══════════ */
-:root { --note-table: #c99a6c; --note-table-text: #2a1606; }
-.bd-card[data-type="event"][data-table],
-.bd-chip[data-type="event"][data-table],
-.gwt-ref[data-type="event"][data-table] { background: var(--note-table); color: var(--note-table-text); box-shadow: inset 0 0 0 1.5px rgba(60, 30, 8, .35), inset 0 -10px 18px rgba(60, 30, 8, .18); }
-.bd-card[data-type="event"][data-table] { border: 1.5px dashed rgba(60, 30, 8, .45); }
-.dt-card[data-type="event"][data-table] { border-left-color: var(--note-table); }
-.dt-link-el[data-table] { background: var(--note-table); color: var(--note-table-text); padding: 0 4px; border-radius: 3px; }
-.sp-ref[data-type="event"][data-table], .sp-sticky[data-type="event"][data-table] { --hint: var(--note-table); }
-.bd-type-icon-table { background: var(--note-event); }
-.bd-type-icon-table.on { background: var(--note-table); }
+/* ═══════════ STORED ELSEWHERE (a table, a config file, a document, a legacy table…; any kind): a shadowy brown ═══════════ */
+:root { --note-stored: #c99a6c; --note-stored-text: #2a1606; }
+.bd-card[data-type="event"][data-stored],
+.bd-chip[data-type="event"][data-stored],
+.gwt-ref[data-type="event"][data-stored] { background: var(--note-stored); color: var(--note-stored-text); box-shadow: inset 0 0 0 1.5px rgba(60, 30, 8, .35), inset 0 -10px 18px rgba(60, 30, 8, .18); }
+.bd-card[data-type="event"][data-stored] { border: 1.5px dashed rgba(60, 30, 8, .45); }
+.dt-card[data-type="event"][data-stored] { border-left-color: var(--note-stored); }
+.dt-link-el[data-stored] { background: var(--note-stored); color: var(--note-stored-text); padding: 0 4px; border-radius: 3px; }
+.sp-ref[data-type="event"][data-stored], .sp-sticky[data-type="event"][data-stored] { --hint: var(--note-stored); }
+.bd-type-icon-stored { background: var(--note-event); }
+.bd-type-icon-stored.on { background: var(--note-stored); }
 
 /* Threads: replies under their thread; the board chat's outstanding threads */
 .cm-reply { margin: 6px 0 0 14px; padding-left: 10px; border-left: 2px solid var(--border); }

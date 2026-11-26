@@ -10,14 +10,14 @@ From the plan "Event Book · plan: Outline for product owners" (m_mwx6jw4463rso)
 ## Events
 
 `CriterionAdded`, `CriterionReworded`, `CriterionTagged` (the whole list), `CriterionRemoved`, `CriterionProofLinked`, `CriterionProofUnlinked`,
-`ChapterDescribed`, `EventDrafted`, `DraftEventDropped`. Defined in `events.js`, folded into `state.outlineGoals` by `projection.js`.
+`ChapterDescribed`, `EventDrafted`, `DraftEventDropped`. "Make it a slice…" on a draft chip writes no event of its own: `makeDraftASlice` builds a Do slice with the planFile step builder (command, event, fields on both, one undo). Defined in `events.js`, folded into `state.outlineGoals` by `projection.js`.
 A book that has them but not the feature opens fine: the projection has no case for an event it does not know, so they are ignored
 (`tests/feature-outline-goals-boundary.test.js` removes the feature from a copy of the app and opens such a book).
 
 ## What is here
 
 `command.js` (the commands), `rules.js` (shared pure rules), `*.read.js` (one view per part: Outline Goal, Outline Summary, Criteria Proven,
-Acceptance Criteria, Criterion Editor, Chapter Brief, Chapter Draft Events, Chapter Ladder), `outlineGoals.parts.js` (the components),
+Acceptance Criteria, Criterion Editor, Chapter Brief, Chapter Draft Events, Chapter Ladder, Make Slice Sheet), `outlineGoals.parts.js` (the components),
 `view.js` (the Outline's slot: what goes on top and under each chapter), `wire.js` (taps and keys), `uiState.js`, `styles.js` (the CSS,
 added to the page once), `mcp.js` (what the MCP `outline` tool prints).
 
@@ -30,6 +30,8 @@ Every one is a single line marked `feature: outline-goals` (`grep -rn "feature: 
 ## To remove
 
 1. Delete this folder.
-2. Delete `tests/gwt/outline-goals.test.mjs`, `tests/gwt/outline-goals-parts.test.mjs`, `tests/outline-goals.test.js` and `tests/feature-outline-goals-boundary.test.js`.
+2. Delete `tests/gwt/outline-goals.test.mjs`, `tests/gwt/outline-goals-parts.test.mjs`, `tests/outline-goals.test.js`, `tests/outline-goals-drafts.test.js` and `tests/feature-outline-goals-boundary.test.js`.
 3. Delete every line marked `feature: outline-goals` (the Outline keeps an empty slot, `extras`, that draws nothing).
 4. Old books that hold these events still open: they are ignored.
+
+The draft event input reuses the Pad's suggestion list (`features/pad/suggestInput.js`, colour orange for events, blue for the sheet's command). While a field of the Outline has focus on a phone, `body.og-typing` hides the book's bottom bar (`.ol-stats`); the listeners are set up from `view.js`, in this folder.

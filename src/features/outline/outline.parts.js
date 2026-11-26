@@ -269,6 +269,18 @@ export function outlineNewChapterButton(view) {
   return view?.canAddChapter ? `<button class="ol-add-chapter" data-component="Outline new chapter button" data-key="new-chapter" data-outline-action="new-chapter">＋ Chapter</button>` : '';
 }
 
+// A new book's Outline starts here: ＋ Chapter with a hint, and the slices that need no chapter as one small line.
+// view: Outline Chapter First
+export function outlineChapterStart(view) {
+  if (!view?.chapterFirst) return '';
+  return `<div class="ol-chapter-first" data-component="Outline chapter start" data-key="chapter-first">
+      <div class="ol-chapter-hint">Start with a chapter: a part of the journey, like Invitations or RSVP</div>
+      <button class="ol-add-chapter" data-outline-action="new-chapter">＋ Chapter</button>
+      <div class="ol-loose-line">or add a slice without a chapter: <span class="ol-loose-kinds">${view.kinds.map(k =>
+        `<button class="ol-loose-add" data-outline-action="add-open" data-chapter="" data-kind="${k.kind}">＋ ${k.label}</button>`).join(' · ')}</span></div>
+    </div>`;
+}
+
 // The book's title along the bottom; tapping it goes to the book's front. view: Outline Book Name
 export function outlineBookTitle(view) {
   return `<button class="bd-book-title" data-component="Outline book title" data-key="title" data-book-title>${escapeHtml(view.title)}</button>`;

@@ -90,22 +90,51 @@ export function chapterBriefCard(view, ui = {}) {
   return `<div class="og-brief" data-component="Chapter brief" data-key="${id}">${text}${crits}</div>`;
 }
 
-// The events drafted for a chapter, dashed; × drops one, ＋ event drafts another (ui.drafting: its name is being typed). view: Chapter Draft Events
-export function chapterDraftChips(view, ui = {}) {
+// The events drafted for a chapter, as small dashed chips in the event colour. Tap a chip for "Remove" (ui.menu: the name whose menu is open;
+// on a mouse a × shows on hover). ＋ event turns into a chip you type in place (ui.drafting). view: Chapter Draft Events
+export function chapterDraftChips(view, ui = view.ui ?? {}) {
   if (!view.drafts.length && !can(ui)) return '';
   const id = esc(view.chapterId);
   const add = !can(ui) ? '' : ui.drafting
-    ? `<span class="og-draft og-draft-new"><input id="ogDraftName" class="og-draft-input" type="text" placeholder="Event name" autocomplete="off" autocapitalize="sentences" enterkeyhint="done"><button class="og-small" data-goals-action="save-draft" data-chapter="${id}">Add</button><button class="og-small" data-goals-action="cancel-draft" aria-label="Cancel">✕</button></span>`
+    ? `<span class="og-draft og-draft-typing"><input id="ogDraftName" class="og-draft-input" type="text" placeholder="Event name" aria-label="Event name" autocomplete="off" autocapitalize="sentences" enterkeyhint="next"></span><div class="pad-suggest-slot og-suggest" id="ogDraftSuggest" hidden></div>`
     : `<button class="og-draft og-draft-add" data-goals-action="add-draft" data-chapter="${id}">＋ event</button>`;
-  return `<div class="og-drafts" data-component="Chapter draft events" data-key="${id}">${view.drafts.map(name => `<span class="og-draft">${esc(name)}${can(ui)
-    ? `<button class="og-draft-x" data-goals-action="drop-draft" data-chapter="${id}" data-name="${esc(name)}" aria-label="Drop the draft event ${esc(name)}">×</button>` : ''}</span>`).join('')}${add}</div>`;
+  const chip = name => {
+    const n = esc(name), open = ui.menu === name;
+    if (!can(ui)) return `<span class="og-draft">${n}</span>`;
+    return `<span class="og-draft${open ? ' og-draft-open' : ''}"><button class="og-draft-name" data-goals-action="draft-menu" data-chapter="${id}" data-name="${n}" aria-haspopup="menu" aria-expanded="${open}">${n}</button>`
+      + `<button class="og-draft-x" data-goals-action="drop-draft" data-chapter="${id}" data-name="${n}" aria-label="Drop the draft event ${n}" tabindex="-1">×</button>`
+      + (open ? `<span class="og-draft-menu" role="menu"><button role="menuitem" class="og-draft-make" data-goals-action="make-slice" data-chapter="${id}" data-name="${n}">Make it a slice…</button><button role="menuitem" class="og-draft-remove" data-goals-action="drop-draft" data-chapter="${id}" data-name="${n}">Remove</button></span>` : '') + '</span>';
+  };
+  return `<div class="og-drafts" data-component="Chapter draft events" data-key="${id}">${view.drafts.map(chip).join('')}${add}</div>`;
 }
 
-// Seven small rungs, filled up to the furthest one the chapter has reached. view: Chapter Ladder
-export function chapterLadderRungs(view) {
+const RUNG_NAME = { described: 'Described', criteria: 'Criteria', events: 'Events', slices: 'Slices', scenarios: 'Scenarios', refined: 'Refined', built: 'Built ✓' };
+
+// Where the chapter has got to in words ("Events · next: slices"), a thin seven-step bar beneath; tap to list all seven steps (ui.open). view: Chapter Ladder
+export function chapterLadderRungs(view, ui = view.ui ?? {}) {
   const at = RUNGS.indexOf(view.reached);
-  const label = view.reached === 'none' ? 'nothing yet' : view.reached;
-  return `<div class="og-ladder" role="img" aria-label="Chapter ladder: ${label}, ${at + 1} of ${RUNGS.length} rungs" data-component="Chapter ladder" data-key="${esc(view.chapterId)}">
-    ${RUNGS.map((r, i) => `<span class="og-rung${i <= at ? ' on' : ''}" title="${r}"></span>`).join('')}<span class="og-ladder-label">${label}</span>
+  const next = RUNGS[at + 1];
+  const now = view.reached === 'none' ? 'Not started' : RUNG_NAME[view.reached];
+  const rest = view.reached === 'built' ? '' : ` · next: ${view.reached === 'none' ? 'describe it' : next}`;
+  const key = esc(view.chapterId);
+  return `<div class="og-ladder" data-component="Chapter ladder" data-key="${key}">
+    <button class="og-ladder-line" data-goals-action="toggle-ladder" data-chapter="${key}" aria-expanded="${!!ui.open}" aria-label="Chapter progress: ${at + 1 > 0 ? at + 1 : 0} of ${RUNGS.length} steps. ${esc(now + rest)}"><b>${now}</b>${rest}</button>
+    <span class="og-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${RUNGS.length}" aria-valuenow="${at + 1}" aria-label="${at + 1} of ${RUNGS.length} steps">${RUNGS.map((r, i) => `<span class="og-rung${i <= at ? ' on' : ''}"></span>`).join('')}</span>
+    ${ui.open ? `<ul class="og-steps">${RUNGS.map((r, i) => `<li class="og-step${i <= at ? ' on' : ''}"><span aria-hidden="true">${i <= at ? '✓' : '○'}</span> ${RUNG_NAME[r].replace(' ✓', '')}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
+// Which command makes the draft event happen, and its fields (a comma list); the command's name is suggested from the book. view: Make Slice Sheet
+export function makeSliceForm(view) {
+  return `<div class="og-sheet" data-component="Make slice sheet" data-key="${esc(view.chapterId)}" data-chapter="${esc(view.chapterId)}" data-event="${esc(view.event)}">
+    <div class="sheet-title">Make ${esc(view.event)} a slice</div>
+    <label class="bd-sheet-label" for="ogMakeCommand">Which command makes it happen?</label>
+    <input id="ogMakeCommand" class="sheet-input" type="text" value="${esc(view.command)}" placeholder="e.g. Submit profile" autocomplete="off" autocapitalize="sentences">
+    <div class="pad-suggest-slot og-suggest og-suggest-sheet" id="ogMakeSuggest" hidden></div>
+    <label class="bd-sheet-label" for="ogMakeFields">Its fields</label>
+    <input id="ogMakeFields" class="sheet-input" type="text" value="${esc(view.fields)}" placeholder="e.g. profileId, interests, topics" autocomplete="off">
+    <p class="og-hint">The slice goes at the end of ${esc(view.chapterName)}. The fields go on the command and on the event.</p>
+    <button class="sheet-btn" data-goals-action="save-make-slice">Make the slice</button>
+    <button class="sheet-btn" data-goals-action="cancel-make-slice">Cancel</button>
   </div>`;
 }

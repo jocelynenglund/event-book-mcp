@@ -42,7 +42,7 @@ export function padUpdateChapter(state, { frameId }) {
       kept.add(key(l.noteId, l.role));
       const shared = Object.entries(state.slices).filter(([id, s]) => id !== frame.sliceId && s.elements.includes(el.id)).length;
       steps.push({ kind: 'rename', role: l.role, elementId: el.id, from: el.name, to: l.name, shared });
-    } else if (l.role === 'event') { if (!here) steps.push({ kind: 'add', role: l.role, name: l.name, ...(l.external ? { external: true } : {}) }); }
+    } else if (l.role === 'event') { if (!here) steps.push({ kind: 'add', role: l.role, name: l.name, ...(l.external ? { external: true } : {}), ...(l.storage ? { storage: l.storage } : {}) }); }
     else if (!here) notChanged.push(`${ROLE_WORD[l.role]} ${l.name} (a slice has one command or view)`);
   });
   made.stickies.filter(s => state.elements[s.elementId] && !kept.has(key(s.noteId, s.role))).forEach(s => notRemoved.push(`${ROLE_WORD[s.role]} ${state.elements[s.elementId].name}`));

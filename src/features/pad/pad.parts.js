@@ -6,6 +6,7 @@
 // ===========================================
 
 import { screenWire } from './screenWire.parts.js';
+import { padStorageTag } from '../storedElsewhere/storedElsewhere.parts.js'; // feature: stored-elsewhere
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -21,9 +22,9 @@ export function padNote(note) {
     : note.scenario ? scenario(note.scenario)
     : note.screen ? screenWire(note.screen)
     : note.automation ? automation(note.automation)
-    : `<div class="pad-note-text"><div class="pad-note-title">${escapeHtml(note.title)}</div>${note.bodyLines.length ? `<div class="pad-note-body">${escapeHtml(note.bodyLines.join('\n'))}</div>` : ''}</div>`;
+    : `<div class="pad-note-text"><div class="pad-note-title">${escapeHtml(note.title)}${note.storage ? padStorageTag({ noteId: note.noteId, kind: note.storage }) : ''}</div>${note.bodyLines.length ? `<div class="pad-note-body">${escapeHtml(note.bodyLines.join('\n'))}</div>` : ''}</div>`; // feature: stored-elsewhere (the kind tag)
   return `
-    <div class="pad-note" data-component="Pad note" data-key="${escapeHtml(note.noteId)}" data-pad-note="${escapeHtml(note.noteId)}" data-colour="${note.colour}" data-size="${note.size}" ${note.external ? 'data-external="true"' : ''}
+    <div class="pad-note" data-component="Pad note" data-key="${escapeHtml(note.noteId)}" data-pad-note="${escapeHtml(note.noteId)}" data-colour="${note.colour}" data-size="${note.size}" ${note.external ? 'data-external="true"' : ''} ${note.storage ? 'data-stored="true"' : ''}
          ${note.selected ? 'data-selected="true"' : ''} style="left:${note.x}px;top:${note.y}px${note.colour === 'arrow' ? `;width:${note.w}px` : ''}" aria-label="${escapeHtml(`${note.colour} note`)}">
       ${body}
       ${note.places > 1 ? `<button type="button" class="pad-note-link" data-pad-action="note-places" data-note="${escapeHtml(note.noteId)}" title="${escapeHtml(`The same note in ${note.places} places: tap to see them`)}" aria-label="${escapeHtml(`The same note in ${note.places} places`)}">🔗 ${note.places}</button>` : ''}

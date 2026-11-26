@@ -8,6 +8,7 @@
 
 import { KIND_OF } from './sketch.js';
 import { propertyTypes } from '../../core/constants.js';
+import { storageMarker } from '../storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 
 const BULLET = /^\s*(?:[-•*·–—]+\s*)+/;
 const words = text => String(text ?? '').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
@@ -52,13 +53,15 @@ export function externalName(firstLine) {
   return { external: bare !== line && !!bare.trim(), name: bare !== line && bare.trim() ? bare.trim() : line };
 }
 
-// colour: blue | orange | green. -> { kind: command | event | readModel | hotspot | note, name, external (true only on an orange note marked external), fields: [{ line, name, note, type? }] }
+// colour: blue | orange | green. -> { kind: command | event | readModel | hotspot | note, name, external (true only on an orange note marked external), storage ({ kind } on an orange note marked "(table)", "(config)"… stored elsewhere), fields: [{ line, name, note, type? }] }
 // A note with a field line that carries a value ("- contractNumber: 99999", not a type) is an EXAMPLE of its event, command or view, not its definition:
 // `example: true`, no `fields` (it adds and changes none), and `values` says what it shows: [{ name: camelCase field, as: the words typed, value: the text, or null for a bare "- EventDate" }]
 export function parseNote(text, colour) {
   const lines = String(text ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean), kind = KIND_OF[colour] || null;
-  const { external, name } = kind === 'event' ? externalName(lines[0]) : { external: false, name: lines[0] || '' };
-  const fields = lines.slice(1).map(fieldOf).filter(Boolean), read = { kind, name: titleCase(name), ...(external ? { external: true } : {}) };
+  const marked = kind === 'event' ? externalName(lines[0]) : { external: false, name: lines[0] || '' };
+  const { storage, name } = kind === 'event' && !marked.external ? storageMarker(marked.name) : { storage: null, name: marked.name };   // feature: stored-elsewhere
+  const { external } = marked;
+  const fields = lines.slice(1).map(fieldOf).filter(Boolean), read = { kind, name: titleCase(name), ...(external ? { external: true } : {}), ...(storage ? { storage } : {}) };   // feature: stored-elsewhere
   if (!fields.some(f => f.value !== undefined)) return { ...read, fields };
   return { ...read, example: true, fields: [], values: fields.map(f => ({ name: f.name, as: f.as || f.line, value: f.value ?? null })) };
 }

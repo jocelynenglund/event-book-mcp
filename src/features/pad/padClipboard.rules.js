@@ -7,6 +7,7 @@
 // ===========================================
 
 import { notesInFrame, NOTE_SIZE, NOTE_GAP } from './sketch.js';
+import { storageMarker } from '../storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 
 export const CLIPBOARD_MIME = 'application/x-eventbook-pad+json';
 export const PASTE_STEP = 24;       // with no pointer to paste at: this far from the originals, and again for each paste after
@@ -56,7 +57,7 @@ export function pastePlan(copy, { at = null, step = 1, ids }) {
 // An event name reads like one: two to six words, no sentence punctuation, ending in a past tense ("Order Placed", "Payment sent")
 const IRREGULAR = new Set(['sent', 'paid', 'made', 'taken', 'given', 'chosen', 'done', 'bought', 'built', 'left', 'lost', 'won', 'begun', 'held', 'kept', 'told', 'sold', 'found', 'seen', 'written', 'broken']);
 export function looksLikeEvent(firstLine) {
-  const line = String(firstLine ?? '').replace(/\s*\(external\)\s*$/i, '').trim();
+  const line = storageMarker(String(firstLine ?? '').replace(/\s*\(external\)\s*$/i, '').trim()).name; // feature: stored-elsewhere
   const words = line.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 6 || /[.?!,:;]/.test(line)) return false;
   const last = words[words.length - 1].toLowerCase();

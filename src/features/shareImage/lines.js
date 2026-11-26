@@ -18,7 +18,7 @@ export function gwtLines(scn, state, showValues = false) {
   const ref = (kw, id, values) => {
     const el = state.elements[id];
     const v = showValues ? valuesText(values) : '';
-    return el ? { kw, text: `${el.name}${v ? ` ${v}` : ''}`, type: el.type, external: !!el.external, table: !!el.table, published: el.type === 'event' && !!el.published && !el.external } : { kw, text: '(removed)' };
+    return el ? { kw, text: `${el.name}${v ? ` ${v}` : ''}`, type: el.type, external: !!el.external, stored: !!el.storage, published: el.type === 'event' && !!el.published && !el.external } : { kw, text: '(removed)' };
   };
   const lines = (scn.given || []).map((g, i) => ref(i ? 'And' : 'Given', g.elementId, g.values));
   if (!lines.length) lines.push({ kw: 'Given', text: 'nothing happened yet' });

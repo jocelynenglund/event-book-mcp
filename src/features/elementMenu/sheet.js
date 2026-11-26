@@ -223,13 +223,6 @@ export function menuTogglePublished() {
   else hideAllSheets();
 }
 
-export function menuToggleTable() {
-  hideAllSheets();
-  const el = elementMenuState(load(), currentElementId);
-  if (!el) return;
-  appendEvent(EventTypes.ElementTableSet, { elementId: el.elementId, table: !el.table });
-  render();
-}
 
 export function menuRemoveFromSlice() {
   hideAllSheets();

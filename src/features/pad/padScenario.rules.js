@@ -17,6 +17,7 @@
 // ===========================================
 
 import { titleCase, camelCase, externalName } from './padNote.rules.js';
+import { storageMarker } from '../storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 
 const KEYWORD = /^(given|when|then|and)\b\s*:?\s*(.*)$/i;
 const SHORT = /^(?:([gwtqa])|(&))\s*:\s*(.*)$/i;                        // G: W: T: Q: A: &:
@@ -158,13 +159,15 @@ export function readScenario(text, known, kind = 'command') {
   return read;
 }
 
+const withoutStorage = name => storageMarker(name).name; // feature: stored-elsewhere
+
 // The names the Pad and the book know, lower case: events and views for " and ", commands for When
 export function namesKnown(state) {
   const names = { events: new Set(), views: new Set(), commands: new Set(), padCommands: new Set() };
   const set = { event: names.events, readModel: names.views, command: names.commands };
   Object.values(state.elements).forEach(e => set[e.type]?.add(key(e.name)));
   Object.values(state.pad?.notes || {}).forEach(n => {
-    const kind = { orange: 'event', green: 'readModel' }[n.colour], name = n.colour === 'orange' ? externalName(lines(n.text)[0]).name : lines(n.text)[0];
+    const kind = { orange: 'event', green: 'readModel' }[n.colour], name = n.colour === 'orange' ? withoutStorage(externalName(lines(n.text)[0]).name) : lines(n.text)[0]; // feature: stored-elsewhere
     if (kind && name) set[kind].add(key(name));
     if (n.colour === 'blue' && name) names.padCommands.add(key(name));   // the blue notes: only an automation's → looks for them (a When keeps to the board's commands)
   });

@@ -34,7 +34,7 @@ export function fieldOf(el, name) {
   return at ? { name: itemField(at.prop, at.item), prop: at.prop, item: at.item } : null;
 }
 
-// Only an event can be a whole source (an external event or a legacy table is an event too)
+// Only an event can be a whole source (an external event or one stored elsewhere is an event too)
 export const isWholeSource = el => el?.type === 'event';
 
 // What a mapped field comes from, while it still can: { field, from: { elementId, sticky, field, text, whole? } }, or null

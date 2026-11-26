@@ -73,6 +73,7 @@ const cloneMcp = await import(new URL('features/cloneSlice/cloneSlice.mcp.js', s
 // What other features say beside a sticky in the outline: (sticky) → words or ''
 const outlineNotes = [
   (await import(new URL('features/pages/pages.mcp.js', src))).outlineNote, // feature: pages
+  (await import(new URL('features/storedElsewhere/storedElsewhere.mcp.js', src))).outlineNote, // feature: stored-elsewhere
 ];
 // What other features say at the end of a slice's line in the outline: (state, slice) → ' · words' or ''
 const sliceNotes = [
@@ -125,7 +126,7 @@ const API = (process.env.EVENTPAD_API || PROD_API).replace(/\/$/, '');
 const APP = process.env.EVENTPAD_APP || 'https://eventbook.itsybit.se/';
 
 // The keys a step of add_steps takes: any other is an error, never silently dropped
-const stepKeys = ['kind', 'name', 'screen', 'command', 'event', 'events', 'readModel', 'list', 'table', 'external', 'published', 'to', 'when', 'using', 'todo', 'processor', 'result', 'fields', 'description', 'scenarios'];
+const stepKeys = ['kind', 'name', 'screen', 'command', 'event', 'events', 'readModel', 'list', 'table', 'storage', 'external', 'published', 'to', 'when', 'using', 'todo', 'processor', 'result', 'fields', 'description', 'scenarios'];
 
 // ---------- Reading the model ----------
 
@@ -242,8 +243,8 @@ function stickyNamed(name, field, slice, st = state()) {
 }
 
 const chapterId = name => chapterIdIn(name);
-// What an event is beyond a plain event: an old table read as events, another system's, or one of ours published to other systems
-const eventMark = el => (el.table ? ` (legacy table${typeof el.table === 'string' ? ': ' + el.table : ''})` : '') + (el.external ? ' (external)' : '')
+// What an event is beyond a plain event (stored elsewhere is noted by the outline notes): another system's, or one of ours published to other systems
+const eventMark = el => noteOf(el) + (el.external ? ' (external)' : '')
   + (el.published && !el.external ? ` (integration${el.to?.length ? ' → ' + el.to.join(', ') : ''})` : '');
 const props = el => (el.properties?.length ? ` (${el.properties.map(p => (isQueryField(el, p.name) ? '?' : '') + p.name + (p.type && p.type !== 'string' ? ':' + p.type : '') + (mappingOf(state(), el, p.name) ? ` ← ${mappingOf(state(), el, p.name).sources.map(x => x.text + (x.whole && !/^each /.test(x.text) ? ' (whole)' : '')).join(', ')}` : '')).join(', ')})` : '');
 
@@ -1188,7 +1189,7 @@ const tools = [
   { name: 'outline', description: 'The open model as a short outline: chapters (with "N of M refined"), slices (S-numbers to refer to them, and each slice\'s stable ref #xxxxx at the end of its line: S-numbers shift when a slice is inserted, moved or deleted, the ref never does, and every tool that takes a slice takes the ref, the S-number or the title; an S-number the book has moved since your last outline is refused with the new numbering; "☐ ready" once refined, ready to build; "☑ done" once confirmed built from the tests), stickies with fields, scenario counts. Under a slice, "Information completeness:" lists its fields with no source (the information completeness check: a hint while planning, never a block). scenarios:true lists each Given/When/Then (★ must have, ✓ nice to have).',
     inputSchema: { type: 'object', properties: { chapter: S, scenarios: { type: 'boolean' } } }, run: outline },
   { name: 'add_steps', edits: true,
-    description: 'Add steps to a chapter (made if new), in order. The reply names each new slice (S-number and #ref) and ends with "Numbering changed:" listing every slice it shifted (S7 → S8 <title> (#ref)): use the ref from then on. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, table?, external?, published?, to?}: table is the name of a legacy table (old storage read as events), external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model; "orderRef ← Order placed.orderId" (or <-) is the field orderRef, which comes from the field orderId of the sticky Order placed, already in the book: it is mapped, so it has a source; a read-model field written ?name is a query parameter: the caller asks the view with it, so it needs no event source), description, scenarios: [...] (Given/When/Then scenarios added to that slice in the same call, the shape add_scenarios takes). Any other key on a step is an error that lists the accepted ones: nothing is dropped silently, and nothing is added when one is wrong. Stickies with the same name are reused.',
+    description: 'Add steps to a chapter (made if new), in order. The reply names each new slice (S-number and #ref) and ends with "Numbering changed:" listing every slice it shifted (S7 → S8 <title> (#ref)): use the ref from then on. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, storage?, table?, external?, published?, to?}: storage {kind, name?} says the event is not saved as events but kept elsewhere: kind is free text ("table", "config", "document", "legacy table"…), name the table or file (e.g. {kind: "config", name: "pricing.json"}); every kind is drawn the same brown way and is a source of fields; table: "<name>" is the older way to say a legacy table; external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, storage / table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model; "orderRef ← Order placed.orderId" (or <-) is the field orderRef, which comes from the field orderId of the sticky Order placed, already in the book: it is mapped, so it has a source; a read-model field written ?name is a query parameter: the caller asks the view with it, so it needs no event source), description, scenarios: [...] (Given/When/Then scenarios added to that slice in the same call, the shape add_scenarios takes). Any other key on a step is an error that lists the accepted ones: nothing is dropped silently, and nothing is added when one is wrong. Stickies with the same name are reused.',
     inputSchema: { type: 'object', properties: { chapter: S, steps: { type: 'array', items: { type: 'object' } } }, required: ['steps'] },
     run: ({ chapter, steps }) => {
       notLiterature('steps');
@@ -1570,7 +1571,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.11.0' },
+      serverInfo: { name: 'eventpad', version: '0.12.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

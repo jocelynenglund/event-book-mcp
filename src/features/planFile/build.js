@@ -16,6 +16,7 @@ import { addFieldSource } from '../fieldMapping/command.js';
 import { propOf } from '../fieldMapping/mappings.js';
 import { parseRows } from '../viewQueries/query.js';
 import { fieldKey, parsePropertyText } from '../../core/constants.js';
+import { storageError, storageFromSpec } from '../storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 
 export const PLAN_FORMAT = 'eventbook-plan/1';
 
@@ -30,13 +31,16 @@ export { as as stickyNamed };
 const list = v => (Array.isArray(v) ? v : v ? [v] : []);
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-// An event is a name, or { name, table?, external?, published?, to? }: table is the legacy table's name (the event is really
-// an old table read as events), external says another system records it, published says it is one of ours that is
+// An event is a name, or { name, storage?, table?, external?, published?, to? }: storage ({ kind, name? }: "table", "config", "document"…) says
+// the event is kept somewhere other than events; table is the older way to say it for a legacy table (its name); external says another system records it, published says it is one of ours that is
 // published to other systems (an integration event, a contract) and `to` names who consumes it. On a do / see step, `table`,
 // `published` and `to` beside the event are shorthand for its one event, and `external` for its events; an auto step writes
 // them per event.
-const eventKeys = ['name', 'table', 'external', 'published', 'to'];
-const flagError = (table, external, published, to) => {
+const eventKeys = ['name', 'storage', 'table', 'external', 'published', 'to'];   // feature: stored-elsewhere
+const flagError = (table, external, published, to, storage) => {
+  const bad = storageError(storage);   // feature: stored-elsewhere
+  if (bad) return bad;   // feature: stored-elsewhere
+  if (storage !== undefined && table !== undefined) return 'Give storage or table, not both (table is the older way to say a legacy table)';   // feature: stored-elsewhere
   if (table !== undefined && (typeof table !== 'string' || !table.trim())) return "table must be the table's name";
   if (external !== undefined && typeof external !== 'boolean') return 'external must be true or false';
   if (published !== undefined && typeof published !== 'boolean') return 'published must be true or false';
@@ -53,12 +57,12 @@ function eventSpecs(entries, shorthand = {}) {
     const odd = Object.keys(e).filter(k => !eventKeys.includes(k));
     if (odd.length) throw new Error(`An event takes ${eventKeys.join(', ')}; not ${odd.join(', ')}`);
     if (typeof e.name !== 'string' || !e.name.trim()) throw new Error('Every event needs a name');
-    const bad = flagError(e.table, e.external, e.published, e.to);
+    const bad = flagError(e.table, e.external, e.published, e.to, e.storage);
     if (bad) throw new Error(bad);
     return { ...e };
   });
-  const { table, external, published, to } = shorthand;
-  const bad = flagError(table, external, published, to);
+  const { table, external, published, to, storage } = shorthand;
+  const bad = flagError(table, external, published, to, storage);
   if (bad) throw new Error(bad);
   if (published !== undefined || to !== undefined) {
     if (specs.length !== 1) throw new Error(specs.length ? 'published on a step with several events: write each event as {name, published, to}' : 'published needs an event on the step');
@@ -69,14 +73,19 @@ function eventSpecs(entries, shorthand = {}) {
     if (specs.length !== 1) throw new Error(specs.length ? 'table on a step with several events: write each event as {name, table}' : 'table needs an event on the step');
     specs[0].table = table;
   }
+  if (storage !== undefined) {   // feature: stored-elsewhere
+    if (specs.length !== 1) throw new Error(specs.length ? 'storage on a step with several events: write each event as {name, storage}' : 'storage needs an event on the step');   // feature: stored-elsewhere
+    specs[0].storage = storage;   // feature: stored-elsewhere
+  }   // feature: stored-elsewhere
   if (external !== undefined) specs.forEach(e => { e.external = external; });
   specs.forEach(e => { if (e.published && e.external) throw new Error(flagError(undefined, true, true)); });
   return specs;
 }
 // Marks are set once: a sticky that already has them is left alone
-function markEvent(id, { table, external, published, to }) {
+function markEvent(id, { table, external, published, to, storage }) {
   const el = state().elements[id];
-  if (table && el?.table !== table) es.appendEvent(es.EventTypes.ElementTableSet, { elementId: id, table });
+  const stored = storageFromSpec({ table, storage });   // feature: stored-elsewhere
+  if (stored && (el?.storage?.kind !== stored.kind || el?.storage?.name !== stored.name)) es.appendEvent(es.EventTypes.ElementStorageSet, { elementId: id, kind: stored.kind, ...(stored.name ? { name: stored.name } : {}) });   // feature: stored-elsewhere
   if (external && !el?.external) es.appendEvent(es.EventTypes.ElementExternalSet, { elementId: id, external: true });
   if (published) c.setPublished(id, true, to || []);
 }
@@ -90,11 +99,12 @@ export function checkStepMarks(step) {
     if (step.list && kind !== 'see') return 'list belongs on a see step (its read model)';
     if (kind === 'auto') {
       if (step.table !== undefined) return 'table does not say which event on an auto step: on an auto step, write the event as {name, table}';
+      if (step.storage !== undefined) return 'storage does not say which event on an auto step: on an auto step, write the event as {name, storage}';   // feature: stored-elsewhere
       if (step.external !== undefined && typeof step.external !== 'boolean') return 'external must be true or false';
       if (step.published !== undefined || step.to !== undefined) return 'published does not say which event on an auto step: on an auto step, write the event as {name, published, to}';
       if (list(step.when).length > 1) return 'An auto step has one "when" event';
       eventSpecs(step.when); eventSpecs(step.events || step.result);
-    } else eventSpecs(step.events || step.event, { table: step.table, external: step.external, published: step.published, to: step.to });
+    } else eventSpecs(step.events || step.event, { table: step.table, external: step.external, published: step.published, to: step.to, storage: step.storage });
     return null;
   } catch (e) { return e.message; }
 }
@@ -297,7 +307,7 @@ export function chapterId(name, st = state()) {
 
 // ---------- A whole plan file ----------
 
-const stepKeys = ['kind', 'name', 'description', 'screen', 'command', 'event', 'events', 'readModel', 'when', 'external', 'table', 'published', 'to', 'list', 'using', 'todo', 'processor', 'result', 'fields', 'scenarios'];
+const stepKeys = ['kind', 'name', 'description', 'screen', 'command', 'event', 'events', 'readModel', 'when', 'external', 'table', 'storage', 'published', 'to', 'list', 'using', 'todo', 'processor', 'result', 'fields', 'scenarios'];
 const planKeys = ['format', '$schema', 'name', 'description', 'chapters'];
 const chapterKeys = ['name', 'steps'];
 

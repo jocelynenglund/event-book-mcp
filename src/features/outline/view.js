@@ -9,6 +9,8 @@
 
 import { updateSaveChip } from '../sync/view.js';
 import { statusChips, filtering as staged, emptyText } from '../filter/status.js';
+import { stageFilterNote } from '../filter/stageFilterNote.read.js';
+import { stageFilterChip } from '../filter/filter.parts.js';
 import { projectState } from '../../core/projections.js';
 import { openProgressHistory } from '../buildProgress/sheet.js';
 import { refinedPillTap } from './refinedPill.js';
@@ -22,11 +24,12 @@ import { outlineSearchField } from './outlineSearchField.read.js';
 import { outlineToolbarOptions } from './outlineToolbarOptions.read.js';
 import { outlineAddKinds } from './outlineAddKinds.read.js';
 import { outlineCanAddChapter } from './outlineCanAddChapter.read.js';
+import { outlineChapterFirst } from './outlineChapterFirst.read.js';
 import { outlineBookName } from './outlineBookName.read.js';
 import { outlineFoldAllState } from './outlineFoldAllState.read.js';
 import { outlineOpenCommentsCount } from './outlineOpenCommentsCount.read.js';
 import { outlineMoveTargets } from './outlineMoveTargets.read.js';
-import { outlineRow, outlineChapterHead, outlinePartHeading, outlineSearchBox, outlineToolbar, outlineAddButtons, outlineNewChapterButton, outlineBookTitle,
+import { outlineRow, outlineChapterHead, outlinePartHeading, outlineSearchBox, outlineToolbar, outlineAddButtons, outlineNewChapterButton, outlineChapterStart, outlineBookTitle,
   outlineFoldAll, outlineBarComments, outlineMoveBar, outlineAddSheet, outlineEditSheet, outlineVerdictSheet, scenarioTestersSheet } from './outline.parts.js';
 import { outlineStepPlan } from './outlineStepPlan.read.js';
 import { outlineMovePlan } from './outlineMovePlan.read.js';
@@ -224,7 +227,7 @@ export function renderOutline() {
   // A literature book's outline is its paragraphs and sentences: no scenarios, stickies or add steps
   if (layout.literature) { screenNow = { layout, rows: {} }; renderLiteratureOutline(container); return; }
   let extras = { top: '', chapter: () => '' };   // what other features put on top of the Outline and under each chapter's heading
-  extras = outlineGoalsFor(state, { editable: !isReadOnly() && !built, anyScenarios: layout.totals.scenarios > 0, filtering: layout.filtering }); // feature: outline-goals
+  extras = outlineGoalsFor(state, { editable: !isReadOnly() && !built, anyScenarios: layout.totals.scenarios > 0, searching: layout.searching }); // feature: outline-goals
   const rows = {};
   const trace = activeFieldTrace(state);
   layout.chapters.forEach(ch => ch.rows.forEach(r => { rows[r.slice.id] = outlineSliceRow(state, r.slice, { ...r, trace }); }));
@@ -236,7 +239,8 @@ export function renderOutline() {
     fields: openFields.has(row.sliceId), values: openValues.has(row.sliceId),
     canAdd: !isReadOnly() || canAddScenariosHere(), verifying: !!layout.verify
   });
-  const sections = layout.chapters.map(chapter => {
+  const first = outlineChapterFirst(state, layout, { editable: !isReadOnly() && !built });
+  const sections = first.chapterFirst ? '' : layout.chapters.map(chapter => {
     const heading = outlineChapterHeading(state, chapter, { built, searching: layout.searching });
     const head = chapter.loose
       ? (layout.hasChapters ? outlineChapterHead(heading) : '')
@@ -256,12 +260,13 @@ export function renderOutline() {
   if (!container.querySelector('#olSearch')) container.innerHTML = `${outlineSearchBox(outlineSearchField(state, { query }))}<div id="olBody"></div>`;
   container.querySelector('.ol-search-clear').hidden = !query;
   container.querySelector('#olBody').innerHTML = `
+    ${stageFilterChip(stageFilterNote())}
     ${extras.top}
     ${outlineToolbar({ ...outlineToolbarOptions(state, layout, { arrangeable: canArrangeCurrent() }), showFields, selecting })}
     ${verifyLine(layout.verify)}
     ${roundsLine(layout.rounds)}
-    ${sections || (layout.searching ? `<div class="ol-empty">Nothing matches "${escapeHtml(query)}"</div>` : staged() ? `<div class="ol-empty">${emptyText()}</div>` : '')}
-    ${outlineNewChapterButton(outlineCanAddChapter(state, layout))}
+    ${first.chapterFirst ? outlineChapterStart(first) : sections || (layout.searching ? `<div class="ol-empty">Nothing matches "${escapeHtml(query)}"</div>` : !layout.sliceCount && staged() ? `<div class="ol-empty">No slices yet: start with the goal above, or add a chapter</div>` : staged() ? `<div class="ol-empty">${emptyText()}</div>` : '')}
+    ${first.chapterFirst ? '' : outlineNewChapterButton(outlineCanAddChapter(state, layout))}
     ${moveBar}
     ${bottomBar(state, layout)}`;
   container.classList.toggle('tracing', !!trace);

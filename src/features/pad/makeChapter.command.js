@@ -25,7 +25,7 @@ const refuse = refused => ({ refused, chapterId: null, slices: 0 });
 // A slice of the preview as a plan-file step (what the ticked lines say)
 export function stepOf(slice) {
   const kept = slice.lines.filter(l => l.included);
-  const events = kept.filter(l => l.role === 'event').map(l => (l.external ? { name: l.name, external: true } : l.name));   // an event marked (external) is another system's
+  const events = kept.filter(l => l.role === 'event').map(l => (l.external || l.storage ? { name: l.name, ...(l.external ? { external: true } : {}), ...(l.storage ? { storage: l.storage } : {}) } : l.name));   // an event marked (external) is another system's
   const fields = [...new Map(ownFieldLines(kept).map(l => [l.name.toLowerCase(), l.type ? `${l.name}:${l.type}` : l.name])).values()];   // "amount: number" keeps its type
   if (slice.kind === 'automation') return autoStepOf(slice, kept.find(l => l.role === 'automation').automation, events, fields);
   const notes = [...kept.filter(l => l.role === 'field' && l.note).map(l => `${l.name}: ${l.note}`), ...kept.filter(l => l.role === 'note').map(l => l.text)];
