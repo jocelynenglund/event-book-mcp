@@ -119,17 +119,18 @@ function drawAutomation(ctx, n, c) {
 
 // A chapter arrow: a long blue arrow with its heading on it, for the eye only
 function drawArrow(ctx, n) {
-  const head = 44, band = n.h * 0.12;
+  const blue = '#2f6fcf', thick = 3, lead = 24, gap = 10, head = 15, midY = n.y + n.h / 2, endX = n.x + n.w;
   ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(n.x, n.y + band); ctx.lineTo(n.x + n.w - head, n.y + band); ctx.lineTo(n.x + n.w - head, n.y); ctx.lineTo(n.x + n.w, n.y + n.h / 2);
-  ctx.lineTo(n.x + n.w - head, n.y + n.h); ctx.lineTo(n.x + n.w - head, n.y + n.h - band); ctx.lineTo(n.x, n.y + n.h - band); ctx.closePath();
-  ctx.fillStyle = '#2f6fcf'; ctx.fill();
-  ctx.font = font(700, 20); ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'middle';
-  const room = n.w - head - 32;
+  ctx.font = font(700, 20); ctx.textBaseline = 'middle';
+  const room = n.w - lead - gap * 2 - 60;
   let label = n.title;
   while (label.length > 1 && ctx.measureText(label).width > room) label = label.slice(0, -2) + '…';
-  ctx.fillText(label, n.x + 20, n.y + n.h / 2);
+  const textX = n.x + lead + gap, textEnd = textX + ctx.measureText(label).width + gap;
+  ctx.fillStyle = blue;
+  ctx.fillRect(n.x, midY - thick / 2, lead, thick);                       // the line, up to the label's gap
+  ctx.fillRect(textEnd, midY - thick / 2, endX - textEnd - 2, thick);     // and on from it to the head
+  ctx.beginPath(); ctx.moveTo(endX, midY); ctx.lineTo(endX - head, midY - head * 0.55); ctx.lineTo(endX - head, midY + head * 0.55); ctx.closePath(); ctx.fill();
+  ctx.fillText(label, textX, midY);
   ctx.restore();
 }
 

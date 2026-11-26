@@ -41,7 +41,9 @@ function sliceOf(pad, frame, names, off, known) {
   // An example note (padNote.rules.js: field lines with values) is not a definition: the slice's own command or view is the first note that is not one
   const first = kind => notes.find(n => n.parsed.kind === kind && !n.parsed.example) || notes.find(n => n.parsed.kind === kind);
   const main = notes.find(n => n.parsed.kind === 'automation') || first('command') || first('readModel');
-  let auto = main?.parsed.kind === 'automation' ? previewAutomation(main.note.text, known) : null;
+  // An automation's trigger: the event it wakes on, an external (yellow) one or one placed left of the automation note; the first is it, any other event is an outcome
+  const trigger = main?.parsed.kind === 'automation' ? notes.filter(n => n.parsed.kind === 'event').sort((a, b) => a.note.x - b.note.x).find(n => n.parsed.external || n.note.x < main.note.x) : null;
+  let auto = main?.parsed.kind === 'automation' ? previewAutomation(main.note.text, known, { triggered: !!trigger }) : null;
   // The command an automation sends may sit in its frame: it is part of the slice (its fields and the frame's events are the slice's), not left out
   const own = auto ? ownCommand(main.note.text, notes.filter(n => n.parsed.kind === 'command').map(n => ({ name: n.parsed.name, note: n.note }))) : null;
   if (own && !auto.target) auto = { ...auto, target: own.name, targetKind: 'command', warnings: auto.warnings.filter(w => !/^An automation triggers a command/.test(w)) };
@@ -50,7 +52,9 @@ function sliceOf(pad, frame, names, off, known) {
     const isMain = note === main?.note || note === own?.note, isEvent = parsed.kind === 'event';
     const key = `${note.id}:0`;
     if (parsed.kind === 'scenario') {
-      const s = main && previewScenario(note.text, known, main.parsed.kind, { command: main.parsed.kind === 'command' ? main.parsed.name : null, view: main.parsed.kind === 'readModel' ? main.parsed.name : null });
+      // an automation's scenarios are a command's: Given events, When the command it sends, Then its event or refusal
+      const cmd = main && (main.parsed.kind === 'command' ? main.parsed.name : auto?.targetKind === 'command' ? auto.target : null);
+      const s = main && previewScenario(note.text, known, main.parsed.kind === 'automation' ? 'command' : main.parsed.kind, { command: cmd, view: main.parsed.kind === 'readModel' ? main.parsed.name : null });
       if (s?.name) scenarios.push({ key, noteId: note.id, role: 'scenario', label: 'Scenario', text: s.name, name: s.name, note: null, included: !off.includes(key), tickable: true, scenario: s.scenario, rows: s.rows, warnings: s.warnings });
       continue;
     }
@@ -67,7 +71,7 @@ function sliceOf(pad, frame, names, off, known) {
     if (parsed.example && !isMain && !isEvent && main && parsed.name.toLowerCase() === main.parsed.name.toLowerCase()) continue;   // the slice's own command or view, shown again with example values
     if (!isMain && !isEvent) { lines.push({ key, noteId: note.id, role: 'left out', text: parsed.name, name: parsed.name, note: null, included: false, tickable: false }); continue; }
     const included = isMain || !off.includes(key);
-    lines.push({ key, noteId: note.id, role: ROLE[parsed.kind], text: parsed.name, name: parsed.name, note: null, included, tickable: isEvent, ...(isEvent && parsed.external ? { external: true } : {}), ...(isEvent && parsed.storage ? { storage: parsed.storage } : {}) });
+    lines.push({ key, noteId: note.id, role: ROLE[parsed.kind], text: parsed.name, name: parsed.name, note: null, included, tickable: isEvent, ...(isEvent && parsed.external ? { external: true } : {}), ...(note === trigger?.note ? { trigger: true } : {}), ...(isEvent && parsed.storage ? { storage: parsed.storage } : {}) });
     if (!included) continue;
     parsed.fields.forEach((f, i) => {
       const fieldKey = `${note.id}:${i + 1}`;

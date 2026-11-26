@@ -4170,17 +4170,20 @@ body.pad-mode { overflow: hidden; }
 .pad-note-link { position: absolute; right: 6px; bottom: 5px; padding: 1px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.5); color: #fff; font: 700 12px var(--font-body); line-height: 1.4; border: 0; cursor: pointer; min-height: 24px; }
 .pad-note.lifted, .pad-frame.lifted { z-index: 20; cursor: grabbing; }
 .pad-note.lifted { box-shadow: 0 14px 28px -10px rgba(60, 40, 10, 0.55); }
-/* A chapter arrow: a long blue arrow (body and pointed head) with its heading on it, for the eye only. Its width is the note's own (inline); the shape is
-   drawn by ::before so the selection ring and the resize handle are not cut off. White on a mid blue reads on the light and the dark paper. */
-.pad-note[data-colour="arrow"] { --arrow-font: max(20px, calc(13px / var(--pad-zoom, 1))); min-height: 0; height: calc(var(--arrow-font) * 2.8); padding: 0 46px 0 20px; background: none; box-shadow: none; overflow: visible; border-radius: 0; color: #fff; justify-content: flex-start; text-align: left; }
-.pad-note[data-colour="arrow"]::before { content: ""; position: absolute; inset: 0; background: #2f6fcf; clip-path: polygon(0 12%, calc(100% - 44px) 12%, calc(100% - 44px) 0, 100% 50%, calc(100% - 44px) 100%, calc(100% - 44px) 88%, 0 88%); filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.2)); }
-.pad-note[data-colour="arrow"][data-selected="true"]::before { background: #2560b8; }
-.pad-arrow-text { position: relative; min-width: 0; flex: 1; font: 700 var(--arrow-font)/1.2 var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pad-note[data-colour="arrow"] .pad-note-input { position: relative; color: #fff; text-align: left; font: 700 var(--arrow-font)/1.2 var(--font-body); }
+/* A chapter arrow: a thin blue line with an arrowhead at its right end and the heading inline in it (a gap in the line, like a Miro connector label), for the eye
+   only. Its width is the note's own (inline); the box (the hit area) stays 2.8 lines tall so it is easy to grab, the line itself is --arrow-line thick (at least 2px on
+   screen when zoomed out). The line is drawn by .pad-arrow-lead / .pad-arrow-rule, so the selection ring and the resize handle are not cut off. */
+.pad-note[data-colour="arrow"] { --arrow-font: max(20px, calc(13px / var(--pad-zoom, 1))); --arrow-line: max(3px, calc(2px / var(--pad-zoom, 1))); --arrow-blue: #2f6fcf; min-height: 0; height: calc(var(--arrow-font) * 2.8); padding: 0; display: flex; flex-direction: row; align-items: center; background: none; box-shadow: none; overflow: visible; border-radius: 0; color: var(--arrow-blue); justify-content: flex-start; text-align: left; }
+.pad-note[data-colour="arrow"][data-selected="true"] { --arrow-blue: #2560b8; }
+.pad-arrow-lead { flex: 0 0 24px; height: var(--arrow-line); background: var(--arrow-blue); }
+.pad-arrow-rule { position: relative; flex: 1 1 0; min-width: 12px; height: var(--arrow-line); background: var(--arrow-blue); }
+.pad-arrow-rule::after { content: ""; position: absolute; right: 0; top: 50%; width: calc(var(--arrow-line) * 5); height: calc(var(--arrow-line) * 5); border-top: var(--arrow-line) solid var(--arrow-blue); border-right: var(--arrow-line) solid var(--arrow-blue); transform: translate(-30%, -50%) rotate(45deg); box-sizing: border-box; }
+.pad-arrow-text { position: relative; flex: 0 1 auto; min-width: 0; max-width: calc(100% - 24px - 60px); padding: 0 10px; font: 700 var(--arrow-font)/1.2 var(--font-body); color: var(--arrow-blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pad-note[data-colour="arrow"] .pad-note-input { position: relative; margin-left: 24px; color: var(--arrow-blue); text-align: left; font: 700 var(--arrow-font)/1.2 var(--font-body); }
 .pad-note[data-colour="arrow"] .pad-note-x { right: auto; left: 4px; top: -12px; }
 .pad-arrow-grip { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: max(48px, calc(44px / var(--pad-zoom, 1))); height: max(100%, calc(44px / var(--pad-zoom, 1))); cursor: ew-resize; touch-action: none; z-index: 2; }
-.pad-arrow-grip::after { content: "↔"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #fff; font: 700 15px/1 var(--font-body); opacity: 0.85; }
-.pad-swatch[data-colour="arrow"] { background: #2f6fcf; box-shadow: none; clip-path: polygon(0 28%, 58% 28%, 58% 0, 100% 50%, 58% 100%, 58% 72%, 0 72%); }
+.pad-arrow-grip::after { content: "↔"; position: absolute; right: 14px; top: calc(50% - var(--arrow-font) * 0.9); color: var(--arrow-blue); font: 700 15px/1 var(--font-body); opacity: 0.85; }
+.pad-swatch[data-colour="arrow"] { background: #2f6fcf; box-shadow: none; clip-path: polygon(0 42%, 72% 42%, 72% 12%, 100% 50%, 72% 88%, 72% 58%, 0 58%); }
 .pad-kind-example .pad-note[data-colour="arrow"] { min-height: 56px; width: 100% !important; max-width: 100%; box-sizing: border-box; }
 .pad-ghost { position: fixed; z-index: 400; pointer-events: none; opacity: 0.92; }
 
