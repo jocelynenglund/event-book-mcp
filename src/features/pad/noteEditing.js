@@ -84,7 +84,7 @@ export function addExample(colourOf) {
   hideKindCard();
   hideAllSheets();
   S.sel = { noteIds: new Set([noteId]), frameIds: new Set() };
-  wrote(addNote({ noteId, x: Math.round(c.x - NOTE_SIZE / 2), y: Math.round(c.y - NOTE_SIZE / 2), colour: colourOf, text: example.text }), 'Added the example');
+  wrote(addNote({ noteId, x: Math.round(c.x - NOTE_SIZE / 2), y: Math.round(c.y - NOTE_SIZE / 2), colour: example.colour, text: example.text }), 'Added the example');
 }
 
 export const useColour = c => { S.colour = c; store.set(COLOUR_KEY, c); };

@@ -4,7 +4,7 @@
 // UI / automation · commands & views · events
 // ===========================================
 
-import { updateSaveChip } from '../sync/view.js';
+import { updateSaveChip, updateCheckoutBanner } from '../sync/view.js';
 import { statusChips } from '../filter/status.js';
 import { projectState } from '../../core/projections.js';
 import { boardLayout, withFlows, firstAppearances } from './boardLayout.read.js';
@@ -209,6 +209,7 @@ function aimRibbon(e) {
 const PART_GAP = '26px', SLIVER_W = '25px', TAB_MARGINS = 18;
 
 export function renderBoard() {
+  updateCheckoutBanner();
   updateSaveChip();   // the ☁ chip in the top bar: Save to library, Saved, Saving…, Not saved
   const board = document.getElementById('board');
   if (!board) return;

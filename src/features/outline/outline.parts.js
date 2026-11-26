@@ -322,8 +322,8 @@ export function outlineAddSheet(form) {
       <div class="ol-add-hint" id="olAddHint">${escapeHtml(form.hint)}</div>
       ${form.fields.map(f => `
         <label class="ol-add-label" for="${f.id}">${f.label}</label>
-        <input class="sheet-input" id="${f.id}" list="${f.id}List" placeholder="${f.placeholder}" autocomplete="off" enterkeyhint="${f.last ? 'done' : 'next'}">
-        <datalist id="${f.id}List">${f.names.map(n => `<option value="${escapeHtml(n)}">`).join('')}</datalist>
+        <input class="sheet-input" id="${f.id}" data-suggest="${f.type}" placeholder="${f.placeholder}" autocomplete="off" enterkeyhint="${f.last ? 'done' : 'next'}">
+        <div class="pad-suggest-slot ol-add-suggest" id="${f.id}Suggest" hidden></div>
         ${f.check ? `<label class="ol-add-check"><input type="checkbox" id="${f.check.id}"> ${f.check.label}</label>` : ''}`).join('')}
       <label class="ol-add-label" for="olAddProps">Properties <span class="ol-add-note">${form.propsNote}</span></label>
       <input class="sheet-input" id="olAddProps" placeholder="Optional: orderId, amount, lines[]" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">

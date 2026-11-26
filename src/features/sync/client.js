@@ -530,21 +530,28 @@ function checkInOnClose() {
 // nothing at all is asked while this device holds it or the book isn't kept.
 const POLL_MS = () => { try { return Number(localStorage.getItem('eventpad_poll_ms')) || 30_000; } catch (e) { return 30_000; } };
 let lastPoll = 0;
-function pollHeldElsewhere() {
+const PROBE_MS = () => { try { return Number(localStorage.getItem('eventpad_probe_ms')) || 60_000; } catch (e) { return 60_000; } };
+// Held by nobody here, the open book is asked about every 60 s (eventpad_probe_ms): someone may have checked it out since it was
+// opened, and a holder is otherwise learned only on a library-wide sync. One sync of this book (the holder and the events after
+// its position come back together); a 429 or lost connection backs everything off (backOff); hidden tab, shelves open, held here: nothing.
+function pollOpenBook() {
   const id = getCurrentModelId();
   if (!account() || !isKept(id) || document.visibilityState !== 'visible' || document.body.classList.contains('library-mode')) return;
   const holder = holderOf(id);
-  if (!holder || holder.you || Date.now() - lastPoll < POLL_MS()) return;
+  if (holder?.you) return;
+  if (Date.now() - lastPoll < (holder ? POLL_MS() : PROBE_MS())) return;
+  if (syncBackoff() > 0 || isBuildShelf(id)) return;   // waiting out a 429; a build is never checked out
   lastPoll = Date.now();
-  syncModel(id).catch(() => {});
+  syncModel(id).catch(e => { if (overloaded(e)) backOff(); });
 }
 
 let inited = false;
 export function initSync() {
   if (inited) return;   // a second call would double every listener
   inited = true;
+  lastPoll = Date.now();   // the first look is a minute from now: start-up has its own sync
   onOpenModel(id => { if (account() && isKept(id)) { lastPoll = Date.now(); syncModel(id).catch(() => {}); } });
-  setInterval(pollHeldElsewhere, 1000);
+  setInterval(pollOpenBook, 1000);
   // A shelf kept on the server changes only where it's checked out
   setEditGuard(id => canEdit(id), id => blocked(id));
   // A build book is never checked out, yet its reader may lay its chapters out: arranging goes onto it wherever it is kept

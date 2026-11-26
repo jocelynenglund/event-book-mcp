@@ -7,7 +7,7 @@
 // draw. Where the focus is, what is being renamed and a drag in progress are this device's, not events.
 // ===========================================
 
-import { updateSaveChip } from '../sync/view.js';
+import { updateSaveChip, updateCheckoutBanner } from '../sync/view.js';
 import { pagesStoryboard as storyboard } from './pagesStoryboard.read.js';
 import { pagesStoryboard as draw } from './pages.parts.js';
 import { renamePage, arrangePages } from './pages.command.js';
@@ -31,6 +31,7 @@ const cards = () => [...view().querySelectorAll('.pg-card')];
 const say = refused => { if (refused) showToast(refused); return !refused; };
 
 export function renderPages(state) {
+  updateCheckoutBanner();
   updateSaveChip();
   const box = view();
   if (!box) return;

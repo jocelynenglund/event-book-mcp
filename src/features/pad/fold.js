@@ -7,7 +7,8 @@
 // ===========================================
 
 import { padShelf as shelfView } from './padShelf.read.js';
-import { padShelf } from './pad.parts.js';
+import { padBookName as bookNameView } from './padBookName.read.js';
+import { padShelf, padBookName } from './pad.parts.js';
 import { shelveFrames, shelveAllMade, unshelveFrames, revealNote, revealFrame } from './shelf.command.js';
 import { foldStrip, unfoldStrip } from './foldStrip.command.js';
 import { canEditCurrent } from '../../core/eventStore.js';
@@ -20,7 +21,7 @@ export function drawShelf(state) {
   if (!view) return;
   let slot = document.getElementById('padShelfSlot');
   if (!slot) { slot = document.createElement('div'); slot.id = 'padShelfSlot'; view.appendChild(slot); }
-  slot.innerHTML = padShelf(shelfView(state, { editable: canEditCurrent() }));
+  slot.innerHTML = padBookName(bookNameView(state)) + padShelf(shelfView(state, { editable: canEditCurrent() }));
 }
 
 // Outline a frame for about a second (CSS .pad-note-flash), as a note is when a place of it is gone to

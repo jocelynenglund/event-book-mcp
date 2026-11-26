@@ -5,6 +5,8 @@
 // Names of the frame the note is in come first. The note being typed is never offered to itself. Escape dismisses (`dismissed`), and `active`
 // (the one the arrow keys are on) is this device's.
 //   colour: the note's, or 'bulk' for the ＋ Events box.  text, caret: what is typed.  noteId: the note being edited (or `at` {x, y}: a new one).
+//   field: instead of a note, a plain name box (the Outline's add-step forms): { kind: command | event | readModel | processor, chapterId, lead: [names] or (state, chapterId) → [names] }.
+//     The whole box is the word; the stickies of that chapter's slices come first, and `lead` (the chapter's draft events) before them.
 // -> { visible, kind, from, to, query, active, items: [{ index, name, kind, insert, inFrame }] }
 // ===========================================
 
@@ -19,12 +21,12 @@ import { pageSuggestions } from '../pages/pagesSuggest.js'; // feature: pages
 const suggestionKinds = {
   page: { label: 'page', names: pageSuggestions }, // feature: pages
 };
-const KIND_LABEL = { command: 'command', event: 'event', readModel: 'view' };
+const KIND_LABEL = { command: 'command', event: 'event', readModel: 'view', processor: 'processor' };
 const NONE = { visible: false, kind: null, from: 0, to: 0, query: '', active: null, items: [] };
 
 // Every name the book and the Pad have, by kind: { command|event|readModel: Map(lower name → { name, noteId | null, fields }) }
 function namesOf(state, exceptNoteId) {
-  const names = { command: new Map(), event: new Map(), readModel: new Map() };
+  const names = { command: new Map(), event: new Map(), readModel: new Map(), processor: new Map() };
   const add = (kind, name, noteId, fields) => {
     const key = name.toLowerCase(), have = names[kind].get(key);
     names[kind].set(key, { name, noteIds: [...(have?.noteIds || []), ...(noteId ? [noteId] : [])], fields: [...new Set([...(have?.fields || []), ...fields])] });
@@ -45,8 +47,32 @@ function frameOf(state, noteId, at) {
   return { ids: new Set(inside.map(n => n.id)), view: inside.some(n => n.colour === 'green') && !inside.some(n => n.colour === 'blue') };
 }
 
-export function padSuggestions(state, { colour, text = '', caret = text.length, noteId = null, at = null, active = null, dismissed = false } = {}) {
+// The lower-case names of the stickies the slices of a chapter hold
+function chapterNames(state, chapterId) {
+  const held = new Set();
+  Object.values(state.slices || {}).filter(s => chapterId && s.chapterId === chapterId)
+    .forEach(s => s.elements.forEach(id => state.elements[id] && held.add(state.elements[id].name.trim().toLowerCase())));
+  return held;
+}
+
+// A plain name box: every name of its kind; the chapter's first, its drafts before them
+function fieldSuggestions(state, { kind, chapterId, lead: leadFrom = [] }, text, caret, active) {
+  const lead = typeof leadFrom === 'function' ? leadFrom(state, chapterId) : leadFrom;
+  const names = namesOf(state, null)[kind], held = chapterNames(state, chapterId), query = text.slice(0, caret);
+  const candidates = [...names.values()].map(v => ({ name: v.name, kind, insert: v.name, inFrame: held.has(v.name.toLowerCase()) }));
+  lead.forEach(name => {
+    const at = candidates.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
+    if (at >= 0) candidates.splice(at, 1);
+    candidates.push({ name, kind, insert: name, inFrame: true, lead: true });
+  });
+  const items = rank(candidates, query).map((c, index) => ({ index, name: c.name, kind: c.kind, label: c.lead ? 'draft' : KIND_LABEL[c.kind] || '', insert: c.insert, inFrame: c.inFrame, lead: !!c.lead }));
+  if (!items.length) return NONE;
+  return { visible: true, kind, from: 0, to: text.length, query, active: active != null && active < items.length ? active : null, items };
+}
+
+export function padSuggestions(state, { colour, text = '', caret = text.length, noteId = null, at = null, active = null, dismissed = false, field = null } = {}) {
   if (dismissed) return NONE;
+  if (field) return fieldSuggestions(state, field, text, caret, active);
   const frame = frameOf(state, noteId, at), ctx = contextAt(text, caret, colour, { viewFrame: frame.view });
   if (!ctx) return NONE;
   const names = namesOf(state, noteId), pools = { event: ['event'], command: ['command'], readModel: ['readModel'], commandOrEvent: ['command', 'event'], eventOrReadModel: ['event', 'readModel'] };

@@ -7,7 +7,7 @@
 // (read model) or an automation, named after its command or read model.
 // ===========================================
 
-import { updateSaveChip } from '../sync/view.js';
+import { updateSaveChip, updateCheckoutBanner } from '../sync/view.js';
 import { statusChips, filtering as staged, emptyText } from '../filter/status.js';
 import { stageFilterNote } from '../filter/stageFilterNote.read.js';
 import { stageFilterChip } from '../filter/filter.parts.js';
@@ -66,6 +66,8 @@ import { isBuildBook } from '../buildVersions/rules.js';
 import { usageButton } from '../usage/view.js';
 import { renderLiteratureOutline } from '../literature/view.js';
 import { outlineGoalsFor, outlineGoalsClick, outlineGoalsKey } from '../outlineGoals/view.js'; // feature: outline-goals
+import { openDrafts } from '../outlineGoals/rules.js'; // feature: outline-goals
+import { suggestShow, suggestClear, suggestKey, initSuggest } from '../pad/suggestInput.js';
 
 let selecting = false;
 let query = '';            // the search box: filters slices (and opens folded chapters while it does)
@@ -118,6 +120,19 @@ const checked = id => !!document.getElementById(id)?.checked;
 function openAddSheet() {
   addForm = outlineAddForm(projectState(), { chapterId: adding, kind: addKind });
   openBoardSheet(outlineAddSheet(addForm), 'olAddFirst');
+}
+
+// Other features' names to put first in a kind of box: (state, chapterId) → [names]
+const leadNames = {};
+leadNames.event = openDrafts; // feature: outline-goals: the chapter's draft events
+
+// A name box of the add form: names of its kind as you type (the Pad's list and keys); an event box offers the chapter's draft events first
+function suggestNames(e) {
+  const box = e.target, kind = box.dataset?.suggest;
+  if (!kind || !box.closest?.('.ol-add')) return;
+  const chapterId = adding || null;
+  suggestShow({ box, mount: document.getElementById(`${box.id}Suggest`), getState: projectState, colour: kind,
+    field: () => ({ kind, chapterId, lead: leadNames[kind] || [] }) });
 }
 
 // The element a name in the sheet stands for, when the book already has one (any case)
@@ -215,6 +230,7 @@ function saveEdit() {
 }
 
 export function renderOutline() {
+  updateCheckoutBanner();
   updateSaveChip();   // the ☁ chip in the top bar: Save to library, Saved, Saving…, Not saved
   const container = document.getElementById('outlineView');
   if (!container) return;
@@ -493,5 +509,10 @@ export function initOutline() {
     if (el) el.textContent = outlineAddHint(addForm, { when: fieldValue('olAddFirst'), using: fieldValue('olAddUsing'), external: checked('olAddExternal') });
   };
   sheet?.addEventListener('input', hint);
+  sheet?.addEventListener('input', suggestNames);
+  // Before Enter moves on to the next box: a name picked from the list is not a step; Tab / ↑ / ↓ / Esc are the list's too
+  sheet?.addEventListener('keydown', e => { if (e.target.closest?.('.ol-add') && e.target.dataset?.suggest) suggestKey(e); }, true);
+  sheet?.addEventListener('focusout', e => { if (e.target.dataset?.suggest) suggestClear(); });
+  initSuggest();
   sheet?.addEventListener('change', hint);
 }

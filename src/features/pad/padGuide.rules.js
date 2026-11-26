@@ -6,6 +6,8 @@
 // Colours are the Pad's own (sketch.js COLOURS), in the order of the swatches.
 // ===========================================
 
+import { STORED_GUIDE_ENTRY, STORED_VARIANT } from '../storedElsewhere/storedElsewhere.guide.js'; // feature: stored-elsewhere
+
 export const KINDS = [
   {
     colour: 'blue', name: 'Command', purpose: 'Something a person (or an automation) asks the system to do. A frame with one is a command slice.',
@@ -15,7 +17,7 @@ export const KINDS = [
   {
     colour: 'orange', name: 'Event', purpose: 'Something that happened, in the past tense. The events of a frame are what its command records.',
     format: ['First line: its name', '- one field per line', 'A value after a field ("- contractNumber: 99999") makes it an example of the event, not its definition: it adds no fields', 'An event another system records: end the name with (external) or start it with external: — drawn yellow, made an external event',
-      'Something kept elsewhere than events (a table, a config file, a document): end the name with its kind in brackets, e.g. (table), (config) or (document) — drawn brown with a small kind tag, made a sticky stored as that kind'],
+      'Something kept outside events (a table, a config file…) is its own entry: Stored elsewhere'],
     example: 'Booking Recalled\n- cycleId'
   },
   {
@@ -60,6 +62,14 @@ export const KINDS = [
     example: 'Ordering'
   }
 ];
+
+// The full guide's entries: the kinds in the order of the strip, with Stored elsewhere after Event (it is the orange note's other reading, not a colour)
+export const GUIDE_ENTRIES = KINDS.flatMap(k => k.colour === 'orange' ? [k, STORED_GUIDE_ENTRY] : [k]);   // feature: stored-elsewhere
+
+// Small second examples under a kind's card: the same note read another way
+export const VARIANTS = {
+  orange: [{ label: 'from another system', example: 'Payment Received (external)' }, { label: STORED_VARIANT.label, example: STORED_VARIANT.example }]   // feature: stored-elsewhere
+};
 
 // The Pad in short
 export const RULES = [

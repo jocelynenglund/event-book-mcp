@@ -49,7 +49,7 @@ export function zoomAt(cx, cy, k) {
 }
 
 // The boxes (in world units) in view: the canvas pans and zooms (never closer than 100%) so they fit; nothing: the start
-export function fit(draw = true, boxes = [...S.scene.notes.map(n => ({ x: n.x, y: n.y, w: NOTE_SIZE, h: NOTE_SIZE })), ...S.scene.frames.map(f => ({ x: f.x, y: f.y, w: f.w, h: f.h }))]) {
+export function fit(draw = true, boxes = [...S.scene.notes.map(n => ({ x: n.x, y: n.y, w: NOTE_SIZE, h: n.drawnH || NOTE_SIZE })), ...S.scene.frames.map(f => ({ x: f.x, y: f.y, w: f.w, h: f.drawnH ?? f.h }))]) {
   const r = $('padStage')?.getBoundingClientRect(), W = r?.width || window.innerWidth, H = r?.height || window.innerHeight - 120;
   if (!boxes.length) S.vp = { x: 40, y: 60, k: 1 };
   else {
@@ -67,7 +67,7 @@ export function jumpToFrame(frameId) {
   const f = S.scene.frames.find(x => x.frameId === frameId);
   if (!f) return;
   only('frame', frameId);
-  fit(false, [{ x: f.x, y: f.y, w: f.w, h: f.h }]);
+  fit(false, [{ x: f.x, y: f.y, w: f.w, h: f.drawnH ?? f.h }]);
   applyView();
   redraw();
 }
@@ -78,7 +78,7 @@ export function jumpToNote(noteId) {
   const n = S.scene.notes.find(x => x.noteId === noteId);
   if (!n) { showToast('That note is gone'); return; }
   only('note', noteId);
-  fit(false, [{ x: n.x, y: n.y, w: NOTE_SIZE, h: NOTE_SIZE }]);
+  fit(false, [{ x: n.x, y: n.y, w: NOTE_SIZE, h: n.drawnH || NOTE_SIZE }]);
   applyView();
   redraw();
   flashNote(noteId);

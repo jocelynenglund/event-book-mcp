@@ -4092,7 +4092,7 @@ body.pad-mode { overflow: hidden; }
 
 /* A note: a flat coloured square, its text centred, nothing else (the colours are the board's sticky colours) */
 .pad-note {
-  position: absolute; width: 180px; height: 180px; padding: 16px; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden;
+  position: absolute; width: 180px; height: auto; min-height: 180px; padding: 16px; display: flex; align-items: center; justify-content: center; text-align: center; overflow: visible;   /* the stored size is the minimum: a note grows to show all its text */
   border-radius: 2px; font: 500 15px/1.4 var(--font-body); touch-action: none; cursor: grab;
   background: var(--note-command); color: var(--note-command-text);
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08), 0 8px 14px -8px rgba(60, 40, 10, 0.4);
@@ -4157,7 +4157,7 @@ body.pad-mode { overflow: hidden; }
 .bd-card .pad-wire, .sp-sticky .pad-wire { margin-top: 6px; border: 1px solid #b4ad9e; border-radius: 5px; overflow: hidden; background: #fff; pointer-events: none; }
 .bd-card .pad-wire { font-size: 10px; }
 .pad-scn-label.pad-scn-sym { width: auto; min-width: 15px; padding: 0 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.pad-note-text { align-self: flex-start; width: 100%; text-align: left; overflow-wrap: anywhere; max-height: 100%; overflow: hidden; }
+.pad-note-text { align-self: flex-start; width: 100%; text-align: left; overflow-wrap: anywhere; }
 .pad-note-title { font-weight: 700; font-size: 15px; line-height: 1.25; }
 .pad-note-body { white-space: pre-wrap; font-weight: 400; font-size: 13px; line-height: 1.35; margin-top: 6px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, currentColor 28%, transparent); }
 .pad-note[data-size="s"] .pad-note-title { font-size: 13px; }
@@ -4172,7 +4172,7 @@ body.pad-mode { overflow: hidden; }
 .pad-note.lifted { box-shadow: 0 14px 28px -10px rgba(60, 40, 10, 0.55); }
 /* A chapter arrow: a long blue arrow (body and pointed head) with its heading on it, for the eye only. Its width is the note's own (inline); the shape is
    drawn by ::before so the selection ring and the resize handle are not cut off. White on a mid blue reads on the light and the dark paper. */
-.pad-note[data-colour="arrow"] { --arrow-font: max(20px, calc(13px / var(--pad-zoom, 1))); height: calc(var(--arrow-font) * 2.8); padding: 0 46px 0 20px; background: none; box-shadow: none; overflow: visible; border-radius: 0; color: #fff; justify-content: flex-start; text-align: left; }
+.pad-note[data-colour="arrow"] { --arrow-font: max(20px, calc(13px / var(--pad-zoom, 1))); min-height: 0; height: calc(var(--arrow-font) * 2.8); padding: 0 46px 0 20px; background: none; box-shadow: none; overflow: visible; border-radius: 0; color: #fff; justify-content: flex-start; text-align: left; }
 .pad-note[data-colour="arrow"]::before { content: ""; position: absolute; inset: 0; background: #2f6fcf; clip-path: polygon(0 12%, calc(100% - 44px) 12%, calc(100% - 44px) 0, 100% 50%, calc(100% - 44px) 100%, calc(100% - 44px) 88%, 0 88%); filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.2)); }
 .pad-note[data-colour="arrow"][data-selected="true"]::before { background: #2560b8; }
 .pad-arrow-text { position: relative; min-width: 0; flex: 1; font: 700 var(--arrow-font)/1.2 var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4272,6 +4272,10 @@ body.pad-mode { overflow: hidden; }
 .pad-kind-format { margin: 0 0 10px; padding-left: 18px; font: 400 13.5px/1.45 var(--font-body); }
 .pad-kind-example { margin-bottom: 10px; }
 .pad-kind-example .pad-note { position: relative; height: auto; min-height: 150px; cursor: default; }
+.pad-kind-variants { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.pad-kind-variant { margin: 0; min-width: 0; }
+.pad-kind-variant .pad-note { position: relative; left: auto; top: auto; width: 100%; height: auto; min-height: 56px; box-sizing: border-box; cursor: default; font-size: 12px; }
+.pad-kind-variant figcaption { margin-top: 3px; font: 400 12px var(--font-body); color: var(--text-muted); }
 .pad-kind-add { height: 36px; padding: 0 14px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: 700 14px var(--font-body); cursor: pointer; }
 .pad-kind-add:hover { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .pad-guide-intro { margin: 0 0 8px; color: var(--text-muted); font: 400 14px/1.4 var(--font-body); }
@@ -4332,6 +4336,7 @@ body.pad-mode { overflow: hidden; }
 /* The board's screen editor: the Pad's screen text in a sheet, with the window it draws and what it maps (pad/screenTextEditor.parts.js) */
 .stx-text { width: 100%; min-height: 150px; resize: vertical; text-align: left; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .stx-suggest { z-index: 400; }
+.ol-add-suggest { z-index: 400; }   /* the Outline's add-step forms: the list sits above their sheet */
 .stx-preview { margin: 10px 0 6px; background: #fff; color: #2b241c; border: 1px solid #b4ad9e; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08), 0 8px 14px -8px rgba(60, 40, 10, 0.4); }
 .stx-maps { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font: 600 12.5px var(--font-body); color: var(--text); }
 .stx-map-label { display: inline-block; min-width: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-muted); }
@@ -4377,8 +4382,10 @@ body.pad-mode { overflow: hidden; }
 .pad-place-chip.made { background: var(--note-event); color: var(--note-event-text); }
 .pad-place-chip.hidden { background: color-mix(in srgb, var(--text) 8%, transparent); font-style: italic; }
 /* Pad: drawing less. The shelf under the canvas holds the made frames put away (a chip each); a scenario note folds its strip behind ▸ N */
-#padShelfSlot { flex: none; }
+#padShelfSlot { flex: none; display: flex; align-items: center; min-width: 0; border-top: 1px solid var(--border); background: var(--bg); }
 #padShelfSlot:empty { display: none; }
+.pad-book-title { flex: 0 1 auto; min-width: 0; max-width: 40%; padding: 6px 4px 6px 12px; }
+#padShelfSlot .pad-shelf { flex: 1 1 0; min-width: 0; border-top: none; }
 .pad-shelf { display: flex; align-items: center; gap: 8px; padding: 6px 12px; overflow-x: auto; scrollbar-width: thin; border-top: 1px solid var(--border); background: var(--bg); }
 .pad-shelf-title { flex: none; font: 700 12px var(--font-body); letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, #7a6f60); }
 .pad-shelf-chip { flex: none; min-height: 34px; max-width: 260px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; border: 1px solid color-mix(in srgb, #3f7d32 45%, transparent); border-radius: 999px; background: color-mix(in srgb, #3f7d32 12%, var(--surface)); color: #2f6a24; font: 600 13px var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }

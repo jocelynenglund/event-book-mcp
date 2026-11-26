@@ -16,33 +16,42 @@ let cur = null;   // { box, mount, getState, colour, noteId, at, layout, view, a
 
 const phone = () => window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth <= 600;
 
+// In a sheet (a transformed box) "fixed" is measured from the sheet, not the window: after placing, move by what it is off by
+function settle(mount, left, top) {
+  mount.style.left = `${left}px`; mount.style.top = `${top}px`;
+  const r = mount.getBoundingClientRect();
+  if (Math.abs(r.left - left) > 1) mount.style.left = `${left - (r.left - left)}px`;
+  if (Math.abs(r.top - top) > 1) mount.style.top = `${top - (r.top - top)}px`;
+}
+
 function place() {
   const { mount, box, layout } = cur;
   if (layout === 'inline') return;
   if (layout === 'bar') {
     const vv = window.visualViewport, top = (vv?.offsetTop || 0) + (vv?.height || window.innerHeight) - mount.offsetHeight;
-    mount.style.left = '0'; mount.style.right = '0'; mount.style.top = `${Math.max(0, top)}px`;
+    mount.style.right = 'auto'; mount.style.width = `${window.innerWidth}px`;
+    settle(mount, 0, Math.max(0, top));
     return;
   }
   const r = box.getBoundingClientRect(), below = r.bottom + 6, room = window.innerHeight - below;
   mount.style.right = 'auto';
-  mount.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - mount.offsetWidth - 8))}px`;
-  mount.style.top = `${room >= mount.offsetHeight + 8 ? below : Math.max(8, r.top - mount.offsetHeight - 6)}px`;
+  settle(mount, Math.max(8, Math.min(r.left, window.innerWidth - mount.offsetWidth - 8)), room >= mount.offsetHeight + 8 ? below : Math.max(8, r.top - mount.offsetHeight - 6));
 }
 
 function draw() {
   const { box, mount } = cur;
-  cur.view = suggestView(cur.getState(), { colour: cur.colour, text: box.value, caret: box.selectionStart ?? box.value.length, noteId: cur.noteId, at: cur.at, active: cur.active, dismissed: cur.dismissed });
+  cur.view = suggestView(cur.getState(), { colour: cur.colour, text: box.value, caret: box.selectionStart ?? box.value.length, noteId: cur.noteId, at: cur.at, field: cur.field && cur.field(), active: cur.active, dismissed: cur.dismissed });
   mount.innerHTML = suggestBox(cur.view);
   mount.dataset.layout = cur.layout;
   mount.hidden = !cur.view.visible;
   if (cur.view.visible) place();
 }
 
-// The box was typed in (or the caret moved): offer names for where it is. colour: the note's, or 'bulk'; noteId / at: which note, or where a new one is
-export function suggestShow({ box, mount, getState, colour, noteId = null, at = null, typed = true }) {
+// The box was typed in (or the caret moved): offer names for where it is. colour: the note's, or 'bulk'; noteId / at: which note, or where a new one is;
+// field: a function giving { kind, chapterId, lead } for a plain name box (colour is then ignored)
+export function suggestShow({ box, mount, getState, colour, noteId = null, at = null, typed = true, field = null }) {
   const same = cur && cur.box === box;
-  cur = { box, mount, getState, colour, noteId, at, layout: colour === 'bulk' ? 'inline' : phone() ? 'bar' : 'pop', view: null, active: null, dismissed: same && !typed ? cur.dismissed : false };
+  cur = { box, mount, getState, colour, noteId, at, field, layout: colour === 'bulk' ? 'inline' : phone() ? 'bar' : 'pop', view: null, active: null, dismissed: same && !typed ? cur.dismissed : false };
   draw();
 }
 

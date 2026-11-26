@@ -135,6 +135,6 @@ export function makeSliceForm(view) {
     <input id="ogMakeFields" class="sheet-input" type="text" value="${esc(view.fields)}" placeholder="e.g. profileId, interests, topics" autocomplete="off">
     <p class="og-hint">The slice goes at the end of ${esc(view.chapterName)}. The fields go on the command and on the event.</p>
     <button class="sheet-btn" data-goals-action="save-make-slice">Make the slice</button>
-    <button class="sheet-btn" data-goals-action="cancel-make-slice">Cancel</button>
+    <button class="sheet-btn secondary" data-goals-action="cancel-make-slice">Cancel</button>
   </div>`;
 }
