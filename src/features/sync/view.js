@@ -21,6 +21,7 @@ import { libraryAccountBar, saveChipButton, checkoutChipButton } from './sync.pa
 import { saveChip } from './saveChip.read.js';
 import { checkoutChip } from './checkoutChip.read.js';
 import { reviewOf } from '../review/client.js';
+import { updateLiveChip } from '../liveBooks/view.js'; // feature: live-books
 import { drawLinkLoader, closeLinkLoader } from '../linkLoading/loader.js';
 import { linkProblem } from '../linkLoading/linkLoadingState.read.js';
 
@@ -166,6 +167,7 @@ export function updateCheckoutBanner() {
 // The ☁ chip beside Share in an open book's top bar (Board, Outline, Pad): ☁ Save to library for a book only on this device,
 // then ✓ Saved / Saving… / ⚠ Not saved. Drawn from Save Chip; redrawn when a screen is and when the sync's status changes.
 export function updateSaveChip() {
+  updateLiveChip(); // feature: live-books: the Live / Polling chip beside it
   const id = getCurrentModelId();
   const inBook = !document.body.classList.contains('library-mode');
   const v = saveChip(inBook ? { ...saveFacts(id), reviewing: !!reviewOf(id) } : { signedIn: false });

@@ -131,6 +131,7 @@ import { initCompare, openComparePicker } from './features/compare/view.js';
 import { initPreface } from './features/preface/view.js';
 import { initSync } from './features/sync/client.js';
 import { initSyncView, updateCheckoutBanner, updateSaveChip } from './features/sync/view.js';
+import { initLiveBooks } from './features/liveBooks/view.js'; // feature: live-books
 import { openBoardSheet } from './features/board/sheets/shared.js';
 import { showCompare } from './ui/feed.js';
 import { openReplay } from './features/replay/replay.js';
@@ -492,6 +493,7 @@ async function init() {
   });
   titleMore.addEventListener('click', openTitleMenu);
   initSync();
+  initLiveBooks(); // feature: live-books
   
   // Wire up FAB: quick ＋ Slice / ＋ Chapter on the board, new element in the list
   document.getElementById('fab').onclick = () => toggleFabMenu();
