@@ -1215,12 +1215,13 @@ const tools = [
       scenarios.forEach(x => addScenario(s, x));
       return `Added ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} to ${nameOf(s)}.${gapNote(state(), [s.id])}${scenariosNow(s)}`;
     } },
-  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays.',
+  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). reads: "<view>" makes the slice\'s processor read an existing view (its title or S-number, or the read model\'s name; the one the "an automation reads a view" gap points at; fix_gaps also offers "Read <view>" for each view that draws the trigger event in), and says when its trigger event now reaches it through the view. stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays.',
     inputSchema: { type: 'object', properties: { slice: S, name: S, description: S, fields: S, chapter: S, refined: { type: 'boolean' }, waived: { type: 'boolean' }, waivedReason: S, ready: { type: 'boolean', description: 'Older name for refined' }, delete: { type: 'boolean' },
       automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when', 'processor'] }, person: { type: 'boolean' },
       stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' },
+      reads: { ...S, description: 'An automation slice\'s processor reads this existing view: its title or S-number (or the read model\'s name)' },
       stopTrigger: { ...S, description: 'An automation slice\'s processor stops starting on this event (its name): the "⚡ on" link goes, the event stays' } }, required: ['slice'] },
-    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger }) => {
+    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger, reads }) => {
       if (refined === undefined) refined = ready;
       const s = findSlice(slice, state(), { destructive: !!del });
       if (del) { const was = nameOf(s); c.deleteSlice(s.id); return `Deleted ${was}.`; }
@@ -1228,7 +1229,7 @@ const tools = [
         const odd = Object.keys(automation).filter(k => !['when', 'processor', 'view'].includes(k));
         if (odd.length) throw new Error(`automation takes when, processor and view; not ${odd.join(', ')}`);
         const why = auto.runSliceFromAutomation({ sliceId: s.id, processor: automation.processor, whenEvent: automation.when, viewSliceId: automation.view ? findSlice(automation.view).id : null });
-        if (why) throw new Error(/already run by/.test(why) ? `${why}: to change what it reads use edit_slice {slice, stopReading: "<view>"}` : why);
+        if (why) throw new Error(/already run by/.test(why) ? `${why}: to change what it reads use edit_slice {slice, stopReading: "<view>"} or {slice, reads: "<view>"}` : why);
       }
       if (stopReading) {
         const st = state();
@@ -1242,6 +1243,25 @@ const tools = [
           (held.has(l.to) || st.elements[l.to].name.trim().toLowerCase() === key));
         if (!links.length) throw new Error(`${pr.sliceTitle(s, st)} doesn't read "${stopReading}"`);
         links.forEach(l => c.setReads(l.from, l.to, false));
+      }
+      let readsNote = '';
+      if (reads) {
+        const st = state();
+        const partner = s.pairWith && st.slices[s.pairWith];
+        const procs = [...s.elements, ...(partner?.elements || [])].filter(id => st.elements[id]?.type === 'processor');
+        if (!procs.length) throw new Error(`${pr.sliceTitle(s, st)} has no processor: only an automation slice reads a view`);
+        const key = String(reads).trim().toLowerCase();
+        // The view (by slice) or the read model itself (by name)
+        let view = null; try { view = findSlice(reads, st); } catch { /* by read model name */ }
+        const models = view ? view.elements.filter(id => st.elements[id]?.type === 'readModel')
+          : Object.values(st.elements).filter(e => e.type === 'readModel' && !e.orphaned && e.name.trim().toLowerCase() === key).map(e => e.id);
+        if (!models.length) throw new Error(view ? `${pr.sliceTitle(view, st)} is not a view: it holds no read model` : `No view or read model "${reads}"`);
+        const todo = models.filter(m => !procs.every(p => st.connections.some(l => l.relation === 'context' && l.from === p && l.to === m)));
+        if (!todo.length) throw new Error(`${pr.sliceTitle(s, st)} already reads "${reads}"`);
+        procs.forEach(p => c.setReads(p, todo[0], true));
+        const held = view || Object.values(st.slices).find(x => x.type === 'SV' && x.elements.includes(todo[0]));
+        const events = [...new Set(procs.flatMap(p => processorTriggers(st, p)).filter(t => held?.elements.includes(t.id)).map(t => t.name))];
+        if (events.length) readsNote = `\n${events.join(', ')} now reaches it through the view: stopTrigger it if it no longer needs waking directly.`;
       }
       if (stopTrigger) {
         const st = state();
@@ -1264,9 +1284,9 @@ const tools = [
       // After the edits above (each of which takes refined back)
       if (refined === false) c.clearSliceRefined(s.id);
       if (refined === true) { const refused = c.markSliceRefined(s.id); if (refused) throw new Error(`${pr.sliceTitle(s, state())} can't be marked refined: ${refused}`); }
-      return `Updated ${nameOf(state().slices[s.id])}.${scenariosNow(state().slices[s.id])}`;
+      return `Updated ${nameOf(state().slices[s.id])}.${scenariosNow(state().slices[s.id])}${readsNote}`;
     } },
-  { name: 'fix_gaps', description: 'The information completeness gaps of the open model (a slice, a chapter, or the whole book), each with its why and its one-tap fixes, every fix named by an id for apply_fix: add a field to the sticky it comes from, draw an event into a slice, set it by the system, remove it, map a field from another sticky\'s field (map|<sticky>|<field>: say which with map|<sticky>|<field>|<from sticky>|<from field>, or use map_field), or tidy fields written as prose (pages[] (pageId, finishedAt) split on its commas). The same list the person sees when they tap the count in the app. Slices that are ☑ Refined are listed but apply_fix will not change them.',
+  { name: 'fix_gaps', description: 'The information completeness gaps of the open model (a slice, a chapter, or the whole book), each with its why and its one-tap fixes, every fix named by an id for apply_fix: add a field to the sticky it comes from, draw an event into a slice, read an existing view (an automation: readview|<processor>|<read model>, instead of waking on its trigger event), set it by the system, remove it, map a field from another sticky\'s field (map|<sticky>|<field>: say which with map|<sticky>|<field>|<from sticky>|<from field>, or use map_field), or tidy fields written as prose (pages[] (pageId, finishedAt) split on its commas). The same list the person sees when they tap the count in the app. Slices that are ☑ Refined are listed but apply_fix will not change them.',
     inputSchema: { type: 'object', properties: { slice: S, chapter: S }, required: [] },
     run: ({ slice, chapter } = {}) => {
       const st = state();
@@ -1550,7 +1570,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.10.0' },
+      serverInfo: { name: 'eventpad', version: '0.11.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

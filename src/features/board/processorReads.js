@@ -62,3 +62,22 @@ export function automationReads(state, slice) {
     .map(t => ({ label: '⚡ on', name: t.name, sliceId: null }));
   return [...reads, ...triggers];
 }
+
+// The views the book already has that a processor could read instead of waking on its trigger event: each view slice that
+// draws in one of the processor's trigger events and holds a read model the processor doesn't read yet, one entry per read
+// model, the processor's own chapter first. [{ readModelId, readModelName, sliceId, title, events: [{ id, name }] }]
+export function viewsDrawingTriggers(state, processorId) {
+  const triggers = processorTriggers(state, processorId);
+  if (!triggers.length) return [];
+  const reading = new Set(processorReads(state, processorId).map(r => r.readModelId));
+  const home = state.sliceOrder.map(id => state.slices[id]).find(s => s?.type !== 'SV' && s?.elements.includes(processorId))
+    || state.sliceOrder.map(id => state.slices[id]).find(s => s?.elements.includes(processorId));
+  return state.sliceOrder.map(id => state.slices[id]).filter(s => s?.type === 'SV' && !s.elements.includes(processorId))
+    .flatMap(s => {
+      const events = triggers.filter(t => s.elements.includes(t.id)).map(t => ({ id: t.id, name: t.name }));
+      if (!events.length) return [];
+      return s.elements.map(id => state.elements[id]).filter(el => el?.type === 'readModel' && !el.orphaned && !reading.has(el.id))
+        .map(rm => ({ readModelId: rm.id, readModelName: rm.name, sliceId: s.id, title: sliceTitle(s, state), events, near: !!home?.chapterId && s.chapterId === home.chapterId }));
+    })
+    .map((v, i) => ({ v, i })).sort((a, b) => (b.v.near - a.v.near) || (a.i - b.i)).map(x => x.v);
+}

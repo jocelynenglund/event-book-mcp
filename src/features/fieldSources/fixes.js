@@ -4,6 +4,7 @@
 //   add|<target sticky>|<sticky that has the field>|<field>   add the field to the sticky it comes from (its type and item fields too)
 //   draw|<slice>|<event>                                       draw an event (one elsewhere in the book) into the slice
 //   reads|<processor>                                          make a read slice for an automation that has only a trigger event
+//   readview|<processor>|<read model>                          the automation reads a view the book already has (one that draws in its trigger event) and stops waking on that event
 //   map|<sticky>|<field>[|<from sticky>|<from field>]          it comes from another sticky's field (the buttons ask which; an agent says it);
 //                                                              <from field> @event: the whole event, @event+items: and a list gets its fields as item fields
 //   system|<sticky>|<field>                                    set by the system (asks how)
@@ -15,10 +16,15 @@
 // screen (or, for an automation, its read model); a view's field ← an event that carries it; a Given ← the event.
 // ===========================================
 
+import { viewsDrawingTriggers } from '../board/processorReads.js';
+
 // The fixes of one gap (from fieldSources(state).gaps), in the order they are offered
-export function fixesOf(g) {
+export function fixesOf(g, state = null) {
   if (g.fixes) return g.fixes;   // the screen rules know their own
-  if (g.kind === 'automation') return [{ id: `reads|${g.elementId}`, kind: 'reads', label: 'Make a read slice for it' }];
+  if (g.kind === 'automation') return [
+    { id: `reads|${g.elementId}`, kind: 'reads', label: 'Make a read slice for it' },
+    ...(state ? viewsDrawingTriggers(state, g.elementId) : []).map(v => ({ id: `readview|${g.elementId}|${v.readModelId}`, kind: 'readview',
+      label: `Read ${v.title} (instead of waking on ${v.events.map(e => e.name).join(', ')})` }))];
   if (g.kind === 'given') return [{ id: `draw|${g.sliceId}|${g.elementId}`, kind: 'draw', label: `Draw ${g.sticky} into ${g.slice}` }];
   return [
     ...g.from.map(t => ({ id: `add|${t.id}|${g.elementId}|${g.field}`, kind: 'add', label: `Add ${g.field} to ${t.name}` })),
