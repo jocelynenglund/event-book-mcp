@@ -43,11 +43,12 @@ export function readAutomation(text) {
 
 // What Make chapter does with an automation note: the read model, and whether the → is a command it triggers or an event it translates into.
 // names: namesKnown (padScenario.rules.js). -> { name, reads, target, targetKind: 'command' | 'event' | null, readsKnown, warnings }
-export function previewAutomation(text, names) {
+// triggered: the frame holds the event it wakes on (an external or earlier event), so it needs no read model
+export function previewAutomation(text, names, { triggered = false } = {}) {
   const read = readAutomation(text), warnings = [...read.problems];
   const command = !!read.target && (names.commands.has(key(read.target)) || names.padCommands.has(key(read.target)));
   const event = !!read.target && names.events.has(key(read.target));
-  if (!read.reads) warnings.push('An automation reads a read model: add a line "reads <Read model>"');
+  if (!read.reads && !triggered) warnings.push('An automation reads a read model: add a line "reads <Read model>"');
   const readsKnown = !!read.reads && names.views.has(key(read.reads));
   if (read.reads && !readsKnown) warnings.push(`Unknown read model ${read.reads} (it is made new)`);
   if (!read.target) warnings.push('An automation triggers a command or translates into an event: add a line "→ <Command or Event>"');

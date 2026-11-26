@@ -50,10 +50,12 @@ export function addOutlineProperties(sliceId, text) {
 
 // The fields a slice's events were drawn with (a Pad view frame's orange notes): each event of the slice, by name, gains the fields it lacks
 // (a field it has already is kept as it is, never twice). `byEvent`: [{ name, fields: ["amount", "total:decimal"] }]
-export function addEventProperties(sliceId, byEvent) {
+export const addEventProperties = (sliceId, byEvent) => addElementProperties(sliceId, 'event', byEvent);
+// The same for the slice's element of any type (an automation's command keeps only the fields its own note lists)
+export function addElementProperties(sliceId, type, byEvent) {
   const state = projectState();
   byEvent.forEach(({ name, fields }, n) => {
-    const el = (state.slices[sliceId]?.elements || []).map(id => state.elements[id]).find(e => e?.type === 'event' && e.name.trim().toLowerCase() === name.trim().toLowerCase());
+    const el = (state.slices[sliceId]?.elements || []).map(id => state.elements[id]).find(e => e?.type === type && e.name.trim().toLowerCase() === name.trim().toLowerCase());
     if (!el || !fields.length) return;
     parsePropertyText(fields.join(', '), 'string', el.properties.map(p => p.name)).parsed.forEach(({ name: field, type, items }, i) => appendEvent(EventTypes.PropertyAdded, {
       elementId: el.id, propertyId: newPropertyId(n * 100 + i), name: field, propertyType: type, ...(items ? { items } : {})

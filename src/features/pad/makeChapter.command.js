@@ -11,7 +11,7 @@
 
 import { appendEvent, EventTypes, canEditCurrent } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
-import { addEventProperties } from '../outline/command.js';
+import { addEventProperties, addElementProperties } from '../outline/command.js';
 import { addStep, addScenario, chapterId as chapterNamed } from '../planFile/build.js';
 import { addHotspotComment } from '../comments/command.js';
 import { padMakeChapter } from './padMakeChapter.read.js';
@@ -25,9 +25,9 @@ const refuse = refused => ({ refused, chapterId: null, slices: 0 });
 // A slice of the preview as a plan-file step (what the ticked lines say)
 export function stepOf(slice) {
   const kept = slice.lines.filter(l => l.included);
-  const events = kept.filter(l => l.role === 'event').map(l => (l.external || l.storage ? { name: l.name, ...(l.external ? { external: true } : {}), ...(l.storage ? { storage: l.storage } : {}) } : l.name));   // an event marked (external) is another system's
+  const events = kept.filter(l => l.role === 'event' && !l.trigger).map(l => (l.external || l.storage ? { name: l.name, ...(l.external ? { external: true } : {}), ...(l.storage ? { storage: l.storage } : {}) } : l.name));   // an event marked (external) is another system's
   const fields = [...new Map(ownFieldLines(kept).map(l => [l.name.toLowerCase(), l.type ? `${l.name}:${l.type}` : l.name])).values()];   // "amount: number" keeps its type
-  if (slice.kind === 'automation') return autoStepOf(slice, kept.find(l => l.role === 'automation').automation, events, fields);
+  if (slice.kind === 'automation') return autoStepOf(slice, kept.find(l => l.role === 'automation').automation, events, fields, kept.find(l => l.role === 'event' && l.trigger));
   const notes = [...kept.filter(l => l.role === 'field' && l.note).map(l => `${l.name}: ${l.note}`), ...kept.filter(l => l.role === 'note').map(l => l.text)];
   const main = kept.find(l => l.role === 'command' || l.role === 'view');
   return {
@@ -38,12 +38,20 @@ export function stepOf(slice) {
 }
 
 // An automation frame as a plan-file auto step: its processor reads the read model, then triggers the command, or translates into the event (with the frame's other events)
-function autoStepOf(slice, auto, events, fields) {
+// Its trigger is the event it wakes on (an external or earlier event: `when`). A command's fields stay on the command, and each event keeps the fields its own note lists
+function autoStepOf(slice, auto, events, fields, trigger) {
   const results = auto.targetKind === 'event' ? [...new Map([auto.target, ...events].map(e => [e.name ?? e, e])).values()] : events;
   return {
     kind: 'auto', name: slice.name || undefined, processor: auto.name, using: auto.reads,
-    ...(auto.targetKind === 'command' ? { command: auto.target } : {}), ...(results.length ? { events: results } : {}), ...(fields.length ? { fields } : {})
+    ...(auto.targetKind === 'command' ? { command: auto.target } : {}), ...(trigger ? { when: trigger.external ? { name: trigger.name, external: true } : trigger.name } : {}),
+    ...(results.length ? { events: results } : {}), ...(fields.length && auto.targetKind !== 'command' ? { fields } : {})
   };
+}
+
+// An automation's command: the fields its note lists (they go on the command only)
+export function commandFieldsOf(slice) {
+  const kept = slice.lines.filter(l => l.included), command = kept.find(l => l.role === 'command');
+  return command ? [...new Map(kept.filter(l => l.role === 'field' && l.noteId === command.noteId).map(l => [l.name.toLowerCase(), l.type ? `${l.name}:${l.type}` : l.name])).values()] : [];
 }
 
 // What a view frame's orange notes say about their events: the fields each was drawn with (a step's fields are its own note's: ownFieldLines)
@@ -83,7 +91,11 @@ export function makeChapter({ frameIds = [], chapterName = '', names = {}, off =
     const chapterId = chapterNamed(String(chapterName).trim());
     const sliceIds = made.map(slice => {
       const sliceId = addStep(stepOf(slice), chapterId);
-      if (slice.kind !== 'automation') addEventProperties(sliceId, eventFieldsOf(slice));
+      if (slice.kind === 'automation') {   // the command's fields on the command, the events' own on the events: nothing is copied between them
+        const command = slice.lines.find(l => l.included && l.role === 'command');
+        if (command) addElementProperties(sliceId, 'command', [{ name: command.name, fields: commandFieldsOf(slice) }]);
+      }
+      addEventProperties(sliceId, eventFieldsOf(slice));
       const refused = placeScreens(sliceId, slice.lines.filter(l => l.included && l.role === 'screen').map(l => ({ name: l.name, text: l.screenText })));
       if (refused) throw new Error(refused);
       slice.lines.filter(l => l.included && l.role === 'hotspot').forEach(l => addHotspotComment(sliceId, l.text));

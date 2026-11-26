@@ -18,7 +18,7 @@ export function padNote(note) {
   const automation = a => `<div class="pad-note-text"><div class="pad-note-title"><span class="pad-gear" aria-hidden="true">⚙</span> ${escapeHtml(a.title)}</div>${a.rows.length ? `<div class="pad-auto-rows">${a.rows.map(r => `<div class="pad-auto-row" data-kind="${r.kind}">${r.kind === 'reads' ? '<span class="pad-auto-word">reads</span> ' : r.kind === 'target' ? '<span class="pad-auto-word">→</span> ' : ''}${escapeHtml(r.text)}</div>`).join('')}</div>` : ''}</div>`;
   const body = note.editing
     ? `<textarea class="pad-note-input" data-pad-input="note" aria-label="Note text" spellcheck="false">${escapeHtml(note.text)}</textarea>`
-    : note.colour === 'arrow' ? `<div class="pad-arrow-text">${escapeHtml(note.title)}</div>`
+    : note.colour === 'arrow' ? `<span class="pad-arrow-lead"></span><div class="pad-arrow-text">${escapeHtml(note.title)}</div><span class="pad-arrow-rule"></span>`
     : note.scenario ? scenario(note.scenario)
     : note.screen ? screenWire(note.screen)
     : note.automation ? automation(note.automation)

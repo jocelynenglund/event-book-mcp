@@ -34,7 +34,8 @@ const LABEL = { given: 'G', when: 'W', then: 'T' };
 const NOTHING = /^(?:nothing|none|no events?|-|–|—)$/i;               // "Given nothing"
 const BULLET = /^[-•*]\s+\S/;                                                // "- name: anna"
 const TIMES = /\s*(?:×|\bx)\s*(\d+)\s*$/i;                              // "×2", "x2"
-const OUTCOME = /^(rejected|nothing)\s*:\s*(.*)$/i;                     // "Then rejected: …", "Then nothing: …"
+const OUTCOME = /^(rejected|nothing)\s*:\s*(.*)$/i;
+const REFUSAL = /^[✗✘✕]\s*(.*)$/;                                       // "Then ✗ Already sent" = rejected: Already sent                     // "Then rejected: …", "Then nothing: …"
 const lines = text => String(text ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 const key = name => titleCase(name).toLowerCase();
 
@@ -138,7 +139,7 @@ export function readScenario(text, known, kind = 'command') {
       else if (read.when) problem(`A scenario has one When: ${command?.name ?? line} is left out`);
       else if (command) read.when = command;
     } else {
-      const outcome = !continues && line.match(OUTCOME), bullet = BULLET.test(line), empty = line.match(/^[-•*]?\s*\(empty\)$/i);
+      const refusal = !continues && line.match(REFUSAL), outcome = !continues && (refusal ? ['', 'rejected', refusal[1]] : line.match(OUTCOME)), bullet = BULLET.test(line), empty = line.match(/^[-•*]?\s*\(empty\)$/i);
       if (bullet || empty) {
         if (kind === 'command') problem(`Not read: ${line}`);
         else read.then = { kind: 'events', items: [], ...read.then, rows: [...(read.then?.rows || []), ...(empty ? [] : [valuesOf(line.replace(/^[-•*]\s*/, ''))])] };
