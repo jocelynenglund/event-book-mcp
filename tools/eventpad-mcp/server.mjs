@@ -63,7 +63,7 @@ const src = new URL('../../src/', import.meta.url);
 const es = await import(new URL('core/eventStore.js', src));
 const pr = await import(new URL('core/projections.js', src));
 const c = await import(new URL('features/board/command.js', src));
-const { automationReads } = await import(new URL('features/board/processorReads.js', src));
+const { automationReads, processorTriggers } = await import(new URL('features/board/processorReads.js', src));
 const arr = await import(new URL('features/arrange/command.js', src));
 const sc = await import(new URL('features/scenarios/command.js', src));
 const ol = await import(new URL('features/outline/command.js', src));
@@ -118,6 +118,9 @@ const SHARE_API = process.env.EVENTPAD_SHARE_API || process.env.EVENTPAD_API || 
 const API = (process.env.EVENTPAD_API || PROD_API).replace(/\/$/, '');
 const APP = process.env.EVENTPAD_APP || 'https://eventbook.itsybit.se/';
 
+// The keys a step of add_steps takes: any other is an error, never silently dropped
+const stepKeys = ['kind', 'name', 'screen', 'command', 'event', 'events', 'readModel', 'list', 'table', 'external', 'published', 'to', 'when', 'using', 'todo', 'processor', 'result', 'fields', 'description', 'scenarios'];
+
 // ---------- Reading the model ----------
 
 const state = () => pr.projectState();
@@ -141,7 +144,12 @@ function learnNumbers(st, ids) {
     m.set(s.id, { n: i + 1, title: pr.sliceTitle(s, st) });
   });
 }
-const forgetNumbers = () => toldNow().clear();
+// Models whose numbering changed during this session (a reply printed a shift): until the next full outline an S-number is
+// good for reading only. Edits take the ref or the title, because "S4" may be a slice the caller never meant.
+const shiftedModels = new Set();
+const forgetNumbers = () => { toldNow().clear(); shiftedModels.delete(es.getCurrentModelId()); };
+// True while a tool that edits runs (set per call): a read-only tool may take an S-number at any time
+let editing = false;
 // "S8 Seven (#k3f9q)": a slice as the replies name it (and what the caller now knows it as)
 function nameOf(slice, st = state()) {
   const i = pr.getOrderedSlices(st).findIndex(x => x.id === slice.id);
@@ -165,7 +173,7 @@ function staleNumbering(k, st, cur) {
 }
 
 // A slice by its stable ref (#k3f9q), its S-number (from the outline), its id or its title
-function findSlice(ref, st = state()) {
+function findSlice(ref, st = state(), { destructive = false } = {}) {
   const all = sliceRefs(st);
   const key = String(ref).trim().toLowerCase();
   if (/^#[a-z0-9_-]+$/.test(key)) {
@@ -175,7 +183,16 @@ function findSlice(ref, st = state()) {
     return hits[0].slice;
   }
   const num = /^s(\d+)$/.exec(key);
-  if (num) staleNumbering(Number(num[1]), st, all[Number(num[1]) - 1]?.slice);
+  if (num) {
+    const at = all[Number(num[1]) - 1];
+    if (destructive && at) throw new Error(`To delete, name the slice by its ref or title (${at.ref} is ${pr.sliceTitle(at.slice, st)} ${at.short}) — numbers shift. Nothing was changed.`);
+    if (editing && shiftedModels.has(es.getCurrentModelId())) {
+      const saw = [...toldNow()].filter(([, v]) => v.n === Number(num[1])).map(([id, v]) => `You saw ${ref} as ${v.title} ${shortRef({ id })}${state().slices[id] ? '' : ' (now gone)'}.`);
+      const mapping = all.slice(0, 40).map(x => `${x.ref} ${pr.sliceTitle(x.slice, st)} ${x.short}`);
+      throw new Error(`Numbering changed in this session, so an S-number can't pick the slice to edit (${ref} may not be the one you meant). Nothing was changed. ${saw.join(' ')} Name it by its ref (#xxxxx) or the title; now:\n${mapping.join('\n')}${all.length > 40 ? `\n… and ${all.length - 40} more: read the outline` : ''}\nA full outline makes S-numbers good again.`);
+    }
+    staleNumbering(Number(num[1]), st, at?.slice);
+  }
   const hit = all.find(x => x.ref.toLowerCase() === key || x.slice.id === ref)
     || all.find(x => pr.sliceTitle(x.slice, st).toLowerCase() === key);
   if (!hit) throw new Error(`No slice "${ref}" (use a ref like #k3f9q or an S-number from the outline, or its title)`);
@@ -194,6 +211,7 @@ function numberingNote(base) {
   for (const id of [...m.keys()]) if (!st.slices[id]) m.delete(id);
   const fresh = pr.getOrderedSlices(st).map(x => x.id).filter(id => !base.has(id));
   if (!moved.length) { learnNumbers(st, fresh); return ''; }
+  shiftedModels.add(es.getCurrentModelId());
   const shown = moved.slice(0, 40);
   learnNumbers(st, [...shown.map(x => x.id), ...fresh]);
   return `\nNumbering changed (S-numbers shift when a slice is inserted, moved or deleted; the ref never does):\n${shown.map(x => shiftLine(x, st)).join('\n')}${moved.length > shown.length ? `\n… and ${moved.length - shown.length} more: re-read the outline` : ''}`;
@@ -1164,14 +1182,22 @@ const tools = [
   { name: 'outline', description: 'The open model as a short outline: chapters (with "N of M refined"), slices (S-numbers to refer to them, and each slice\'s stable ref #xxxxx at the end of its line: S-numbers shift when a slice is inserted, moved or deleted, the ref never does, and every tool that takes a slice takes the ref, the S-number or the title; an S-number the book has moved since your last outline is refused with the new numbering; "☐ ready" once refined, ready to build; "☑ done" once confirmed built from the tests), stickies with fields, scenario counts. Under a slice, "Information completeness:" lists its fields with no source (the information completeness check: a hint while planning, never a block). scenarios:true lists each Given/When/Then (★ must have, ✓ nice to have).',
     inputSchema: { type: 'object', properties: { chapter: S, scenarios: { type: 'boolean' } } }, run: outline },
   { name: 'add_steps', edits: true,
-    description: 'Add steps to a chapter (made if new), in order. The reply names each new slice (S-number and #ref) and ends with "Numbering changed:" listing every slice it shifted (S7 → S8 <title> (#ref)): use the ref from then on. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, table?, external?, published?, to?}: table is the name of a legacy table (old storage read as events), external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model; "orderRef ← Order placed.orderId" (or <-) is the field orderRef, which comes from the field orderId of the sticky Order placed, already in the book: it is mapped, so it has a source; a read-model field written ?name is a query parameter: the caller asks the view with it, so it needs no event source), description. Stickies with the same name are reused.',
+    description: 'Add steps to a chapter (made if new), in order. The reply names each new slice (S-number and #ref) and ends with "Numbering changed:" listing every slice it shifted (S7 → S8 <title> (#ref)): use the ref from then on. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, table?, external?, published?, to?}: table is the name of a legacy table (old storage read as events), external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model; "orderRef ← Order placed.orderId" (or <-) is the field orderRef, which comes from the field orderId of the sticky Order placed, already in the book: it is mapped, so it has a source; a read-model field written ?name is a query parameter: the caller asks the view with it, so it needs no event source), description, scenarios: [...] (Given/When/Then scenarios added to that slice in the same call, the shape add_scenarios takes). Any other key on a step is an error that lists the accepted ones: nothing is dropped silently, and nothing is added when one is wrong. Stickies with the same name are reused.',
     inputSchema: { type: 'object', properties: { chapter: S, steps: { type: 'array', items: { type: 'object' } } }, required: ['steps'] },
     run: ({ chapter, steps }) => {
       notLiterature('steps');
+      // Everything is checked before anything is added: a key it would drop, or a scenario it could not add, is an error
+      steps.forEach((step, i) => {
+        const odd = Object.keys(step || {}).filter(k => !stepKeys.includes(k));
+        if (odd.length) throw new Error(`Step ${i + 1}: unknown ${odd.length === 1 ? 'key' : 'keys'} ${odd.join(', ')}. A step takes ${stepKeys.join(', ')}. Nothing was added.`);
+        if (step.scenarios !== undefined && !Array.isArray(step.scenarios)) throw new Error(`Step ${i + 1}: scenarios is a list, as add_scenarios takes. Nothing was added.`);
+        (step.scenarios || []).forEach(checkScenario);
+      });
       const chId = chapterId(chapter);
-      const ids = steps.map(s => addStep(s, chId));
+      let made = 0;
+      const ids = steps.map(s => { const id = addStep(s, chId); (s.scenarios || []).forEach(x => { addScenario(state().slices[id], x); made++; }); return id; });
       const st = state();
-      return `Added ${ids.length} step${ids.length === 1 ? '' : 's'}: ${ids.map(id => nameOf(st.slices[id], st)).join(', ')}${gapNote(st, ids)}`;
+      return `Added ${ids.length} step${ids.length === 1 ? '' : 's'}${made ? ` and ${made} scenario${made === 1 ? '' : 's'}` : ''}: ${ids.map(id => nameOf(st.slices[id], st)).join(', ')}${gapNote(st, ids)}`;
     } },
   { name: 'add_scenarios', edits: true,
     description: 'Add Given/When/Then scenarios to a slice (#ref, S-number or title; the reply names it and lists its scenarios now). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command) or when {query} (a See slice: what the caller asks the view with, one line of free text, e.g. "name starts with a" or "name = a*"; shown as a Q step), then {event, values} | {rejected: reason: the command is refused with a reason the caller sees} | {nothing: why: accepted but changes nothing, e.g. the same call twice or an automation with nothing to do; the reason is required, one line; not with event/rejected/readModel} | {readModel?, values | rows} (a See slice: rows is a list of {field: value}, or text with a row per line, "- name: anna, place: 1"; [] means it shows nothing), mustHave (true: an acceptance criterion; otherwise a nice to have).',
@@ -1183,13 +1209,14 @@ const tools = [
       scenarios.forEach(x => addScenario(s, x));
       return `Added ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} to ${nameOf(s)}.${gapNote(state(), [s.id])}${scenariosNow(s)}`;
     } },
-  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (S-number or title). stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name).',
+  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays.',
     inputSchema: { type: 'object', properties: { slice: S, name: S, description: S, fields: S, chapter: S, refined: { type: 'boolean' }, waived: { type: 'boolean' }, waivedReason: S, ready: { type: 'boolean', description: 'Older name for refined' }, delete: { type: 'boolean' },
       automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when', 'processor'] }, person: { type: 'boolean' },
-      stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' } }, required: ['slice'] },
-    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading }) => {
+      stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' },
+      stopTrigger: { ...S, description: 'An automation slice\'s processor stops starting on this event (its name): the "⚡ on" link goes, the event stays' } }, required: ['slice'] },
+    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger }) => {
       if (refined === undefined) refined = ready;
-      const s = findSlice(slice);
+      const s = findSlice(slice, state(), { destructive: !!del });
       if (del) { const was = nameOf(s); c.deleteSlice(s.id); return `Deleted ${was}.`; }
       if (automation) {
         const odd = Object.keys(automation).filter(k => !['when', 'processor', 'view'].includes(k));
@@ -1209,6 +1236,15 @@ const tools = [
           (held.has(l.to) || st.elements[l.to].name.trim().toLowerCase() === key));
         if (!links.length) throw new Error(`${pr.sliceTitle(s, st)} doesn't read "${stopReading}"`);
         links.forEach(l => c.setReads(l.from, l.to, false));
+      }
+      if (stopTrigger) {
+        const st = state();
+        const partner = s.pairWith && st.slices[s.pairWith];
+        const procs = [...s.elements, ...(partner?.elements || [])].filter(id => st.elements[id]?.type === 'processor');
+        const key = String(stopTrigger).trim().toLowerCase();
+        const links = procs.flatMap(p => processorTriggers(st, p).filter(t => t.name.trim().toLowerCase() === key).map(t => ({ event: t.id, proc: p })));
+        if (!links.length) throw new Error(`${pr.sliceTitle(s, st)} doesn't trigger on "${stopTrigger}"`);
+        links.forEach(l => c.setTrigger(l.event, l.proc, false));
       }
       if (person === true) { const why = auto.runSliceByPerson({ sliceId: s.id }); if (why) throw new Error(why); }
       if (name) c.nameSlice(s.id, name);
@@ -1325,10 +1361,10 @@ const tools = [
       const on = Object.values(state().slices).filter(x => x.elements.includes(el.id)).length;
       return `Renamed the ${el.type === 'readModel' ? 'read model' : el.type} ${el.name} → ${to} (on ${on} ${on === 1 ? 'slice' : 'slices'}).`;
     } },
-  { name: 'delete_scenario', edits: true, description: 'Delete one scenario of a slice, by its name (to change a scenario: delete it and add it again). The reply lists the scenarios it has left.',
+  { name: 'delete_scenario', edits: true, description: 'Delete one scenario of a slice (#ref or exact title: an S-number is refused, numbers shift), by its name (to change a scenario: delete it and add it again). The reply names what was deleted and lists the scenarios it has left.',
     inputSchema: { type: 'object', properties: { slice: S, scenario: S }, required: ['slice', 'scenario'] },
     run: ({ slice, scenario }) => {
-      const s = findSlice(slice), st = state();
+      const s = findSlice(slice, state(), { destructive: true }), st = state();
       const scns = pr.getScenariosForSlice(s.id, st);
       const hit = scns.find(x => (x.name || '').trim().toLowerCase() === scenario.trim().toLowerCase());
       if (!hit) throw new Error(`${pr.sliceTitle(s, st)} has no scenario "${scenario}" (it has: ${scns.map(x => x.name).join('; ') || 'none'})`);
@@ -1505,7 +1541,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.6.0' },
+      serverInfo: { name: 'eventpad', version: '0.7.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});
@@ -1522,6 +1558,7 @@ async function handle(msg) {
     // The first reply of a session says when the checkout is behind origin (once, quietly)
     const note = tool.name === 'update_mcp' ? '' : await upd.updateNote({ dir: checkoutDir, version: SERVER_VERSION });
     try {
+      editing = !!tool.edits;
       const before = tool.edits ? numberingBefore() : null;
       let text = String(await (tool.edits ? writeBack(() => tool.run(args), { talk: !!tool.talk }) : tool.run(args)));
       if (before) text += numberingNote(before);

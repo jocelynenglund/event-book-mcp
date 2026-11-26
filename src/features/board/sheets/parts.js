@@ -27,6 +27,18 @@ export function sliceMenuRead(r) {
         </div>`;
 }
 
+// One event that starts a slice's automation, in its menu: tap to stop triggering on it
+export function sliceMenuTrigger(t) {
+  return `
+        <div class="sheet-option" data-component="Slice menu trigger" data-key="${t.processorId}:${t.eventId}" data-board-action="stop-triggering" data-processor="${t.processorId}" data-event="${t.eventId}">
+          <div class="sheet-option-icon" style="background: var(--surface-hover);">✕</div>
+          <div class="sheet-option-text">
+            <div class="sheet-option-title">Stop triggering on ${escapeHtml(t.name)}</div>
+            <div class="sheet-option-desc">Takes the link away; the event stays</div>
+          </div>
+        </div>`;
+}
+
 // One chapter a slice can go to (chapterId null: no chapter), the current one ticked
 export function chapterOption(opt, sliceId) {
   return `

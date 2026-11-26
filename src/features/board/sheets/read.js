@@ -12,7 +12,7 @@ import { isAutomated, freeViewSlices } from '../../automate/command.js';
 import { isTrigger, readsModel } from '../command.js';
 import { sliceTypeLabels } from '../boardSliceHeaderFields.read.js';
 import { searchKey } from './shared.js';
-import { processorReads } from '../processorReads.js';
+import { processorReads, processorTriggers } from '../processorReads.js';
 
 const elementsOf = (book, type) => Object.values(book.elements).filter(e => e.type === type).sort(byName);
 // A sticky as a picker's chip shows it
@@ -52,6 +52,15 @@ export function sliceMenuReads(book, sliceId) {
     .flatMap(processorId => processorReads(book, processorId).map(r => ({ processorId, readModelId: r.readModelId, title: r.title || r.name })))
     .filter((r, i, all) => all.findIndex(x => x.readModelId === r.readModelId && x.processorId === r.processorId) === i)
     .filter(r => !(slice.type === 'SV' && slice.elements.includes(r.readModelId))) };
+}
+
+// The events that start a slice's automation, each with the processor they wake (Stop triggering on ‹event› in its menu)
+export function sliceMenuTriggers(book, sliceId) {
+  const slice = book.slices[sliceId];
+  if (!slice || sliceId.startsWith('au_inferred_')) return { sliceId, triggers: [] };
+  return { sliceId, triggers: slicePartners(slice, book).flatMap(s => s.elements.filter(id => book.elements[id]?.type === 'processor'))
+    .flatMap(processorId => processorTriggers(book, processorId).map(t => ({ processorId, eventId: t.id, name: t.name })))
+    .filter((t, i, all) => all.findIndex(x => x.eventId === t.eventId && x.processorId === t.processorId) === i) };
 }
 
 // Run it from an automation: the events and processors to pick from, the views that could be its first half
