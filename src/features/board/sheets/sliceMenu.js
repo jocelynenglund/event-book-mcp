@@ -10,7 +10,7 @@ import { render, getNewModelStartIn, setStartIn, showOutline, showPad, showBoard
 import { setModelStartIn, getCurrentModelId, openModel, isFrozenCurrent } from '../../../core/eventStore.js';
 import { toastWithUndo } from '../../undo/command.js';
 import { secondTap } from '../../../ui/secondTap.js';
-import { setReads, nameSlice, describeSlice, deleteSlice, moveSlice, nameModel, describeModel, writePreface, tagBook, unlinkProcessor } from '../command.js';
+import { setReads, setTrigger, nameSlice, describeSlice, deleteSlice, moveSlice, nameModel, describeModel, writePreface, tagBook, unlinkProcessor } from '../command.js';
 import { escapeHtml } from '../view.js';
 import { onEnter, openBoardSheet } from './shared.js';
 import { openShareSheet } from '../../shareImage/sheet.js';
@@ -19,8 +19,8 @@ import { isReadOnly } from '../../readOnly/sheet.js';
 import { waiveScenarios, liftScenarioWaiver } from '../../scenarioWaiver/command.js';
 import { nickname } from '../../comments/command.js';
 import { runSliceFromAutomation, runSliceByPerson } from '../../automate/command.js';
-import { sliceMenuView, sliceMenuReads, automateView, waiveView, sliceInfoView, reorderView, modelNameView } from './read.js';
-import { sliceMenuScenario, sliceMenuRead, reorderRow } from './parts.js';
+import { sliceMenuView, sliceMenuReads, sliceMenuTriggers, automateView, waiveView, sliceInfoView, reorderView, modelNameView } from './read.js';
+import { sliceMenuScenario, sliceMenuRead, sliceMenuTrigger, reorderRow } from './parts.js';
 import { readOnlySliceMenu } from '../../readOnly/readOnlySliceMenu.read.js';
 import { readOnlySliceMenuBox } from '../../readOnly/readOnly.parts.js';
 
@@ -105,6 +105,7 @@ export function openSliceMenu(sliceId) {
         </div>
       </div>`}
       ${viewOf(sliceMenuReads, sliceId).reads.map(sliceMenuRead).join('')}
+      ${viewOf(sliceMenuTriggers, sliceId).triggers.map(sliceMenuTrigger).join('')}
       <div class="sheet-option" data-board-action="slice-comment">
         <div class="sheet-option-icon" style="background: var(--surface-hover);">💬</div>
         <div class="sheet-option-text">
@@ -336,6 +337,12 @@ export function onSheetAction(a, t) {
     hideAllSheets();
     render();
     toastWithUndo('No longer reads it');
+  }
+  else if (a === 'stop-triggering') {
+    setTrigger(t.dataset.event, t.dataset.processor, false);
+    hideAllSheets();
+    render();
+    toastWithUndo('No longer triggers on it');
   }
   else if (a === 'waive') submitWaive();
   else if (a === 'waive-lift') {
