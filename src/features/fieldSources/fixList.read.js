@@ -20,7 +20,7 @@ export function fixList(state, { sliceId = null, chapterId = null, all = false }
   const offer = fixes => (readOnly ? [] : fixes);
   const groups = ids.map(id => {
     const rows = [
-      ...gaps.filter(g => g.sliceId === id).map(g => ({ elementId: g.elementId, sticky: g.sticky, field: g.field, why: g.why, fixes: offer(fixesOf(g)) })),
+      ...gaps.filter(g => g.sliceId === id).map(g => ({ elementId: g.elementId, sticky: g.sticky, field: g.field, why: g.why, fixes: offer(fixesOf(g, state)) })),
       ...tidy.filter(t => t.sliceId === id).map(t => ({ elementId: t.elementId, sticky: t.sticky, field: null, why: `fields written as prose: ${quoted(t.fields)}`, fixes: offer([tidyFix(t)]) }))
     ];
     return { sliceId: id, slice: sliceTitle(state.slices[id], state), rows };

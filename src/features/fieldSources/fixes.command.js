@@ -4,6 +4,7 @@
 //     records share a batch. The UI's buttons and the agent tools (apply_fix) both come through here.
 //     Add Field: the field (with its type and item fields) goes onto the sticky it comes from.
 //     Make A Read Slice: an automation with only a trigger event gets a view slice (its read model, reading that event) and reads it.
+//     Read A View: an automation reads a view the book already has (one that draws in its trigger event) and stops waking on that event.
 //     Draw Event In: an event of the book goes into the slice, wired as a placed sticky is.
 //     Map From: the field comes from another sticky's field, or a whole event (map|…|<event>|@event, or @event+items) (Map Field, in fieldMapping); unmap|<sticky>|<field> takes it back (agents' map_field).
 //     Set By The System: how it comes about is recorded (Mark Field Set By System).
@@ -18,8 +19,8 @@
 import { canEditCurrent } from '../../core/eventStore.js';
 import { projectState, sliceTitle } from '../../core/projections.js';
 import { fieldKey } from '../../core/constants.js';
-import { addToSlice, addProcessorReadModel } from '../board/command.js';
-import { processorTriggers } from '../board/processorReads.js';
+import { addToSlice, addProcessorReadModel, setReads, setTrigger } from '../board/command.js';
+import { processorTriggers, viewsDrawingTriggers } from '../board/processorReads.js';
 import { addProperty, removeProperty, updateProperty } from '../properties/command.js';
 import { markFieldSetBySystem } from './command.js';
 import { mapField, mapFromWholeEvent, clearFieldMapping, addFieldSource, removeFieldSource } from '../fieldMapping/command.js';
@@ -61,6 +62,19 @@ const plans = {
     return { touches: own, go: () => {
       const viewId = addProcessorReadModel(home.id, processorId, `${proc.name} to-do`);
       events.filter(id => !projectState().slices[viewId].elements.includes(id)).forEach(id => addToSlice(viewId, 'event', { elementId: id }));
+      return null;
+    } };
+  },
+
+  // The automation reads a view the book already has, and stops waking on the events that view now carries
+  readview(state, processorId, readModelId) {
+    const proc = state.elements[processorId];
+    if (!proc || proc.type !== 'processor') return 'No such sticky';
+    const view = viewsDrawingTriggers(state, processorId).find(v => v.readModelId === readModelId);
+    if (!view) return 'No such sticky';
+    return { touches: slicesOf(state, processorId), go: () => {
+      setReads(processorId, readModelId, true);
+      view.events.forEach(e => setTrigger(e.id, processorId, false));
       return null;
     } };
   },
