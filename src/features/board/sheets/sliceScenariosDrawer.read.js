@@ -5,6 +5,12 @@ import { sliceTitle, getScenariosForSlice } from '../../../core/projections.js';
 import { idsHidden, scenarioHasIds } from '../../scenarios/ids.js';
 import { scenarioLines } from '../../scenarios/scenarioLines.read.js';
 import { commentsOn } from '../../comments/read.js';
+import { scenarioOwnEndingExtra } from '../../cloneSlice/scenarioOwnEnding.read.js'; // feature: clone-slice
+
+// What other features add to a scenario in the drawer: (book, scenarioId) → { kind, view } or null (the drawer draws each, by its kind: scenarios.parts.js)
+const scenarioExtraViews = [
+  scenarioOwnEndingExtra, // feature: clone-slice
+];
 
 export function sliceScenariosDrawer(book, sliceId, { readOnly = false } = {}) {
   const slice = book.slices[sliceId];
@@ -18,7 +24,8 @@ export function sliceScenariosDrawer(book, sliceId, { readOnly = false } = {}) {
     sliceComment: onSlice ? `${onSlice} open on the slice` : 'Comment on the slice',
     scenarios: scenarios.map(scn => {
       const open = openOn(scn.id);
-      return { id: scn.id, sliceId, readOnly, name: scn.name || 'Scenario', mustHave: !!scn.mustHave, openComments: open, commentLabel: open ? `${open} open` : 'Comment', lines: scenarioLines(book, scn) };
+      return { id: scn.id, sliceId, readOnly, name: scn.name || 'Scenario', mustHave: !!scn.mustHave, openComments: open, commentLabel: open ? `${open} open` : 'Comment', lines: scenarioLines(book, scn),
+        ...(readOnly ? {} : (extras => extras.length ? { extras } : {})(scenarioExtraViews.map(extra => extra(book, scn.id)).filter(Boolean))) };
     })
   };
 }

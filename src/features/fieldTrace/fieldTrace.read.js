@@ -38,17 +38,17 @@ export function fieldTrace(state, at) {
     (prop.items || []).forEach((item, j) => { if (mappingOf(state, place.element, itemField(prop, item))) add(place, { name: itemField(prop, item) }, i + (j + 1) / 1000, item); });
   }));
   // A whole event that something comes from is a step of its own (no field)
-  [...nodes.values()].forEach(n => {
-    const m = n.mapping?.from;
-    const key = m?.whole && `${m.elementId}|`;
-    const place = key && places.find(p => p.element.id === m.elementId);
+  [...nodes.values()].forEach(n => (n.mapping?.sources || []).filter(m => m.whole).forEach(m => {
+    const key = `${m.elementId}|`;
+    const place = places.find(p => p.element.id === m.elementId);
     if (place && !nodes.has(key)) nodes.set(key, { key, place, prop: { name: null }, order: -1, whole: true });
-  });
+  }));
   const link = (a, b) => { (next.get(a) || next.set(a, []).get(a)).push(b); };
-  nodes.forEach(n => {
-    const from = n.mapping && `${n.mapping.from.elementId}|${n.mapping.from.field == null ? '' : fieldKey(n.mapping.from.field)}`;
-    if (from && nodes.has(from)) { link(n.key, from); link(from, n.key); }
-  });
+  // Each source is its own branch
+  nodes.forEach(n => (n.mapping?.sources || []).forEach(src => {
+    const from = `${src.elementId}|${src.field == null ? '' : fieldKey(src.field)}`;
+    if (nodes.has(from)) { link(n.key, from); link(from, n.key); }
+  }));
 
   // The path: the same name as any field already on it, or mapped to or from one
   const startKey = `${start.id}|${fieldKey(startProp.name)}`;
@@ -62,7 +62,7 @@ export function fieldTrace(state, at) {
   const { at: gapAt } = fieldSources(state);
   const steps = [...on].map(k => nodes.get(k)).sort((a, b) => a.place.at - b.place.at || a.order - b.order).map((n, i) => {
     const el = n.place.element, ownName = n.item ?? n.prop.name;
-    const was = n.mapping?.from.field != null && fieldKey(n.mapping.from.field) !== fieldKey(ownName) ? n.mapping.from.field : null;
+    const was = (n.mapping?.sources || []).find(m => m.field != null && fieldKey(m.field) !== fieldKey(ownName))?.field ?? null;
     const gap = n.whole ? null : gapAt.get(`${n.place.sliceId}|${el.id}|${n.prop.name}`);
     return { n: i + 1, key: n.key, elementId: el.id, sticky: el.name, kind: el.type, sliceId: n.place.sliceId, slice: sliceTitle(state.slices[n.place.sliceId], state), chapterId: state.slices[n.place.sliceId].chapterId || null,
       field: n.whole ? null : n.prop.name, ...(n.whole ? { whole: true } : {}), renamedFrom: was, gap: !!gap && gap.kind !== 'tidy', start: n.key === startKey };

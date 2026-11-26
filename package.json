@@ -1,6 +1,6 @@
 {
   "name": "event-book-mcp",
-  "version": "0.7.0",
+  "version": "0.10.0",
   "description": "Event Book as an MCP server: an agent models events, commands, views and Given/When/Then scenarios, and you watch the board live.",
   "private": true,
   "license": "MIT",
@@ -12,5 +12,5 @@
     "node": ">=22"
   },
   "homepage": "https://eventbook.itsybit.se/",
-  "builtFrom": "eventpad@e518e5f2"
+  "builtFrom": "eventpad@ee8dc25b"
 }

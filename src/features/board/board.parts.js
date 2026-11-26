@@ -14,10 +14,17 @@ import { fieldGapMark, noSourceMark } from '../fieldSources/fieldGaps.parts.js';
 import { fieldMappingMark } from '../fieldMapping/fieldMapping.parts.js';
 import { screenWire } from '../pad/screenWire.parts.js';
 import { screenPageChips } from '../pages/pages.parts.js'; // feature: pages
+import { alternateOfChip, endingsLabel } from '../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
 
 // What other features add to a sticky (card.extras: [{ kind, view }], from boardLaneStickies.read.js), each drawn from its own view
 const cardExtras = {
   pageChips: screenPageChips, // feature: pages
+};
+
+// What other features add to a slice's header (col.extras: [{ kind, view }], from boardSliceHeaderFields.read.js), each drawn from its own view
+const headerExtras = {
+  alternateOf: alternateOfChip, // feature: clone-slice
+  endings: endingsLabel, // feature: clone-slice
 };
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -85,6 +92,7 @@ export function boardSliceHeader(col, ui = {}) {
     <div class="bd-head" data-component="Board slice header" data-key="${col.sliceId}" ${at(ui.col, 2)} data-slice-type="${col.type}" data-actor="${col.actor}">
       ${col.movable && col.prev ? `<button class="bd-insert" aria-label="Add a slice here" data-action="insert" data-before="${col.sliceId}">+</button>` : ''}
       <div class="bd-head-main">
+      ${col.extras ? `<div class="bd-head-extras">${col.extras.map(x => headerExtras[x.kind]?.(x.view) || '').join('')}</div>` : ''}
         <div class="bd-head-namebox">
           <button class="bd-head-name" data-action="slice-page" data-slice="${col.sliceId}" title="${tip}">
             <span class="bd-head-type">${col.typeLabel}${col.scenarios ? ` · ${col.scenarios} ✓` : ''}</span>

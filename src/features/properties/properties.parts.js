@@ -55,7 +55,7 @@ export function propertyEditor(form) {
     </div>` : ''}
     <div class="pr-from">
       ${form.from
-        ? `<span class="pr-from-now">Comes from <b>${escapeHtml(form.from.text)}</b></span>
+        ? `<span class="pr-from-now">Comes from <b>${escapeHtml(form.from.text)}</b>${form.from.more ? ` +${form.from.more}` : ''}</span>
       <button class="sheet-btn secondary" data-prop-action="map">Change…</button>
       <button class="sheet-btn secondary" data-prop-action="unmap">Unmap</button>`
         : '<button class="sheet-btn secondary" data-prop-action="map">Comes from…</button>'}

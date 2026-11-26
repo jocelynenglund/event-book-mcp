@@ -23,6 +23,12 @@ import { gapCount, tidyCount, fieldSources } from '../fieldSources/rules.js';
 import { mappingOf } from '../fieldMapping/mappings.js';
 import { fieldKey } from '../../core/constants.js';
 import { isQueryField } from '../viewQueries/queryFields.js';
+import { outlineAlternateNoteExtra } from '../cloneSlice/outlineAlternateNote.read.js'; // feature: clone-slice
+
+// What other features add to a row: (state, slice) → { kind, view } or null (the row draws each, by its kind: outline.parts.js)
+const rowExtraViews = [
+  outlineAlternateNoteExtra, // feature: clone-slice
+];
 
 // Short enough to leave the slice name room on a phone; the colour bar says the rest
 const shortKind = { SC: 'Change', SV: 'View', AU: 'Automation' };
@@ -52,7 +58,7 @@ function fieldsOf(slice, state, trace) {
     const g = at.get(`${slice.id}|${el.id}|${p.name}`);
     if (g && !f.gap) f.gap = { elementId: el.id, field: p.name, tidy: g.kind === 'tidy', propertyId: p.id };
     const m = mappingOf(state, el, p.name);
-    if (m && !f.from) { f.from = m.from.text; f.mapped = { elementId: el.id, propertyId: p.id }; }
+    if (m && !f.from) { f.from = m.from.text + (m.from.more ? ` +${m.from.more}` : ''); f.mapped = { elementId: el.id, propertyId: p.id }; }
     if (trace?.keys.includes(`${el.id}|${fieldKey(p.name)}`)) f.onTrace = true;
   }));
   // The ones every sticky shares first, then the marked ones
@@ -85,7 +91,9 @@ export function outlineSliceRow(state, slice, { first = false, last = false, tra
   const threads = sliceComments(state, slice.id).threads;
   const { scenarios, elements } = scenariosOf(slice, state, edition, threads);
   const actor = sliceActor(slice, state);
+  const extras = rowExtraViews.map(extra => extra(state, slice)).filter(Boolean);
   return {
+    ...(extras.length ? { extras } : {}),
     sliceId: slice.id,
     ref: sliceRef(state, slice.id),
     title: sliceTitle(slice, state),

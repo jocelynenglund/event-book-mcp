@@ -41,30 +41,40 @@ export const isWholeSource = el => el?.type === 'event';
 // when it isn't mapped, or the sticky or field it came from is gone. A whole event has field null and whole true; for a
 // list its text says "each ProductConfigured" (one item per event), otherwise just the event.
 export function mappingOf(state, el, name) {
-  const m = el?.mappings?.[fieldKey(name)];
-  const source = m && state.elements[m.from.elementId];
+  const sources = sourcesOf(state, el, name);
+  return sources.length ? { field: el.mappings[fieldKey(name)].field, from: sources.length > 1 ? { ...sources[0], more: sources.length - 1 } : sources[0], sources } : null;
+}
+
+// One source as the views say it: { elementId, sticky, field, text, whole? }, or null when its sticky or field is gone (or a
+// whole source is no event). For a list a whole event's text says "each ProductConfigured" (one item per event).
+function sourceText(state, el, name, src) {
+  const source = state.elements[src.elementId];
   if (!source) return null;
-  if (m.from.field == null) {
+  if (src.field == null) {
     if (!isWholeSource(source)) return null;
-    const own = propOf(el, name);
-    return { field: m.field, from: { elementId: source.id, sticky: source.name, field: null, whole: true, text: `${isList(own) ? 'each ' : ''}${source.name}` } };
+    return { elementId: source.id, sticky: source.name, field: null, whole: true, text: `${isList(propOf(el, name)) ? 'each ' : ''}${source.name}` };
   }
-  const prop = propOf(source, m.from.field);
-  return prop ? { field: m.field, from: { elementId: source.id, sticky: source.name, field: prop.name, text: `${source.name}.${prop.name}` } } : null;
+  const prop = propOf(source, src.field);
+  return prop ? { elementId: source.id, sticky: source.name, field: prop.name, text: `${source.name}.${prop.name}` } : null;
+}
+
+// Every source a field has, while it still can, in the order they were made
+export function sourcesOf(state, el, name) {
+  return (el?.mappings?.[fieldKey(name)]?.sources || []).map(s => sourceText(state, el, name, s)).filter(Boolean);
 }
 
 // Following "comes from" upwards from a field: would it reach (elementId, field)? A mapping there would make a loop.
 export function reaches(state, from, elementId, field) {
   const seen = new Set();
-  let at = { elementId: from.elementId, key: from.field == null ? '' : fieldKey(from.field) };
-  while (at) {
+  const stack = [{ elementId: from.elementId, key: from.field == null ? '' : fieldKey(from.field) }];
+  while (stack.length) {
+    const at = stack.pop();
     // A whole event holds every field of it
     if (at.elementId === elementId && (at.key === fieldKey(field) || at.key === '')) return true;
     const id = `${at.elementId}|${at.key}`;
-    if (seen.has(id)) return false;
+    if (seen.has(id)) continue;
     seen.add(id);
-    const next = state.elements[at.elementId]?.mappings?.[at.key]?.from;
-    at = next ? { elementId: next.elementId, key: next.field == null ? '' : fieldKey(next.field) } : null;
+    (state.elements[at.elementId]?.mappings?.[at.key]?.sources || []).forEach(n => stack.push({ elementId: n.elementId, key: n.field == null ? '' : fieldKey(n.field) }));
   }
   return false;
 }

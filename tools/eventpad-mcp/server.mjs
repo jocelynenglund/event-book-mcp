@@ -69,10 +69,16 @@ const sc = await import(new URL('features/scenarios/command.js', src));
 const ol = await import(new URL('features/outline/command.js', src));
 const og = await import(new URL('features/outlineGoals/mcp.js', src)); // feature: outline-goals
 const cm = await import(new URL('features/comments/command.js', src));
+const cloneMcp = await import(new URL('features/cloneSlice/cloneSlice.mcp.js', src)); // feature: clone-slice
 // What other features say beside a sticky in the outline: (sticky) → words or ''
 const outlineNotes = [
   (await import(new URL('features/pages/pages.mcp.js', src))).outlineNote, // feature: pages
 ];
+// What other features say at the end of a slice's line in the outline: (state, slice) → ' · words' or ''
+const sliceNotes = [
+  cloneMcp.alternateNote, // feature: clone-slice
+];
+const sliceNoteOf = (st, s) => sliceNotes.map(note => note(st, s)).join('');
 const noteOf = e => outlineNotes.map(note => note(e)).filter(Boolean).map(w => ` (${w})`).join('');
 const cmRead = await import(new URL('features/comments/read.js', src));
 const { kindOf } = await import(new URL('features/testImport/spec.js', src));
@@ -239,7 +245,7 @@ const chapterId = name => chapterIdIn(name);
 // What an event is beyond a plain event: an old table read as events, another system's, or one of ours published to other systems
 const eventMark = el => (el.table ? ` (legacy table${typeof el.table === 'string' ? ': ' + el.table : ''})` : '') + (el.external ? ' (external)' : '')
   + (el.published && !el.external ? ` (integration${el.to?.length ? ' → ' + el.to.join(', ') : ''})` : '');
-const props = el => (el.properties?.length ? ` (${el.properties.map(p => (isQueryField(el, p.name) ? '?' : '') + p.name + (p.type && p.type !== 'string' ? ':' + p.type : '') + (mappingOf(state(), el, p.name) ? ` ← ${mappingOf(state(), el, p.name).from.text}` : '')).join(', ')})` : '');
+const props = el => (el.properties?.length ? ` (${el.properties.map(p => (isQueryField(el, p.name) ? '?' : '') + p.name + (p.type && p.type !== 'string' ? ':' + p.type : '') + (mappingOf(state(), el, p.name) ? ` ← ${mappingOf(state(), el, p.name).sources.map(x => x.text + (x.whole && !/^each /.test(x.text) ? ' (whole)' : '')).join(', ')}` : '')).join(', ')})` : '');
 
 // A literature book's outline: paragraphs in order, each with its sentences numbered (where scenarios would be)
 function literatureOutline(st, { chapter } = {}) {
@@ -304,7 +310,7 @@ function outline({ chapter, scenarios = false } = {}) {
       ];
       const scns = [...pr.getScenariosForSlice(s.id, st)].sort((a, b) => !!b.mustHave - !!a.mustHave);
       const must = scns.filter(x => x.mustHave).length;
-      lines.push(`${refs.get(s.id)} [${kind}] ${pr.sliceTitle(s, st)}: ${parts.join(' → ') || '(empty)'}${automationReads(st, s).map(r => ` · ${r.label} ${r.name}`).join('')}${scns.length ? ` · ${scns.length} scenario${scns.length > 1 ? 's' : ''}${must ? ` (${must} must)` : ''}` : ''}${!s.refined ? '' : s.built ? ' · ☑ done' : ` · ☐ ready${st.specs?.[s.id] ? ' · 🧪 specs written' : ''}`}${progressText(st, s.id)} · ${shorts.get(s.id)}`);
+      lines.push(`${refs.get(s.id)} [${kind}] ${pr.sliceTitle(s, st)}: ${parts.join(' → ') || '(empty)'}${automationReads(st, s).map(r => ` · ${r.label} ${r.name}`).join('')}${scns.length ? ` · ${scns.length} scenario${scns.length > 1 ? 's' : ''}${must ? ` (${must} must)` : ''}` : ''}${sliceNoteOf(st, s)}${!s.refined ? '' : s.built ? ' · ☑ done' : ` · ☐ ready${st.specs?.[s.id] ? ' · 🧪 specs written' : ''}`}${progressText(st, s.id)} · ${shorts.get(s.id)}`);
       shown.push(s.id);
       if (s.description) lines.push(`   ${s.description}`);
       if (s.waived) lines.push(`   no scenario (waived)${s.waived.reason ? `: ${s.waived.reason}` : ''}`);
@@ -1293,9 +1299,10 @@ const tools = [
       const st = state();
       return `Done: ${label.replace(/…$/, '')}${how && fix.startsWith('system|') ? ` (${how})` : ''}${gapNote(st, st.sliceOrder) || '\nNothing left to fix.'}`;
     } },
-  { name: 'map_field', edits: true, description: 'Say a field comes from another sticky\'s field ("Payment requested.orderRef ← Order placed.orderId"): it has a source, so it is no longer an information completeness gap, and trace_field follows it. sticky + field is the field (slice narrows it down when two stickies share a name), from is "Sticky.field" of a sticky already in the book, or just an event\'s name ("ProductConfigured") for the whole event: "products[] ← each ProductConfigured" (items: true also gives a list the event\'s fields as item fields, each mapped to its event field). unmap: true takes the mapping back. Refused: a field that is not there, a field from itself, a loop; never changes a slice that is ☑ Refined (only the person does). The same code the app\'s Comes from… runs; one undo-able step.',
-    inputSchema: { type: 'object', properties: { sticky: S, field: S, from: S, items: { type: 'boolean' }, unmap: { type: 'boolean' }, slice: S }, required: ['sticky', 'field'] },
-    run: ({ sticky, field, from, items, unmap, slice }) => {
+  { name: 'map_field', edits: true, description: 'Say a field comes from another sticky\'s field ("Payment requested.orderRef ← Order placed.orderId"): it has a source, so it is no longer an information completeness gap, and trace_field follows it. sticky + field is the field (slice narrows it down when two stickies share a name), from is "Sticky.field" of a sticky already in the book, or just an event\'s name ("ProductConfigured") for the whole event: "products[] ← each ProductConfigured" (items: true also gives a list the event\'s fields as item fields, each mapped to its event field). A field can come from several sources: add: true makes this one an extra source (the others stay), remove: true takes exactly this one away, neither replaces the first as before. unmap: true takes every mapping back. Refused: a field that is not there, a field from itself, a loop; never changes a slice that is ☑ Refined (only the person does). The same code the app\'s Comes from… runs; one undo-able step.',
+    inputSchema: { type: 'object', properties: { sticky: S, field: S, from: S, items: { type: 'boolean' }, unmap: { type: 'boolean' }, add: { type: 'boolean' }, remove: { type: 'boolean' }, slice: S }, required: ['sticky', 'field'] },
+    run: ({ sticky, field, from, items, unmap, add, remove, slice }) => {
+      const verb = remove ? 'dropsource' : add ? 'addsource' : 'map';
       const st = state();
       const el = stickyNamed(sticky, field, slice, st);
       if (unmap) {
@@ -1313,16 +1320,17 @@ const tools = [
       if (!asField && (!at || events.length)) {
         if (!events.length) throw new Error(`"${from}" is not "Sticky.field" and no event is called that: a whole source is an event`);
         if (events.length > 1) throw new Error(`${events.length} events are called "${wholeName}": rename one`);
-        const why = fixc.applyFix(`map|${el.id}|${field}|${events[0].id}|${items ? '@event+items' : '@event'}`, { agent: true });
+        const why = fixc.applyFix(`${verb}|${el.id}|${field}|${events[0].id}|${items && verb === 'map' ? '@event+items' : '@event'}`, { agent: true });
         if (why) throw new Error(`Not done: ${why}`);
         const now = state(), m = mappingOf(now, now.elements[el.id], field);
-        return `${el.name}.${propOf(now.elements[el.id], field).name} ← ${m ? m.from.text : events[0].name}${items ? ' (with the event\'s fields as item fields)' : ''}${gapNote(now, now.sliceOrder)}`;
+        return `${el.name}.${propOf(now.elements[el.id], field).name} ← ${m ? m.sources.map(x => x.text).join(', ') : 'nothing'}${items ? ' (with the event\'s fields as item fields)' : ''}${gapNote(now, now.sliceOrder)}`;
       }
       const source = stickyNamed(at.sticky, at.field, null, st);
-      const why = fixc.applyFix(`map|${el.id}|${field}|${source.id}|${at.field}`, { agent: true });
+      const why = fixc.applyFix(`${verb}|${el.id}|${field}|${source.id}|${at.field}`, { agent: true });
       if (why) throw new Error(`Not done: ${why}`);
       const now = state();
-      return `${el.name}.${propOf(now.elements[el.id], field).name} ← ${source.name}.${propOf(now.elements[source.id], at.field).name}${gapNote(now, now.sliceOrder)}`;
+      const mp = mappingOf(now, now.elements[el.id], field);
+      return `${el.name}.${propOf(now.elements[el.id], field).name} ← ${mp ? mp.sources.map(x => x.text).join(', ') : 'nothing'}${gapNote(now, now.sliceOrder)}`;
     } },
   { name: 'trace_field', description: 'How a property travels through the book: its path in timeline order, every sticky that carries the field under the same name (case, [] and ? ignored) and the names it was mapped to or from (map_field, "orderRef ← Order placed.orderId"), each step Sticky.field with "(was name)" when it was renamed by a mapping and "⚠" when it has no source. The same path the app shows when the person taps Trace on a field.',
     inputSchema: { type: 'object', properties: { sticky: S, field: S, slice: S }, required: ['sticky', 'field'] },
@@ -1371,6 +1379,7 @@ const tools = [
       sc.deleteScenario(hit.id, s.id);
       return `Deleted "${hit.name}" from ${nameOf(s, st)}.${scenariosNow(s)}`;
     } },
+  cloneMcp.cloneSliceTool({ findSlice, nameOf, S }), // feature: clone-slice
   { name: 'move_slice', edits: true, description: 'Put a slice (#ref, S-number or title) right after another one in the order (an automation moves with its other half). To move it to another chapter use edit_slice {chapter}.',
     inputSchema: { type: 'object', properties: { slice: S, after: S }, required: ['slice', 'after'] },
     run: ({ slice, after }) => {
@@ -1541,7 +1550,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.7.0' },
+      serverInfo: { name: 'eventpad', version: '0.10.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

@@ -63,8 +63,11 @@ export function chapterEvents(state, chapterId, { target = null, name = null } =
 
   // Where a field comes from, when the sticky it comes from came along too
   [...elementIds].map(id => state.elements[id]).filter(el => el?.mappings).forEach(el => Object.values(el.mappings).forEach(m => {
-    const to = elMap[el.id], from = elMap[m.from.elementId];
-    if (to && from && !target?.elements[to]?.mappings?.[fieldKey(m.field)]) add(EventTypes.FieldMapped, { elementId: to, field: m.field, from: { elementId: from, field: m.from.field } });
+    const to = elMap[el.id];
+    if (to && !target?.elements[to]?.mappings?.[fieldKey(m.field)]) m.sources.forEach(src => {
+      const from = elMap[src.elementId];
+      if (from) add(EventTypes.FieldSourceAdded, { elementId: to, field: m.field, from: { elementId: from, field: src.field } });
+    });
   }));
 
   // The chapter and its flows

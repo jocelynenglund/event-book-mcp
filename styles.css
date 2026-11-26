@@ -3982,18 +3982,31 @@ button.ol-field:hover, button.ol-field:focus-visible { background: color-mix(in 
 .pr-from { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
 .pr-from-now { flex-basis: 100%; font-size: 14px; }
 .fg-more { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
-/* The Comes from… sheet */
-.fm-now { margin: 6px 0 10px; font-size: 14px; }
-.fm-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 46vh; overflow-y: auto; }
-.fm-option { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; min-height: 44px; padding: 7px 12px; text-align: left; }
-.fm-opt-name { font: 600 14px var(--font-mono); color: var(--text); }
-.fm-opt-where { font-size: 12px; color: var(--text-muted); }
-.fm-option.same { border-color: var(--text); }
-.fm-option.same .fm-opt-where::after { content: ' · same name'; font-weight: 700; }
-.fm-none, .fm-more { padding: 10px 2px; font-size: 13px; color: var(--text-muted); }
-.fm-items { display: flex; align-items: center; gap: 8px; margin-top: 10px; min-height: 40px; font-size: 14px; }
+/* The Comes from… sheet: the field's sources as chips, and the stickies it could come from as cards of small field chips */
+.fm-sheet .sheet-title b { font-family: var(--font-mono); font-size: 0.82em; font-weight: 600; overflow-wrap: anywhere; }
+.fm-sources { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; min-height: 32px; align-items: center; }
+.fm-source { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 4px 4px 4px 12px; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 999px; font-size: 14px; color: var(--text); }
+.fm-source-text { overflow-wrap: anywhere; }
+.fm-source-x { flex: none; width: 28px; height: 28px; border: none; border-radius: 50%; background: transparent; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.fm-source-x:hover, .fm-source-x:focus-visible { background: var(--surface-hover); color: var(--text); outline: none; }
+.fm-add { margin: 2px 0 8px; font: 600 13px var(--font-body); color: var(--text-muted); }
+.fm-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; max-height: 42vh; overflow-y: auto; }
+.fm-card { padding: 10px 12px; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 12px; }
+.fm-card.same { border-color: var(--accent); }
+.fm-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 8px; }
+.fm-card-name { font: 600 15px var(--font-body); color: var(--text); overflow-wrap: anywhere; }
+.fm-card-where { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.fm-card-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.fm-pill { min-height: 32px; padding: 4px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--text); font: 500 13px var(--font-mono); cursor: pointer; text-decoration: none; transform: none; }
+.fm-pill:hover, .fm-pill:focus-visible { background: var(--surface-hover); outline: none; }
+.fm-pill.whole, .fm-pill.fm-whole { font-family: var(--font-body); font-weight: 600; }
+.fm-pill.same { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.fm-pill.on { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.fm-pill:disabled { opacity: 0.5; cursor: default; }
+.fm-none, .fm-more { padding: 6px 2px; font-size: 13px; color: var(--text-muted); }
+.fm-items { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; min-height: 40px; font-size: 14px; }
 .fm-items input { width: 20px; height: 20px; flex: none; }
-.fm-option.whole { border-style: dashed; }
+.fm-more-n { font-weight: 700; }
 
 /* Trace: a property's path. The stickies on it are numbered, the rest dimmed; the strip lists the steps */
 :root { --trace: #1d6fa5; }

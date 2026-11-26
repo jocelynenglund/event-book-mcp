@@ -3,6 +3,12 @@
 // ===========================================
 
 import { scenarioLinesBlock } from '../../scenarios/scenarios.parts.js';
+import { ownEndingButton } from '../../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
+
+// What other features add to a scenario in the drawer (scn.extras: [{ kind, view }], from sliceScenariosDrawer.read.js), each drawn from its own view
+const scenarioExtras = {
+  ownEnding: ownEndingButton, // feature: clone-slice
+};
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -26,6 +32,7 @@ export function scenarioDrawerItem(scn) {
           <div class="bd-scn-actions">
             <button class="sheet-btn secondary bd-scn-cm" data-board-action="scn-comment" data-slice="${scn.sliceId}" data-scenario="${scn.id}">💬 ${scn.commentLabel}</button>
             ${scn.readOnly ? "" : `<button class="sheet-btn secondary bd-scn-edit" data-board-action="scn-edit" data-scenario="${scn.id}">Edit</button>`}
+            ${(scn.extras || []).map(x => scenarioExtras[x.kind]?.(x.view) || '').join('')}
           </div>
         </div>
       </details>`;
