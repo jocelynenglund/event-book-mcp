@@ -16,7 +16,7 @@ import { fieldMappingMark } from '../fieldMapping/fieldMapping.parts.js';
 import { screenWire } from '../pad/screenWire.parts.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const external = el => `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
+const external = el => `${el.external ? ' data-external="true"' : ''}${el.storage ? ' data-stored="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
 
 // ‹ n / N ›
 export function slicePageNav(nav) {

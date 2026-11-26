@@ -11,7 +11,7 @@
 //     by a read slice for it;
 //   - a VIEW's scenario Given uses only events the view draws in (a command slice's Given is the history it
 //     decides from, so it needn't draw those in).
-// External events and legacy tables are sources: they are not checked. A field marked generated, or set by the
+// External events and events stored elsewhere (a table, a config file, legacy tables…) are sources: they are not checked. A field marked generated, or set by the
 // system (FieldSetBySystem), or a read model's query parameter (FieldMarkedQuery: the caller supplies it), or mapped from another sticky's field (FieldMapped: "orderRef ← Order Placed.orderId") or from a whole event ("products[] ← each ProductConfigured"), is never a gap (a whole-event list's item fields must be on the event by name, or mapped); nor is an event's id or time, which every build makes (a guid or date
 // field, or a name like orderId / sentAt). Fields match by name, ignoring case and [] / ? markers.
 // It is a check for plans: a slice already built (Done), or a book that came from tests, is not hinted at; and a
@@ -45,7 +45,7 @@ const doesnt = (els, verb) => `${names(els)} ${els.length > 1 ? "don't" : "doesn
 // An event that carries a field somewhere in the book, to suggest drawing it in
 function holderOf(state, field, not) {
   const have = new Set(not.map(e => e.id));
-  return Object.values(state.elements).find(e => e.type === 'event' && !have.has(e.id) && !e.table && carries(e, field));
+  return Object.values(state.elements).find(e => e.type === 'event' && !have.has(e.id) && !e.storage && carries(e, field));
 }
 
 // A slice's elements by kind, with the pair partner's when the slice is half of an automation
@@ -80,7 +80,7 @@ function check(state, slice, out) {
 
   // An event a command of the slice produces: its fields come from that command
   if (commands.length) {
-    events.filter(e => !e.external && !e.table).forEach(el => {
+    events.filter(e => !e.external && !e.storage).forEach(el => {
       mark(el, 'event');
       fieldsOf(el).filter(p => !systemSet(state, el, p) && !commands.some(c => carries(c, p.name))).forEach(p =>
         gap(el, p.name, doesnt(commands, `carry ${p.name}`), `add ${p.name} to ${names(commands)}, or mark it set by the system`, 'event', { from: commands }));

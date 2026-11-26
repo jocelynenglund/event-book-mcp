@@ -10,6 +10,7 @@ import { editionOf } from '../features/editions/rules.js';
 import { padFold } from '../features/pad/sketch.js';
 import { projectPages } from '../features/pages/pages.projection.js'; // feature: pages
 import { projectCloneSlice } from '../features/cloneSlice/cloneSlice.projection.js'; // feature: clone-slice
+import { projectStoredElsewhere } from '../features/storedElsewhere/storedElsewhere.projection.js'; // feature: stored-elsewhere
 import { chapterMoved, chaptersArranged, partStarted, partRenamed, partRemoved, chapterRemoved, layoutByName, layoutOnSnapshot } from '../features/arrange/arrangement.js';
 
 // Element ordering hierarchy (top to bottom)
@@ -193,14 +194,6 @@ export function projectState(eventStream = getEventStream()) {
         }
         break;
 
-      case EventTypes.ElementTableSet:
-        if (state.elements[event.data.elementId]) {
-          // the table's name when the event has one (plan files), else just a mark
-          const t = event.data.table;
-          state.elements[event.data.elementId].table = typeof t === 'string' && t ? t : !!t;
-        }
-        break;
-        
       case EventTypes.PropertyAdded:
         if (state.elements[event.data.elementId]) {
           state.elements[event.data.elementId].properties.push({
@@ -803,6 +796,7 @@ export function projectState(eventStream = getEventStream()) {
     }
     projectPages(state, event); // feature: pages
     projectCloneSlice(state, event); // feature: clone-slice
+    projectStoredElsewhere(state, event); // feature: stored-elsewhere
   }
 
   // A sticky whose slices were all deleted stays in the book but sits in no slice: its links are not drawn,

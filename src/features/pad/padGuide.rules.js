@@ -14,7 +14,8 @@ export const KINDS = [
   },
   {
     colour: 'orange', name: 'Event', purpose: 'Something that happened, in the past tense. The events of a frame are what its command records.',
-    format: ['First line: its name', '- one field per line', 'A value after a field ("- contractNumber: 99999") makes it an example of the event, not its definition: it adds no fields', 'An event another system records: end the name with (external) or start it with external: — drawn yellow, made an external event'],
+    format: ['First line: its name', '- one field per line', 'A value after a field ("- contractNumber: 99999") makes it an example of the event, not its definition: it adds no fields', 'An event another system records: end the name with (external) or start it with external: — drawn yellow, made an external event',
+      'Something kept elsewhere than events (a table, a config file, a document): end the name with its kind in brackets, e.g. (table), (config) or (document) — drawn brown with a small kind tag, made a sticky stored as that kind'],
     example: 'Booking Recalled\n- cycleId'
   },
   {

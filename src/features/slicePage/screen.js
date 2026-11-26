@@ -76,7 +76,7 @@ const toOf = el => (publishedOf(el) ? (el.to || []).join(', ') : '');
 // A sticky named in a scenario, with the values it was given ('removed' when the model lost it)
 function refOf(el, values, alias, hideIds) {
   if (!el) return { removed: true };
-  return { type: el.type, external: !!el.external, table: !!el.table, published: publishedOf(el), to: toOf(el), name: el.name, kind: elementLabel(el), values: valuesOf(values, el, alias, hideIds) };
+  return { type: el.type, external: !!el.external, stored: !!el.storage, published: publishedOf(el), to: toOf(el), name: el.name, kind: elementLabel(el), values: valuesOf(values, el, alias, hideIds) };
 }
 
 function scenarioOf(scn, state, hideIds) {
@@ -103,7 +103,7 @@ function stickyOf(el, sliceId, usageState, gaps, mappings) {
   const wire = screenInSlice(usageState, sliceId, el.id);   // a screen made from a Pad sketch draws it, seen from this slice
   return {
     ...(wire ? { screen: wire } : {}),
-    id: el.id, sliceId, type: el.type, external: !!el.external, table: !!el.table, published: publishedOf(el), to: toOf(el), kind: elementLabel(el), name: el.name,
+    id: el.id, sliceId, type: el.type, external: !!el.external, stored: !!el.storage, published: publishedOf(el), to: toOf(el), kind: elementLabel(el), name: el.name,
     used: eventUsageOf(el, usageState),
     // A field with no source wears a ⚠ (Sticky Field Gaps): its why and fix, and where it sits
     fields: (el.properties || []).map(p => {

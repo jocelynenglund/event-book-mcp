@@ -13,6 +13,7 @@ import { scenarioLines } from './padScenario.rules.js';
 import { wireframe } from './padScreen.rules.js';
 import { automationLines } from './padAutomation.rules.js';
 import { externalName } from './padNote.rules.js';
+import { storageMarker } from '../storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 
 // A note is a square with room for about 148 units of text each way: its text keeps the first size it fits in
 // (a plain estimate: about 0.55 of the font size per letter, 1.4 for a line), the smallest when nothing does
@@ -49,7 +50,8 @@ export function padNotes(state, { draft = null, editable = true, selectedIds = [
   const pad = state.pad || { notes: {}, frames: {} };
   const note = (n, extra = {}) => {
     const drawn = { noteId: n.id, x: n.x, y: n.y, colour: n.colour, kind: KIND_OF[n.colour], text: n.text, ...titleAndBody(n.text), size: textSize(n.text), places: Math.max(1, placesOf(pad, n.id).length), draft: false, selected: selectedIds.includes(n.id), editing: editing?.id === n.id, editable, ...(n.colour === 'arrow' ? { w: n.w || ARROW_WIDTH } : {}), ...extra };
-    return { ...drawn, ...(drawn.colour === 'orange' && externalName(drawn.title).external ? { external: true } : {}), scenario: drawn.colour === 'scenario' ? scenarioLines(drawn.text) : null, screen: drawn.colour === 'screen' ? { ...wireframe(drawn.text), key: n.id } : null,
+    const stored = drawn.colour === 'orange' && !externalName(drawn.title).external ? storageMarker(drawn.title).storage : null;   // feature: stored-elsewhere
+    return { ...drawn, ...(drawn.colour === 'orange' && externalName(drawn.title).external ? { external: true } : {}), ...(stored ? { storage: stored.kind } : {}), scenario: drawn.colour === 'scenario' ? scenarioLines(drawn.text) : null, screen: drawn.colour === 'screen' ? { ...wireframe(drawn.text), key: n.id } : null,
       automation: drawn.colour === 'automation' ? automationLines(drawn.text) : null, fold: foldOf(n) };
   };
   const notes = Object.values(state.pad?.notes || {}).filter(n => !isHidden(n)).map(n => note(n, editing?.id === n.id && editing.value != null ? { text: editing.value, ...titleAndBody(editing.value), size: textSize(editing.value) } : {}));

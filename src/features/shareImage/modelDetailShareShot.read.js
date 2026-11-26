@@ -23,7 +23,7 @@ import { gwtLines } from './lines.js';
 // One sticky of a slice, as the picture draws it
 function cardOf(el, slice, state, { showProps, first, trigger }) {
   const todo = el.type === 'readModel' && !!el.todo;
-  const base = { id: el.id, kind: el.type, label: elementLabel(el), name: el.name, external: !!el.external, table: !!el.table, published: el.type === 'event' && !!el.published && !el.external, to: el.type === 'event' && el.published && !el.external ? (el.to || []).join(', ') : '', todo };
+  const base = { id: el.id, kind: el.type, label: elementLabel(el), name: el.name, external: !!el.external, stored: !!el.storage, published: el.type === 'event' && !!el.published && !el.external, to: el.type === 'event' && el.published && !el.external ? (el.to || []).join(', ') : '', todo };
   // A to-do list seen again: a slim reference, not a second full card
   if (todo && !first) return { ...base, slim: true, tags: [], fields: [], list: false, trigger: false };
   const props = !showProps ? [] : el.properties?.length && fieldsFolded(el.id) ? [foldedLabel(el.properties.length)] : (el.properties || []).map(p => fieldLabel(el, p));

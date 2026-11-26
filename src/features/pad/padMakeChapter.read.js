@@ -67,7 +67,7 @@ function sliceOf(pad, frame, names, off, known) {
     if (parsed.example && !isMain && !isEvent && main && parsed.name.toLowerCase() === main.parsed.name.toLowerCase()) continue;   // the slice's own command or view, shown again with example values
     if (!isMain && !isEvent) { lines.push({ key, noteId: note.id, role: 'left out', text: parsed.name, name: parsed.name, note: null, included: false, tickable: false }); continue; }
     const included = isMain || !off.includes(key);
-    lines.push({ key, noteId: note.id, role: ROLE[parsed.kind], text: parsed.name, name: parsed.name, note: null, included, tickable: isEvent, ...(isEvent && parsed.external ? { external: true } : {}) });
+    lines.push({ key, noteId: note.id, role: ROLE[parsed.kind], text: parsed.name, name: parsed.name, note: null, included, tickable: isEvent, ...(isEvent && parsed.external ? { external: true } : {}), ...(isEvent && parsed.storage ? { storage: parsed.storage } : {}) });
     if (!included) continue;
     parsed.fields.forEach((f, i) => {
       const fieldKey = `${note.id}:${i + 1}`;

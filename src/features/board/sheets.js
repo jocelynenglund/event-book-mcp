@@ -22,6 +22,7 @@ import { openScenariosSheet, onSheetAction as scenariosAction } from './sheets/s
 import { openModelNameSheet, openSliceInfo, openSliceMenu, onSheetAction as sliceMenuAction } from './sheets/sliceMenu.js';
 import { onSheetAction as processorAction } from './sheets/processor.js';
 import { onSheetAction as cloneSliceAction } from '../cloneSlice/sheet.js'; // feature: clone-slice
+import { onSheetAction as storedElsewhereAction } from '../storedElsewhere/sheet.js'; // feature: stored-elsewhere
 import { openFindSheet, onSheetAction as findAction, onSheetInput as findInput } from './sheets/find.js';
 import { openReferencePicker } from '../references/sheet.js';
 import { onFieldTap, onCountTap, onSheetAction as fieldGapAction } from '../fieldSources/sheet.js';
@@ -140,6 +141,7 @@ function revealComment(c) {
 // Taps inside the board sheet: each sheet module answers its own
 const sheetActions = [readSheetAction, newSliceAction, chapterAction, arrangeAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction, fieldGapAction, fieldMapAction,
   cloneSliceAction, // feature: clone-slice
+  storedElsewhereAction, // feature: stored-elsewhere
 ];
 
 function handleSheetClick(e) {

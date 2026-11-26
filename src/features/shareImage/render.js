@@ -32,8 +32,8 @@ export const notes = {
   event:     { fill: '#ffc58a', text: '#4a2306' },
   // Events from another system
   external:  { fill: '#fde58a', text: '#3d3005' },
-  // A legacy table read as events: a shadowy orange
-  table:     { fill: '#c99a6c', text: '#2a1606' },
+  // An event stored elsewhere (a table, a config file…): a shadowy brown
+  stored:    { fill: '#c99a6c', text: '#2a1606' },
   // One of our events published to other systems: yellow like an external one, with a dark right edge and a ↗ tab
   published: { fill: '#fde58a', text: '#3d3005' }
 };
@@ -153,13 +153,13 @@ function arrow(ctx, x, y1, y2, color) {
   arrowHead(ctx, x, y2, 0, dir);
 }
 
-// A scenario line's swatch, in its sticky's colour; a legacy table gets a dashed edge, an integration event a dark right edge
+// A scenario line's swatch, in its sticky's colour; an event stored elsewhere gets a dashed edge, an integration event a dark right edge
 export function drawSwatch(ctx, x, y, size, line) {
-  const n = line.table ? notes.table : line.external ? notes.external : line.published ? notes.published : notes[line.type] || notes.screen;
+  const n = line.stored ? notes.stored : line.external ? notes.external : line.published ? notes.published : notes[line.type] || notes.screen;
   ctx.save();
   roundRect(ctx, x, y, size, size, 2);
   ctx.fillStyle = n.fill; ctx.fill();
-  if (line.table) { ctx.setLineDash([2.5, 1.5]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.6)'; ctx.lineWidth = 1; ctx.stroke(); }
+  if (line.stored) { ctx.setLineDash([2.5, 1.5]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.6)'; ctx.lineWidth = 1; ctx.stroke(); }
   else if (line.published) { ctx.clip(); ctx.fillStyle = '#3b2410'; ctx.fillRect(x + size - Math.max(3, size / 4), y, size, size); }
   ctx.restore();
 }
@@ -191,7 +191,7 @@ export function measureCard(ctx, card) {
 }
 
 function drawCard(ctx, card, m, x, y, tilt, t) {
-  const n = (card.kind === 'event' && card.table ? notes.table : card.kind === 'event' && card.external ? notes.external : card.kind === 'event' && card.published ? notes.published : notes[card.kind]) || notes.screen;
+  const n = (card.kind === 'event' && card.stored ? notes.stored : card.kind === 'event' && card.external ? notes.external : card.kind === 'event' && card.published ? notes.published : notes[card.kind]) || notes.screen;
 
   // A to-do list seen again: a slim dashed reference, not a second full card
   if (m.slim) {
@@ -239,8 +239,8 @@ function drawCard(ctx, card, m, x, y, tilt, t) {
     ctx.fillText('\u2197', L.cardW - 12, 17.5);
     ctx.restore();
   }
-  // A legacy table: a dashed darker edge, like the board's sticky
-  if (card.kind === 'event' && card.table) {
+  // Stored elsewhere: a dashed darker edge, like the board's sticky
+  if (card.kind === 'event' && card.stored) {
     roundRect(ctx, 0.75, 0.75, L.cardW - 1.5, m.h - 1.5, 3);
     ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.setLineDash([]);
@@ -846,7 +846,7 @@ export function renderModelImage(args = {}) {
     ctx.fillStyle = notes[type].fill;
     ctx.fill();
     if (notes[type].stroke) { ctx.strokeStyle = notes[type].stroke; ctx.lineWidth = 1; ctx.stroke(); }
-    if (type === 'table') { roundRect(ctx, lx + 0.75, fy + 0.75, 13.5, 13.5, 3); ctx.setLineDash([3, 2]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.55)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); }
+    if (type === 'stored') { roundRect(ctx, lx + 0.75, fy + 0.75, 13.5, 13.5, 3); ctx.setLineDash([3, 2]); ctx.strokeStyle = 'rgba(60, 30, 8, 0.55)'; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); }
     ctx.fillStyle = t.muted;
     ctx.fillText(label, lx + 22, fy);
     lx += 22 + ctx.measureText(label).width + 18;

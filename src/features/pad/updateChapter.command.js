@@ -33,6 +33,7 @@ export function updateChapter({ frameId }) {
     view.steps.filter(s => s.kind === 'rename').forEach(s => es.appendEvent(es.EventTypes.ElementRenamed, { elementId: s.elementId, name: s.to }));
     view.steps.filter(s => s.kind === 'add').forEach(s => {
       const elementId = c.addToSlice(sliceId, stickyTypeOf(s.role), stickyNamed(stickyTypeOf(s.role), s.name));
+      if (s.storage && elementId) es.appendEvent(es.EventTypes.ElementStorageSet, { elementId, kind: s.storage.kind }); // feature: stored-elsewhere
       if (s.external && elementId) es.appendEvent(es.EventTypes.ElementExternalSet, { elementId, external: true });   // an event marked (external) is another system's
     });
     if (view.steps.some(s => s.kind === 'add' || s.kind === 'field') && view.fields.length) addFields(sliceId, view.fields);

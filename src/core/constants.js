@@ -1,12 +1,15 @@
 import { OutlineGoalsEvents } from '../features/outlineGoals/events.js'; // feature: outline-goals
+import { StoredElsewhereEvents } from '../features/storedElsewhere/storedElsewhere.events.js'; // feature: stored-elsewhere
+import { storageLabel } from '../features/storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 // Event Types
 export const EventTypes = {
   ...OutlineGoalsEvents, // feature: outline-goals
+  ...StoredElsewhereEvents, // feature: stored-elsewhere
   // Element events
   ElementCreated: 'ElementCreated',
   ElementDeleted: 'ElementDeleted',
   ElementExternalSet: 'ElementExternalSet', // an event that comes from another system
-  ElementTableSet: 'ElementTableSet',       // an event that is really a legacy table (read as events), shadowy orange { elementId, table }
+  ElementTableSet: 'ElementTableSet',       // OLD: a legacy table { elementId, table }; read as stored elsewhere, kind "legacy table"
   ElementPublishedSet: 'ElementPublishedSet', // one of our events published to other systems (an integration event, a contract) { elementId, published, to? }
   ConnectionRemoved: 'ConnectionRemoved',
   ElementRenamed: 'ElementRenamed',
@@ -180,19 +183,19 @@ export const typeIcons = {
   processor: '⚙️'
 };
 
-// Label for an element, telling external events (from another system) and legacy tables apart
+// Label for an element, telling external events (from another system) and events stored elsewhere (a table, a config file…) apart
 export function elementLabel(el) {
   if (el.type === 'readModel' && el.list) return 'Read model · list';
-  if (el.type === 'event' && el.table) return 'Legacy table';
+  if (el.type === 'event' && el.storage) return storageLabel(el.storage); // feature: stored-elsewhere
   if (el.type === 'event' && el.published && !el.external) return 'Integration event';
   return el.type === 'event' && el.external ? 'External event' : typeLabels[el.type];
 }
 
-// data-external / data-table / data-published attributes: external events yellow, legacy tables a shadowy orange,
+// data-external / data-stored / data-published attributes: external events yellow, events stored elsewhere a shadowy brown,
 // integration events (published to other systems) orange with a ↗ tab and a solid right border
 export function externalAttr(el) {
   if (el.type !== 'event') return '';
-  return `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
+  return `${el.external ? ' data-external="true"' : ''}${el.storage ? ' data-stored="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
 }
 
 // Element type labels

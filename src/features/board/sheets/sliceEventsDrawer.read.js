@@ -18,9 +18,9 @@ export function scenariosUsingEvent(sliceId, eventId, book) {
   return getScenariosForSlice(sliceId, book).filter(s => (s.given || []).some(g => g.elementId === eventId) || s.then?.eventId === eventId).length;
 }
 
-// What an event nothing produces says: a legacy table and an external event say where they come from
+// What an event nothing produces says: an event stored elsewhere (a table, a config file…) and an external event say where they come from
 function noProducerLine(el) {
-  if (el.table) return 'Legacy table · read from the old system';
+  if (el.storage) return `${elementLabel(el)} · kept outside the events`;
   if (el.external) return 'External event · comes from another system';
   return `${elementLabel(el)} · nothing produces it yet`;
 }
@@ -48,7 +48,7 @@ export function sliceEventsDrawer(book, sliceId, { readOnly = false, givens = fa
         return {
           id: el.id, name: el.name, type: el.type, attrs: externalAttr(el), sliceId,
           kind: `${from ? `${elementLabel(el)} · ↳ from ${sliceTitle(from.slice, book)}` : noProducerLine(el)}${givens ? ` · in ${used(el.id)} ${used(el.id) === 1 ? 'scenario' : 'scenarios'}` : ''}`,
-          hint: !from && !el.table && !el.external && !el.published,   // a plain event nothing produces: a gentle hint, not a fault
+          hint: !from && !el.storage && !el.external && !el.published,   // a plain event nothing produces: a gentle hint, not a fault
           remove: locked ? null : { label: `Stop reading ${el.name} here`, usedIn: scenariosUsingEvent(sliceId, el.id, book) },
           props: (el.properties || []).map(propLabel),
           // where a tap goes: to the command that produces it, else to the sticky (read, or edit when it can be)

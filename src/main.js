@@ -149,7 +149,8 @@ import { exportForEventmodelers } from './features/eventmodelers/export.js';
 import { openPropertySheet, saveProperty, deleteProperty, initProperties } from './features/properties/sheet.js';
 import { initTraceStrip } from './features/fieldTrace/strip.js';
 import { deleteElement } from './features/deleteElement/command.js';
-import { openElementMenu, menuRename, menuProperties, menuScreenText, menuSliceEvents, menuSliceScreen, menuReaders, menuProducer, menuDelete, menuRemoveFromSlice, menuToggleExternal, menuTogglePublished, menuToggleTable, menuComment, menuToggleTrigger, menuToggleTodo, menuToggleList, menuUpdatedBy, menuProcessorInputs, menuShowElement, menuSetElementFlow } from './features/elementMenu/sheet.js';
+import { menuStoredAs } from './features/storedElsewhere/sheet.js'; // feature: stored-elsewhere
+import { openElementMenu, menuRename, menuProperties, menuScreenText, menuSliceEvents, menuSliceScreen, menuReaders, menuProducer, menuDelete, menuRemoveFromSlice, menuToggleExternal, menuTogglePublished, menuComment, menuToggleTrigger, menuToggleTodo, menuToggleList, menuUpdatedBy, menuProcessorInputs, menuShowElement, menuSetElementFlow } from './features/elementMenu/sheet.js';
 import { 
   openAddScenarioSheet, 
   openEditScenarioSheet, 
@@ -228,7 +229,7 @@ window.EventPad = {
   menuRemoveFromSlice,
   menuToggleExternal,
   menuTogglePublished,
-  menuToggleTable,
+  menuStoredAs,
   menuComment,
   menuToggleTrigger,
   menuToggleTodo,

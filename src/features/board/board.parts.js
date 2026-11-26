@@ -75,7 +75,7 @@ export function boardCard(card, ui = {}) {
   const traced = card.trace === null || card.trace === undefined ? '' : ` data-trace="${card.trace ? 'on' : 'off'}"`;
   return `
     <button class="bd-card" ${mark} style="--tilt: ${noteTilt(card.tiltKey)}deg" data-type="${card.type}"${card.attrs}${traced}${card.otherFlow ? ' data-other-flow="true"' : ''}${card.trigger ? ' data-trigger="true"' : ''}${card.todo ? ' data-todo="true"' : ''}${card.list ? ' data-list="true"' : ''} data-action="element-read" data-el="${card.elementId}" data-slice="${card.sliceId}">
-      ${step}<span class="bd-card-kind">${card.trigger ? '⚡ Trigger · ' : ''}${card.todo ? '☑ To-do list' : card.label}${card.outcome ? ` · ↳ ${escapeHtml(card.outcome)}` : ''}</span>
+      ${step}<span class="bd-card-kind">${card.trigger ? '⚡ Trigger · ' : ''}${card.todo ? '☑ To-do list' : escapeHtml(card.label)}${card.outcome ? ` · ↳ ${escapeHtml(card.outcome)}` : ''}</span>
       <span class="bd-card-title"><span class="bd-card-more" role="button" aria-label="Edit ${escapeHtml(card.name)}" data-action="element" data-el="${card.elementId}" data-slice="${card.sliceId}">⋮</span><span class="bd-card-name">${escapeHtml(card.name)}</span>${card.places ? `<span class="bd-card-places" role="button" data-action="places" data-el="${card.elementId}" data-slice="${card.sliceId}" aria-label="In ${card.places} slices: show where" title="In ${card.places} slices">🔗 ${card.places}</span>` : ''}</span>
       ${card.to ? `<span class="bd-card-to">→ ${escapeHtml(card.to)}</span>` : ''}
       ${card.screen ? screenWire(card.screen) : ''}

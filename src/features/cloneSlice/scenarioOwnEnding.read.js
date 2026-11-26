@@ -4,7 +4,7 @@ import { cloneable } from './cloneSlice.rules.js';
 
 export function scenarioOwnEnding(book, scenarioId) {
   const scn = book.scenarios[scenarioId], slice = scn && book.slices[scn.sliceId];
-  return { scenarioId, sliceId: scn?.sliceId || null, offered: !!slice && slice.type === 'SC' && cloneable(slice, slice.id) };
+  return { scenarioId, sliceId: scn?.sliceId || null, offered: !!slice && slice.type === 'SC' && cloneable(slice, slice.id, book) };
 }
 
 // The drawer's extra on a scenario (board/sheets/sliceScenariosDrawer.read.js): nothing when it is not offered

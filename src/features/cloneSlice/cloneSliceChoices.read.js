@@ -9,7 +9,7 @@ import { cloneable, keepKinds, nameFor, defaultKeep } from './cloneSlice.rules.j
 
 export function cloneSliceChoices(book, sliceId, scenarioId = null) {
   const slice = book.slices[sliceId];
-  if (!cloneable(slice, sliceId)) return null;
+  if (!cloneable(slice, sliceId, book)) return null;
   const scn = scenarioId ? book.scenarios[scenarioId] : null;
   if (scenarioId && (!scn || scn.sliceId !== sliceId)) return null;
   const has = key => key === 'events' ? slice.elements.some(id => book.elements[id]?.type === 'event') : slice.elements.some(id => book.elements[id]?.type === key);

@@ -1,13 +1,14 @@
 // ===========================================
 // OUTLINE GOALS - Commands (feature: outline-goals)
 // SC: Add Criterion · Reword Criterion · Tag Criterion · Remove Criterion · Link Proof · Unlink Proof
-// SC: Describe Chapter · Draft Event · Drop Draft Event
+// SC: Describe Chapter · Draft Event · Drop Draft Event · Make Draft A Slice
 // Each returns why it was refused, or null (done, or nothing to change). A chapter is named by its id or its name.
 // ===========================================
 
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import { goalsOf, chapterIdOf, sameName, sameSet } from './rules.js';
+import { addStep } from '../planFile/build.js';
 
 const record = (type, data) => (appendEvent(type, data) ? null : 'Read only');
 const clean = text => String(text ?? '').trim();
@@ -97,4 +98,16 @@ export function dropDraftEvent({ chapterId, name, state = projectState() } = {})
   const had = (goalsOf(state).drafts[id] || []).find(n => sameName(n, clean(name)));
   if (!had) return null;
   return record(EventTypes.DraftEventDropped, { chapterId: id, name: had });
+}
+
+// A draft event becomes a Do slice at the end of its chapter: its command, then the event (stickies of the same name are reused),
+// the fields on both (only the ones missing). One tap: one undo. The draft goes by the existing rule (a slice of the chapter holds the event).
+export function makeDraftASlice({ chapterId, event, command, fields = '', state = projectState() } = {}) {
+  const id = chapterIdOf(state, chapterId);
+  if (!id) return `No chapter called ${clean(chapterId)}`;
+  if (!clean(event)) return 'Name the event';
+  if (!clean(command)) return 'Name the command that makes it happen';
+  try { addStep({ kind: 'do', name: clean(command), command: clean(command), events: [clean(event)], fields: clean(fields) || undefined }, id); }
+  catch (e) { return e.message; }
+  return null;
 }

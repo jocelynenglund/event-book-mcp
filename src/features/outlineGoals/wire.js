@@ -12,10 +12,12 @@ import { render } from '../../ui/feed.js';
 import { showToast } from '../../ui/toast.js';
 import { toastWithUndo } from '../undo/command.js';
 import { criterionEditor } from './criterionEditor.read.js';
-import { criterionSheet } from './outlineGoals.parts.js';
+import { criterionSheet, makeSliceForm } from './outlineGoals.parts.js';
 import { goalsOf } from './rules.js';
+import { makeSliceSheet } from './makeSliceSheet.read.js';
+import { suggestShow, suggestClear, suggestKey, initSuggest } from '../pad/suggestInput.js';
 import { goalsUi } from './uiState.js';
-import { addCriterion, rewordCriterion, tagCriterion, removeCriterion, linkProof, unlinkProof, describeChapter, draftEvent, dropDraftEvent, newCriterionId } from './command.js';
+import { addCriterion, rewordCriterion, tagCriterion, removeCriterion, linkProof, unlinkProof, describeChapter, draftEvent, makeDraftASlice, dropDraftEvent, newCriterionId } from './command.js';
 
 const value = id => document.getElementById(id)?.value.trim() || '';
 
@@ -57,14 +59,58 @@ function saveDescription(chapterId) {
   render();
 }
 
+// Redrawing removes the focused input, which fires a focusout we must not take for the person leaving it
+let redrawing = false;
+function redraw() { redrawing = true; try { render(); } finally { redrawing = false; } }
+
 function saveDraft(chapterId) {
   const name = value('ogDraftName');
-  if (!name) { goalsUi.draftingChapter = null; render(); return; }
+  suggestClear();
+  if (!name) { goalsUi.draftingChapter = null; redraw(); return; }
   const why = draftEvent({ chapterId, name });
   if (why) { showToast(why); return; }
   // Stay open for the next one, as when typing a list
-  render();
+  redraw();
   document.getElementById('ogDraftName')?.focus();
+}
+
+// Local guards, set up once: leaving the draft input closes it (keeping what was typed); a tap elsewhere closes a chip's menu;
+// on a phone the book's bottom bar steps aside while a field in the Outline has the keyboard up (the CSS keys off body.og-typing).
+let guarded = false;
+export function installOutlineGoalsGuards() {
+  if (guarded || typeof document === 'undefined') return;
+  guarded = true;
+  initSuggest();
+  document.addEventListener('input', e => {
+    const box = e.target;
+    if (box.id === 'ogDraftName') suggestShow({ box, mount: document.getElementById('ogDraftSuggest'), getState: projectState, colour: 'orange' });
+    else if (box.id === 'ogMakeCommand') suggestShow({ box, mount: document.getElementById('ogMakeSuggest'), getState: projectState, colour: 'blue' });
+  });
+  document.addEventListener('focusin', e => {
+    if (e.target.closest?.('#outlineView') && e.target.matches?.('input, textarea')) document.body.classList.add('og-typing');
+  });
+  document.addEventListener('focusout', e => {
+    if (e.target.matches?.('input, textarea')) document.body.classList.remove('og-typing');
+    if (e.target.id === 'ogDraftName' || e.target.id === 'ogMakeCommand') suggestClear();
+    if (redrawing || e.target.id !== 'ogDraftName' || !goalsUi.draftingChapter) return;
+    const chapterId = goalsUi.draftingChapter, name = e.target.value.trim();
+    goalsUi.draftingChapter = null;
+    if (name) { const why = draftEvent({ chapterId, name }); if (why) showToast(why); }
+    redraw();
+  });
+  document.addEventListener('click', e => {
+    if (!goalsUi.draftMenu || e.target.closest?.('[data-goals-action=draft-menu], .og-draft-menu')) return;
+    goalsUi.draftMenu = null; redraw();
+  });
+}
+
+function saveMakeSlice(root) {
+  const why = makeDraftASlice({ chapterId: root.dataset.chapter, event: root.dataset.event, command: value('ogMakeCommand'), fields: value('ogMakeFields') });
+  if (why) { showToast(why); return; }
+  suggestClear();
+  hideAllSheets();
+  redraw();
+  toastWithUndo('Slice made');
 }
 
 export function outlineGoalsClick(e) {
@@ -85,19 +131,32 @@ export function outlineGoalsClick(e) {
   else if (a === 'edit-description') { goalsUi.editingChapter = t.dataset.chapter; render(); document.getElementById('ogChapterDesc')?.focus(); }
   else if (a === 'cancel-description') { goalsUi.editingChapter = null; render(); }
   else if (a === 'save-description') saveDescription(t.dataset.chapter);
-  else if (a === 'add-draft') { goalsUi.draftingChapter = t.dataset.chapter; render(); document.getElementById('ogDraftName')?.focus(); }
-  else if (a === 'cancel-draft') { goalsUi.draftingChapter = null; render(); }
-  else if (a === 'save-draft') saveDraft(t.dataset.chapter);
-  else if (a === 'drop-draft') { dropDraftEvent({ chapterId: t.dataset.chapter, name: t.dataset.name }); render(); }
+  else if (a === 'add-draft') { goalsUi.draftingChapter = t.dataset.chapter; goalsUi.draftMenu = null; redraw(); document.getElementById('ogDraftName')?.focus(); }
+  else if (a === 'draft-menu') {
+    const m = goalsUi.draftMenu, same = m && m.chapterId === t.dataset.chapter && m.name === t.dataset.name;
+    goalsUi.draftMenu = same ? null : { chapterId: t.dataset.chapter, name: t.dataset.name }; redraw();
+  }
+  else if (a === 'drop-draft') { goalsUi.draftMenu = null; dropDraftEvent({ chapterId: t.dataset.chapter, name: t.dataset.name }); redraw(); }
+  else if (a === 'make-slice') {
+    const view = makeSliceSheet(projectState(), t.dataset.chapter, t.dataset.name);
+    goalsUi.draftMenu = null; redraw();
+    if (view) openBoardSheet(makeSliceForm(view), 'ogMakeCommand');
+  }
+  else if (a === 'cancel-make-slice') { suggestClear(); hideAllSheets(); }
+  else if (a === 'save-make-slice') saveMakeSlice(t.closest('[data-component="Make slice sheet"]'));
+  else if (a === 'toggle-ladder') { const s = goalsUi.ladderOpen; s.has(t.dataset.chapter) ? s.delete(t.dataset.chapter) : s.add(t.dataset.chapter); render(); }
 }
 
 // Enter saves what is being typed: a draft event's name, a criterion's words (Shift+Enter is a new line), a chapter's description
 export function outlineGoalsKey(e) {
+  if ((e.target.id === 'ogDraftName' || e.target.id === 'ogMakeCommand') && suggestKey(e)) return;
+  if (e.key === 'Escape' && goalsUi.draftMenu) { goalsUi.draftMenu = null; redraw(); return; }
   if (e.key === 'Escape' && (goalsUi.draftingChapter || goalsUi.editingChapter) && e.target.closest('.og-brief, .og-drafts')) {
-    goalsUi.draftingChapter = goalsUi.editingChapter = null; render(); return;
+    goalsUi.draftingChapter = goalsUi.editingChapter = null; redraw(); return;
   }
   if (e.key !== 'Enter' || e.shiftKey) return;
   if (e.target.id === 'ogDraftName') { e.preventDefault(); saveDraft(goalsUi.draftingChapter); }
+  else if (e.target.id === 'ogMakeCommand' || e.target.id === 'ogMakeFields') { e.preventDefault(); saveMakeSlice(e.target.closest('[data-component="Make slice sheet"]')); }
   else if (e.target.id === 'ogCritText') { e.preventDefault(); saveCriterion(e.target.closest('[data-component="Criterion sheet"]')); }
   else if (e.target.id === 'ogChapterDesc') { e.preventDefault(); saveDescription(goalsUi.editingChapter); }
 }

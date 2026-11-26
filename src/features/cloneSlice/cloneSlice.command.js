@@ -7,12 +7,12 @@
 
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
 import { projectState, getScenariosForSlice } from '../../core/projections.js';
-import { createSlice, addToSlice, placeSlices, newId } from '../board/command.js';
+import { createSlice, addToSlice, placeSlices, setSliceFlow, newId } from '../board/command.js';
 import { findByName } from '../outline/command.js';
 import { addProperty } from '../properties/command.js';
 import { addScenario, setMustHave, setGiven, setWhen, setQuery, setThenEvent, setThenRejection, setThenNothing, setThenReadModel, moveScenario } from '../scenarios/command.js';
 import { CloneSliceEvents } from './cloneSlice.events.js';
-import { cloneable, nameFor, defaultKeep } from './cloneSlice.rules.js';
+import { cloneRefusal, isAutomation, nameFor, defaultKeep } from './cloneSlice.rules.js';
 
 const ofType = (slice, state, type) => slice.elements.filter(id => state.elements[id]?.type === type);
 
@@ -46,17 +46,18 @@ function copyScenario(scn, sliceId) {
 export function cloneSlice({ sliceId, name = '', keep = {}, ending = '' } = {}) {
   const state = projectState();
   const slice = state.slices[sliceId];
-  if (!slice) return 'That slice is gone';
-  if (!cloneable(slice, sliceId)) return 'An automation\'s slices are not cloned';
+  const refusal = cloneRefusal(slice, sliceId, state);
+  if (refusal) return refusal;
   const endingName = String(ending ?? '').trim();
   if (endingName && slice.type === 'SV') return 'A view has no ending';
   const kept = { ...defaultKeep, ...keep };
 
-  const cloneId = createSlice(slice.type, String(name ?? '').trim() || nameFor(slice, state), { actor: slice.actor, chapterId: slice.chapterId });
+  const cloneId = createSlice(slice.type, String(name ?? '').trim() || nameFor(slice, state), { actor: isAutomation(slice, state) ? 'processor' : slice.actor, chapterId: slice.chapterId });
   appendEvent(CloneSliceEvents.SliceCloned, { sliceId: cloneId, from: sliceId });
   placeSlices([cloneId], { after: sliceId });
+  if (slice.flowId) setSliceFlow(cloneId, slice.flowId); // in the original's flow (a clone is never paired, so it moves alone)
 
-  const lanes = slice.type === 'SV' ? ['readModel', 'screen'] : ['screen', 'command'];
+  const lanes = slice.type === 'SV' ? ['readModel', 'screen'] : ['screen', 'processor', 'command'];
   lanes.filter(type => kept[type]).forEach(type => ofType(slice, state, type).forEach(elementId => addToSlice(cloneId, type, { elementId })));
   if (kept.events) ofType(slice, state, 'event').forEach(elementId => addToSlice(cloneId, 'event', { elementId }));
   const endingId = endingName ? addEnding(cloneId, slice, endingName, projectState()) : null;
