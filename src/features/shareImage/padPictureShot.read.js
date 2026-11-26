@@ -12,7 +12,7 @@
 
 import { padNotes } from '../pad/padNotes.read.js';
 import { padFrames } from '../pad/padFrames.read.js';
-import { notesInFrame, NOTE_SIZE, SCREEN_WIDTH } from '../pad/sketch.js';
+import { notesInFrame, NOTE_SIZE, SCREEN_WIDTH, ARROW_HEIGHT } from '../pad/sketch.js';
 
 export const MARGIN = 48;                       // paper round what is drawn
 export const HEAD = 96;                         // the book's name and what the picture shows, above
@@ -32,13 +32,13 @@ export function screenHeight(lines) {
   return Math.max(WIRE.min, WIRE.bar + WIRE.pad * 2 + body);
 }
 
-const sizeOf = n => (n.screen ? { w: SCREEN_WIDTH, h: screenHeight(n.screen.lines) } : { w: n.colour === 'scenario' ? SCENARIO_WIDTH : NOTE_SIZE, h: NOTE_SIZE });
+const sizeOf = n => (n.colour === 'arrow' ? { w: n.w, h: ARROW_HEIGHT } : n.screen ? { w: SCREEN_WIDTH, h: screenHeight(n.screen.lines) } : { w: n.colour === 'scenario' ? SCENARIO_WIDTH : NOTE_SIZE, h: NOTE_SIZE });
 
 export function padPictureShot(state, { selection = null, options = {} } = {}) {
   const pad = state.pad || { notes: {}, frames: {} };
   const frames = padFrames(state, { editable: false }).frames, notes = padNotes(state, { editable: false }).notes;
   const pickedFrames = selection ? frames.filter(f => selection.frameIds?.includes(f.frameId)) : frames;
-  const inside = new Set(pickedFrames.flatMap(f => notesInFrame(pad, pad.frames[f.frameId]).map(n => n.id)));
+  const inside = new Set(pickedFrames.flatMap(f => notesInFrame(pad, pad.frames[f.frameId], true).map(n => n.id)));
   const pickedNotes = (selection ? notes.filter(n => selection.noteIds?.includes(n.noteId) || inside.has(n.noteId)) : notes).map(n => ({ ...n, ...sizeOf(n) }));
   const title = state.modelName || 'Event Book', credit = 'Made with Event Book';
   if (!pickedNotes.length && !pickedFrames.length) return { empty: true, title, subtitle: 'Nothing on the Pad yet', credit, width: MIN_WIDTH, height: HEAD + 2 * MARGIN + FOOT, crop: null, frames: [], notes: [] };
@@ -51,7 +51,7 @@ export function padPictureShot(state, { selection = null, options = {} } = {}) {
   const subtitle = ['Pad', selection ? 'a selection' : null, [pickedNotes.length && plural(pickedNotes.length, 'note', 'notes'), pickedFrames.length && plural(pickedFrames.length, 'frame', 'frames')].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
   return {
     empty: false, title, subtitle, credit, width, height, crop: { x: x0 - MARGIN, y: y0 - MARGIN, w: w + 2 * MARGIN, h: h + 2 * MARGIN },
-    frames: pickedFrames.map(f => place({ x: f.x, y: f.y, w: f.w, h: f.h, name: f.shownName, nameIsDefault: f.nameIsDefault, noteCount: f.noteIds.length, made: options.showMade && f.chip ? f.chip.label : null })),
+    frames: pickedFrames.map(f => place({ x: f.x, y: f.y, w: f.w, h: f.h, name: f.shownName, nameIsDefault: f.nameIsDefault, noteCount: f.noteCount, made: options.showMade && f.chip ? f.chip.label : null })),
     notes: pickedNotes.map(n => place({ x: n.x, y: n.y, w: n.w, h: n.h, colour: n.colour, kind: n.kind, title: n.title, bodyLines: n.bodyLines, size: n.size, places: n.places, scenario: n.scenario, screen: n.screen, automation: n.automation ?? null }))
   };
 }

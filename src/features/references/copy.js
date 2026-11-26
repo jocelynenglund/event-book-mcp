@@ -6,6 +6,7 @@
 // Cards that already exist in the target (same type and name) are reused.
 // ===========================================
 
+import { carriedEvents } from '../../core/carriedEvents.js';
 import { EventTypes, fieldKey } from '../../core/constants.js';
 import { isQueryField } from '../viewQueries/queryFields.js';
 
@@ -48,6 +49,7 @@ export function chapterEvents(state, chapterId, { target = null, name = null } =
       if (el.todo) add(EventTypes.ElementTodoSet, { elementId: id, todo: true });
       if (el.list) add(EventTypes.ElementListSet, { elementId: id, list: true });
       if (el.sketch) add(EventTypes.ScreenSketchSet, { elementId: id, text: el.sketch });
+      carriedEvents(el, id).forEach(e => add(e.type, e.data));
     }
     const have = new Set((same?.properties || []).map(p => p.name.toLowerCase()));
     (el.properties || []).filter(p => !have.has(p.name.toLowerCase())).forEach(p => {

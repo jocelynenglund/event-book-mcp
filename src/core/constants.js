@@ -1,5 +1,7 @@
+import { OutlineGoalsEvents } from '../features/outlineGoals/events.js'; // feature: outline-goals
 // Event Types
 export const EventTypes = {
+  ...OutlineGoalsEvents, // feature: outline-goals
   // Element events
   ElementCreated: 'ElementCreated',
   ElementDeleted: 'ElementDeleted',
@@ -139,6 +141,7 @@ export const EventTypes = {
   // The Pad: a free sketching canvas of plain sticky notes in the book (features/pad). Sketching is not modelling: none of these clears Refined
   PadNoteAdded: 'PadNoteAdded',               // a plain note, blue (command) | orange (event) | green (view): { noteId, x, y, colour, text }
   PadNoteMoved: 'PadNoteMoved',               // dropped somewhere else (one per note, on drop): { noteId, x, y }
+  PadNoteResized: 'PadNoteResized',           // a chapter arrow's width: { noteId, w } (only arrows have one)
   PadNoteEdited: 'PadNoteEdited',             // { noteId, text }
   PadNoteRecoloured: 'PadNoteRecoloured',     // { noteId, colour }
   PadNoteRemoved: 'PadNoteRemoved',           // { noteId }; a linked note's original leaving hands over to its oldest copy
@@ -147,6 +150,10 @@ export const EventTypes = {
   PadFrameAdded: 'PadFrameAdded',             // a dashed frame round a sketched slice: { frameId, x, y, w, h, name }; its notes are the ones whose middle is inside
   PadFrameChanged: 'PadFrameChanged',         // only what changed: { frameId, x?, y?, w?, h?, name? }
   PadFrameRemoved: 'PadFrameRemoved',         // its notes stay { frameId }
+  PadFrameShelved: 'PadFrameShelved',         // a made frame goes on the shelf, so the Pad draws neither it nor its notes: { frameId, noteIds } (the notes in it then; they stay on the Pad, hidden)
+  PadFrameUnshelved: 'PadFrameUnshelved',     // it is drawn again where it was { frameId }
+  PadStripFolded: 'PadStripFolded',           // the example notes of a strip are folded into the scenario note made from it, so they are not drawn: { noteId (the scenario note), noteIds? (first time; later the same ones) }
+  PadStripUnfolded: 'PadStripUnfolded',       // they are drawn again in their own places { noteId }
   PadFrameConverted: 'PadFrameConverted',     // Make chapter built it into the board: the notes stay as the sketch { frameId, chapterId, sliceId?, made? } (made: a snapshot of what it was made from, see pad/padMade.rules.js; Update chapter records it again)
 
   // Comments: talk about the model, not the model. Allowed on read-only and published

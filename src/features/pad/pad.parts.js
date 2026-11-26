@@ -17,15 +17,18 @@ export function padNote(note) {
   const automation = a => `<div class="pad-note-text"><div class="pad-note-title"><span class="pad-gear" aria-hidden="true">⚙</span> ${escapeHtml(a.title)}</div>${a.rows.length ? `<div class="pad-auto-rows">${a.rows.map(r => `<div class="pad-auto-row" data-kind="${r.kind}">${r.kind === 'reads' ? '<span class="pad-auto-word">reads</span> ' : r.kind === 'target' ? '<span class="pad-auto-word">→</span> ' : ''}${escapeHtml(r.text)}</div>`).join('')}</div>` : ''}</div>`;
   const body = note.editing
     ? `<textarea class="pad-note-input" data-pad-input="note" aria-label="Note text" spellcheck="false">${escapeHtml(note.text)}</textarea>`
+    : note.colour === 'arrow' ? `<div class="pad-arrow-text">${escapeHtml(note.title)}</div>`
     : note.scenario ? scenario(note.scenario)
     : note.screen ? screenWire(note.screen)
     : note.automation ? automation(note.automation)
     : `<div class="pad-note-text"><div class="pad-note-title">${escapeHtml(note.title)}</div>${note.bodyLines.length ? `<div class="pad-note-body">${escapeHtml(note.bodyLines.join('\n'))}</div>` : ''}</div>`;
   return `
     <div class="pad-note" data-component="Pad note" data-key="${escapeHtml(note.noteId)}" data-pad-note="${escapeHtml(note.noteId)}" data-colour="${note.colour}" data-size="${note.size}" ${note.external ? 'data-external="true"' : ''}
-         ${note.selected ? 'data-selected="true"' : ''} style="left:${note.x}px;top:${note.y}px" aria-label="${escapeHtml(`${note.colour} note`)}">
+         ${note.selected ? 'data-selected="true"' : ''} style="left:${note.x}px;top:${note.y}px${note.colour === 'arrow' ? `;width:${note.w}px` : ''}" aria-label="${escapeHtml(`${note.colour} note`)}">
       ${body}
       ${note.places > 1 ? `<button type="button" class="pad-note-link" data-pad-action="note-places" data-note="${escapeHtml(note.noteId)}" title="${escapeHtml(`The same note in ${note.places} places: tap to see them`)}" aria-label="${escapeHtml(`The same note in ${note.places} places`)}">🔗 ${note.places}</button>` : ''}
+      ${note.fold && !note.editing ? `<button type="button" class="pad-note-fold" data-pad-action="toggle-fold" data-note="${escapeHtml(note.noteId)}" data-open="${note.fold.open}" title="${escapeHtml(note.fold.title)}" aria-label="${escapeHtml(note.fold.title)}" aria-expanded="${note.fold.open}">${escapeHtml(note.fold.label)}</button>` : ''}
+      ${note.colour === 'arrow' && note.selected && note.editable && !note.editing ? `<span class="pad-arrow-grip" data-pad-arrow-resize="${escapeHtml(note.noteId)}" title="Drag to make the arrow longer or shorter" aria-hidden="true"></span>` : ''}
       ${note.selected && note.editable && !note.editing ? `<button class="pad-note-x" data-pad-action="remove-note" data-note="${escapeHtml(note.noteId)}" aria-label="Remove the note" title="Remove the note">✕</button>` : ''}
     </div>`;
 }
@@ -46,6 +49,7 @@ export function padFrame(frame) {
         ${name}
         ${chip}
         ${frame.canUpdate ? `<button class="pad-frame-update" data-pad-action="update-chapter" data-frame="${escapeHtml(frame.frameId)}" title="Carry what changed in this sketch over to its slice">Update chapter</button>` : ''}
+        ${frame.canShelve ? `<button class="pad-frame-shelve" data-pad-action="shelve-frame" data-frame="${escapeHtml(frame.frameId)}" title="Put this frame and its notes on the shelf: the Pad stops drawing them (the chapter stays on the board)">Shelve</button>` : ''}
         ${frame.warning ? `<span class="pad-frame-warn">⚠ ${escapeHtml(frame.warning)}</span>` : ''}
         <span class="pad-frame-count">${plural(frame.noteCount, 'note', 'notes')}</span>
       </div>
@@ -67,13 +71,15 @@ export function padToolbar(view) {
       <div class="pad-group" role="group" aria-label="Selection">
         ${slot(view.copy, view.copy.action, `${view.copy.action === 'unlink' ? '' : '🔗 '}${view.copy.label}`, view.copy.action === 'unlink' ? 'Make the selected notes notes of their own' : 'A linked copy of the selected notes: the same note in another place (or Alt-drag a note)')}
         ${slot(view.remove, 'remove-selected', '✕ Remove', 'Remove the selection (the notes in a frame stay)')}
+        ${view.stretch ? btn(view.stretch.action, view.stretch.label, `title="${escapeHtml(view.stretch.title)}"`) : ''}
         ${slot(view.makeChapter, 'make-chapter', 'Make chapter…', 'Build the selected frames into a chapter on the board')}
         <span class="pad-selected" aria-live="polite">${escapeHtml(view.selected)}</span>
       </div>` : '';
   return `
     <div class="pad-toolbar" data-component="Pad toolbar" data-key="pad-toolbar">
       ${edit}
-      <div class="pad-group pad-zoom" role="group" aria-label="Zoom">${btn(view.mode.action, view.mode.label, `title="${escapeHtml(view.mode.title)}"`)}${btn('zoom-out', '−', 'aria-label="Zoom out"')}<span class="pad-zoom-text">${view.zoomText}</span>${btn('zoom-in', '＋', 'aria-label="Zoom in"')}${btn('fit', 'Fit', 'title="Fit everything on the screen"')}${btn(view.guide.action, view.guide.label, `title="${escapeHtml(view.guide.title)}" aria-label="Notation guide"`)}</div>
+      <div class="pad-group pad-mode" role="group" aria-label="Mode">${btn(view.mode.action, view.mode.label, `title="${escapeHtml(view.mode.title)}"`)}${btn('more', '⋯', 'title="More: the rest of the toolbar" aria-label="More"')}</div>
+      <div class="pad-group pad-zoom" role="group" aria-label="Zoom">${btn('zoom-out', '−', 'aria-label="Zoom out"')}<span class="pad-zoom-text">${view.zoomText}</span>${btn('zoom-in', '＋', 'aria-label="Zoom in"')}${btn('fit', 'Fit', 'title="Fit everything on the screen"')}${btn(view.guide.action, view.guide.label, `title="${escapeHtml(view.guide.title)}" aria-label="Notation guide"`)}</div>
     </div>`;
 }
 
@@ -167,7 +173,7 @@ export function padNotePlaces(view) {
   const row = r => `
       <div class="pad-place-row${r.here ? ' here' : ''}" data-place="${escapeHtml(r.noteId)}">
         <span class="pad-place-where${r.where === 'loose' ? ' loose' : ''}">${escapeHtml(r.where)}</span>
-        ${r.here ? '<span class="pad-place-chip">here</span>' : ''} ${r.original ? '<span class="pad-place-chip">original</span>' : ''} ${r.made ? '<span class="pad-place-chip made">made here</span>' : ''}
+        ${r.here ? '<span class="pad-place-chip">here</span>' : ''} ${r.original ? '<span class="pad-place-chip">original</span>' : ''} ${r.made ? '<span class="pad-place-chip made">made here</span>' : ''} ${r.hidden ? `<span class="pad-place-chip hidden">${r.hidden === 'shelf' ? 'on the shelf' : 'folded'}</span>` : ''}
         ${r.here ? '' : `<button type="button" class="pad-place-go" data-pad-action="places-go" data-note="${escapeHtml(r.noteId)}" aria-label="Go to the copy ${escapeHtml(r.where === 'loose' ? 'that is loose' : `in ${r.where}`)}">↗</button>`}
       </div>`;
   return `
@@ -207,6 +213,8 @@ export function padMakeChapter(view) {
       ${view.leftOut.map(l => `<div class="pad-make-warn" role="alert">⚠ Left out of ${escapeHtml(l.slice || 'a frame')}: ${l.names.map(escapeHtml).join(', ')} (a slice has one command or view)</div>`).join('')}
       ${view.madeTwice.map(w => `<div class="pad-make-warn" role="alert">⚠ ${escapeHtml(w.event)} is also made by ${w.others.map(escapeHtml).join(', ')} (one command makes an event)</div>`).join('')}
       ${view.slices.map(slice).join('')}
+      <label class="pad-scn-must pad-make-shelve"><input type="checkbox" data-pad-make="shelve" ${view.shelve ? 'checked' : ''}> Put it on the shelf</label>
+      <div class="pad-make-sub">The frames wait on the shelf under the Pad, so it draws less: tap one there to bring it back</div>
       <div class="pad-make-actions">
         <button class="sheet-btn" data-pad-action="make-cancel">Cancel</button>
         <button class="sheet-btn primary" data-pad-action="make-go" ${view.canMake ? '' : 'disabled'}>Make chapter</button>
@@ -240,6 +248,7 @@ export function padMakeScenario(view) {
       <input class="sheet-input" id="padScenarioName" data-pad-scenario="name" value="${escapeHtml(view.name)}" maxlength="120" autocomplete="off">
       <label class="pad-scn-must"><input type="checkbox" data-pad-scenario="must" ${view.mustHave ? 'checked' : ''}> ★ Must-have</label>
       <div class="pad-make-scn">${view.rows.map(r => `<div class="pad-scn-row"><span class="pad-scn-label">${escapeHtml(r.label)}</span><span class="pad-scn-text">${escapeHtml(r.text)}</span></div>`).join('')}${view.warnings.map(w => `<div class="pad-make-warn" role="alert">⚠ ${escapeHtml(w)}</div>`).join('')}</div>
+      <label class="pad-scn-must pad-make-fold"><input type="checkbox" data-pad-scenario="fold" ${view.fold ? 'checked' : ''}> Fold the strip into the note</label>
       <div class="pad-make-sub">${escapeHtml(view.where)}</div>
       <div class="pad-make-actions">
         <button class="sheet-btn" data-pad-action="scenario-cancel">Cancel</button>
@@ -254,5 +263,17 @@ export function padScenarioStrip(view) {
   return `
     <div class="pad-strip-bar" data-component="Pad scenario strip" data-key="pad-scenario-strip">
       <button type="button" class="pad-maker-jump" data-pad-action="${view.action}" title="${escapeHtml(view.title)}">${escapeHtml(view.label)}</button>
+    </div>`;
+}
+
+// The shelf along the bottom of the Pad: a chip for each shelved frame (a tap puts it back) and "Shelve all made (N)" while made frames are still on the canvas.
+// view: Pad Shelf
+export function padShelf(view) {
+  if (!view.visible) return '';
+  return `
+    <div class="pad-shelf" data-component="Pad shelf" data-key="pad-shelf" role="group" aria-label="Shelf">
+      <span class="pad-shelf-title">Shelf</span>
+      ${view.chips.map(c => `<button type="button" class="pad-shelf-chip" data-pad-action="unshelve" data-frame="${escapeHtml(c.frameId)}" title="${escapeHtml(c.title)}">${escapeHtml(c.label)}</button>`).join('')}
+      ${view.shelveAll ? `<button type="button" class="pad-shelf-all" data-pad-action="shelve-all" title="${escapeHtml(view.shelveAll.title)}">${escapeHtml(view.shelveAll.label)}</button>` : ''}
     </div>`;
 }

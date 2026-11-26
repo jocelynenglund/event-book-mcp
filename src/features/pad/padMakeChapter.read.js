@@ -12,6 +12,7 @@
 // An event that another command's frame holds as well is listed in `madeTwice` to warn first (padEventMaker.rules.js: one command makes an event).
 // A scenario note (warm grey, like the board's Given / When / Then row) is a line of its own, "Scenario": the Given / When / Then it says (padScenario.rules.js), shown as it was read with a warning for every name
 // that is nowhere (not on the Pad, not on the board); it can be unticked like an event, and is never part of the slice.
+// `shelve` (default on, this device's tick) says the made frames go on the shelf at once.
 // Each line is a note's name or one of its field lines; the events' names and the field lines can be unticked (`off` holds the
 // keys of the ones that were: "<noteId>:<line>", 0 the name, then each field in order). Renamed slices and chapter: `names`
 // (frameId → name) and `chapterName`.
@@ -79,7 +80,7 @@ function sliceOf(pad, frame, names, off, known) {
   };
 }
 
-export function padMakeChapter(state, { frameIds = [], chapterName = null, names = {}, off = [] } = {}) {
+export function padMakeChapter(state, { frameIds = [], chapterName = null, names = {}, off = [], shelve = true } = {}) {
   const pad = state.pad || { notes: {}, frames: {} };
   const frames = frameIds.map(id => pad.frames[id]).filter(Boolean).sort((a, b) => a.x - b.x || a.y - b.y);
   const known = namesKnown(state), slices = frames.map(f => sliceOf(pad, f, names, off, known));
@@ -90,7 +91,7 @@ export function padMakeChapter(state, { frameIds = [], chapterName = null, names
   const scenarios = made.flatMap(s => s.lines.filter(l => l.role === 'scenario' && l.included)).length;
   const screens = new Set(made.flatMap(s => s.lines.filter(l => l.role === 'screen' && l.included).map(l => l.name.toLowerCase()))).size;
   return {
-    chapterName: name, canMake: !!made.length && !!name,
+    chapterName: name, canMake: !!made.length && !!name, shelve,
     existing: Object.values(state.chapters).some(c => c.name.trim().toLowerCase() === name.toLowerCase() && !!name),
     summary: `${plural(made.length, 'slice', 'slices')}, ${plural(fields.size, 'field', 'fields')}${screens ? `, ${plural(screens, 'screen', 'screens')}` : ''}${scenarios ? `, ${plural(scenarios, 'scenario', 'scenarios')}` : ''}`,
     madeTwice: made.filter(s => s.kind === 'command').flatMap(s => {   // an event one command makes here and another's frame holds too: one command makes an event

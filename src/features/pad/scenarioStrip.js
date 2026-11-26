@@ -13,7 +13,7 @@ import { openBoardSheet } from '../board/sheets/shared.js';
 import { hideAllSheets } from '../../ui/sheets.js';
 import { showToast } from '../../ui/toast.js';
 
-let ui = null;      // Make scenario… is open: { noteIds, name, mustHave }
+let ui = null;      // Make scenario… is open: { noteIds, name, mustHave, fold }
 let host = null;    // { state(), selected(): [noteId], select([noteId]), wrote(refused, message) }
 
 // The button under the toolbar for the notes selected now: Make scenario… or Lay out as notes ('' when neither applies)
@@ -31,13 +31,13 @@ function draw(first = false) {
 }
 
 function open() {
-  ui = { noteIds: host.selected(), name: null, mustHave: false };
+  ui = { noteIds: host.selected(), name: null, mustHave: false, fold: true };
   draw(true);
 }
 
 function make() {
-  const box = document.getElementById('padScenarioName'), { noteIds, mustHave } = ui;
-  const result = makeScenario({ noteIds, name: box ? box.value : ui.name, mustHave });
+  const box = document.getElementById('padScenarioName'), { noteIds, mustHave, fold } = ui;
+  const result = makeScenario({ noteIds, name: box ? box.value : ui.name, mustHave, fold });
   if (result.refused) { showToast(result.refused); return; }
   ui = null;
   hideAllSheets();
@@ -59,10 +59,11 @@ export function initScenarioStrip(api) {
     if (ui && e.target.matches?.('[data-pad-scenario="name"]')) ui.name = e.target.value;
   });
   document.addEventListener('change', e => {
-    if (!ui || !e.target.matches?.('[data-pad-scenario="must"]')) return;
+    const tick = ui && e.target.matches?.('[data-pad-scenario="must"], [data-pad-scenario="fold"]') ? e.target.dataset.padScenario : null;
+    if (!tick) return;
     const box = document.getElementById('padScenarioName');
     if (box) ui.name = box.value;
-    ui.mustHave = e.target.checked;
+    if (tick === 'must') ui.mustHave = e.target.checked; else ui.fold = e.target.checked;
     draw();
   });
   document.addEventListener('click', e => {

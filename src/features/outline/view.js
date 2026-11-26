@@ -62,6 +62,7 @@ import { getCurrentModelId, getEventStream, canArrangeCurrent } from '../../core
 import { isBuildBook } from '../buildVersions/rules.js';
 import { usageButton } from '../usage/view.js';
 import { renderLiteratureOutline } from '../literature/view.js';
+import { outlineGoalsFor, outlineGoalsClick, outlineGoalsKey } from '../outlineGoals/view.js'; // feature: outline-goals
 
 let selecting = false;
 let query = '';            // the search box: filters slices (and opens folded chapters while it does)
@@ -222,6 +223,8 @@ export function renderOutline() {
   const layout = outlineLayout(state, { query, folded: isChapterFolded });
   // A literature book's outline is its paragraphs and sentences: no scenarios, stickies or add steps
   if (layout.literature) { screenNow = { layout, rows: {} }; renderLiteratureOutline(container); return; }
+  let extras = { top: '', chapter: () => '' };   // what other features put on top of the Outline and under each chapter's heading
+  extras = outlineGoalsFor(state, { editable: !isReadOnly() && !built, anyScenarios: layout.totals.scenarios > 0, filtering: layout.filtering }); // feature: outline-goals
   const rows = {};
   const trace = activeFieldTrace(state);
   layout.chapters.forEach(ch => ch.rows.forEach(r => { rows[r.slice.id] = outlineSliceRow(state, r.slice, { ...r, trace }); }));
@@ -244,7 +247,7 @@ export function renderOutline() {
         : `<div class="ol-empty">No slices yet — add the first step below, or move some here</div>`;
     const add = chapter.folded || selecting || layout.filtering ? '' : outlineAddButtons(outlineAddKinds(state, { chapterId: chapter.id || '' }));
     const part = chapter.partHeading ? outlinePartHeading(partHeadingView(state, chapter.partHeading), { editable: !isReadOnly() }) : '';
-    return `${part}<section class="ol-section">${head}${body}${add}</section>`;
+    return `${part}<section class="ol-section">${head}${extras.chapter(chapter)}${body}${add}</section>`;
   }).join('');
 
   const moveBar = selecting ? outlineMoveBar({ ...outlineMoveTargets(state), selected: selected.size }) : '';
@@ -253,6 +256,7 @@ export function renderOutline() {
   if (!container.querySelector('#olSearch')) container.innerHTML = `${outlineSearchBox(outlineSearchField(state, { query }))}<div id="olBody"></div>`;
   container.querySelector('.ol-search-clear').hidden = !query;
   container.querySelector('#olBody').innerHTML = `
+    ${extras.top}
     ${outlineToolbar({ ...outlineToolbarOptions(state, layout, { arrangeable: canArrangeCurrent() }), showFields, selecting })}
     ${verifyLine(layout.verify)}
     ${roundsLine(layout.rounds)}
@@ -463,6 +467,8 @@ export function initOutline() {
   window.addEventListener('scroll', onOutlineScroll, { passive: true });
   view?.addEventListener('click', handleClick);
   view?.addEventListener('keydown', handleKey);
+  view?.addEventListener('click', outlineGoalsClick); // feature: outline-goals
+  view?.addEventListener('keydown', outlineGoalsKey); // feature: outline-goals
   initOutlineArrange(view);
   view?.addEventListener('input', e => {
     if (e.target.id !== 'olSearch') return;
@@ -473,6 +479,8 @@ export function initOutline() {
   const sheet = document.getElementById('boardSheetContent');
   sheet?.addEventListener('click', handleClick);
   sheet?.addEventListener('keydown', handleKey);
+  sheet?.addEventListener('click', outlineGoalsClick); // feature: outline-goals
+  sheet?.addEventListener('keydown', outlineGoalsKey); // feature: outline-goals
   // An automation's hint follows what's typed and ticked
   const hint = e => {
     if (addForm?.kind !== 'AU' || !e.target.closest('.ol-add')) return;

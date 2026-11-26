@@ -14,7 +14,7 @@
 // ===========================================
 
 import { padMakeChapter } from './padMakeChapter.read.js';
-import { stickyTypeOf, lower } from './padMade.rules.js';
+import { stickyTypeOf, lower, ownFieldLines } from './padMade.rules.js';
 import { scenarioLines } from './padScenario.rules.js';
 
 const NOT_MADE = 'This frame was not made into a chapter, or was made before changes could be followed';
@@ -47,7 +47,7 @@ export function padUpdateChapter(state, { frameId }) {
   });
   made.stickies.filter(s => state.elements[s.elementId] && !kept.has(key(s.noteId, s.role))).forEach(s => notRemoved.push(`${ROLE_WORD[s.role]} ${state.elements[s.elementId].name}`));
 
-  const fields = [...new Map(lines.filter(l => l.role === 'field').map(l => [lower(l.name), l.name])).values()];
+  const fields = [...new Map(ownFieldLines(lines).map(l => [lower(l.name), l.name])).values()];
   const had = new Set(made.fields.map(lower)), have = new Set(fields.map(lower));
   fields.filter(n => !had.has(lower(n))).forEach(name => steps.push({ kind: 'field', name }));
   made.fields.filter(n => !have.has(lower(n))).forEach(n => notRemoved.push(`field ${n}`));

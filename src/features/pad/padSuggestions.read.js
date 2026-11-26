@@ -13,6 +13,12 @@ import { notesInFrame, NOTE_SIZE } from './sketch.js';
 import { parseNote, titleCase } from './padNote.rules.js';
 
 const KIND_OF_COLOUR = { blue: 'command', orange: 'event', green: 'readModel' };
+import { pageSuggestions } from '../pages/pagesSuggest.js'; // feature: pages
+
+// Other features' names to offer, by the kind a context (padSuggest.rules.js screenContexts) asks for: { label, names(state, { text, caret, noteId }) → [name] }
+const suggestionKinds = {
+  page: { label: 'page', names: pageSuggestions }, // feature: pages
+};
 const KIND_LABEL = { command: 'command', event: 'event', readModel: 'view' };
 const NONE = { visible: false, kind: null, from: 0, to: 0, query: '', active: null, items: [] };
 
@@ -45,7 +51,9 @@ export function padSuggestions(state, { colour, text = '', caret = text.length, 
   if (!ctx) return NONE;
   const names = namesOf(state, noteId), pools = { event: ['event'], command: ['command'], readModel: ['readModel'], commandOrEvent: ['command', 'event'], eventOrReadModel: ['event', 'readModel'] };
   let candidates;
-  if (ctx.kind === 'field') {
+  if (suggestionKinds[ctx.kind]) {
+    candidates = suggestionKinds[ctx.kind].names(state, { text, caret, noteId }).map(name => ({ name, kind: ctx.kind, insert: name, inFrame: false }));
+  } else if (ctx.kind === 'field') {
     const of = ['event', 'command', 'readModel'].map(k => names[k].get(titleCase(ctx.of).toLowerCase())).find(Boolean);
     const used = new Set([...(text.slice(0, caret).slice(text.lastIndexOf('\n', caret - 1) + 1).match(/[\p{L}\p{N}_]+(?=\s*:)/gu) || []), ...(ctx.used || [])]);
     candidates = (of?.fields || []).filter(f => !used.has(f)).map(f => ({ name: f, kind: 'field', insert: `${f}: `, inFrame: false }));
@@ -53,7 +61,7 @@ export function padSuggestions(state, { colour, text = '', caret = text.length, 
     candidates = (pools[ctx.kind] || []).flatMap(kind => [...names[kind].values()].map(v => ({ name: v.name, kind, insert: v.name, inFrame: v.noteIds.some(id => frame.ids.has(id)) })));
     candidates.push(...ctx.literals.map(l => ({ name: l.trim(), kind: 'literal', insert: l, inFrame: false })));
   }
-  const items = rank(candidates, ctx.query).map((c, index) => ({ index, name: c.name, kind: c.kind, label: KIND_LABEL[c.kind] || (c.kind === 'field' ? 'field' : ''), insert: c.insert, inFrame: c.inFrame }));
+  const items = rank(candidates, ctx.query).map((c, index) => ({ index, name: c.name, kind: c.kind, label: KIND_LABEL[c.kind] || suggestionKinds[c.kind]?.label || (c.kind === 'field' ? 'field' : ''), insert: c.insert, inFrame: c.inFrame }));
   if (!items.length) return NONE;
   return { visible: true, kind: ctx.kind, from: ctx.from, to: ctx.to, query: ctx.query, active: active != null && active < items.length ? active : null, items };
 }

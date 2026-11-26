@@ -4,23 +4,25 @@
 // No build step, so the base URL branches on hostname like the other apps.
 // ===========================================
 
-import { getEventStream, createModel, openModel, listModels, getCurrentModelId, setModelStartIn } from '../../core/eventStore.js';
+import { beginBrowse, endBrowse, isBrowsing } from '../linkLoading/shareBrowse.js';
+import { getEventStream, createModel, openModel, listModels, getCurrentModelId, setModelStartIn, previewEvents, endPreview } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import { snapshotOf } from '../snapshot/command.js';
 import { shareLinkSnapshot } from './read.js';
 import { showSheet, hideAllSheets } from '../../ui/sheets.js';
 import { showToast } from '../../ui/toast.js';
 import { escapeHtml } from '../board/view.js';
-import { renderModelImage, ensureFonts } from '../shareImage/render.js';
-import { modelDetailShareShot } from '../shareImage/modelDetailShareShot.read.js';
+import { drawLinkLoader, closeLinkLoader, initLinkLoader } from '../linkLoading/loader.js';
+import { linkProblem } from '../linkLoading/linkLoadingState.read.js';
 import { shareSourceEvents, shareSourceId, shareScopeNow, shareOpenOnPad } from '../shareImage/sheet.js';
+import { initShareLinksSheet, shareLinkNameNow, shareHeaders, rememberKey, answerOf, openedShare } from '../shareLinks/index.js'; // feature: share-links
 
 // The eventpad module is live on the shared host (event-store-api PR #201);
 // flip to false to hide Copy link if it ever has to come down
 const LINKS_LIVE = true;
 
 const LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const API_BASE = LOCAL
+export const API_BASE = LOCAL
   ? 'http://localhost:5199/api/eventpad'
   : 'https://labsapi-hmeva5cfhdfkejhz.westeurope-01.azurewebsites.net/api/eventpad';
 
@@ -82,15 +84,16 @@ export async function createShareLink(given = null, modelId = null) {
   const book = shareLinkSnapshot(projectState(events), given ? null : shareScopeNow(), { keepPad: onPad });
   const res = await fetch(`${API_BASE}/shares`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: shareHeaders({ json: true }),   // feature: share-links (the account owns it; signed out, a delete key comes back)
     // Whoever opens the link needs the model, not the history of building it
-    body: JSON.stringify({ name: shareText(book.name), description: shareText(book.description), events: await packEvents(snapshotOf(book.state, events.length)) })
+    body: JSON.stringify({ name: given ? '' : shareLinkNameNow(), bookName: shareText(book.name), bookId: from, description: shareText(book.description), events: await packEvents(snapshotOf(book.state, events.length)) })   // feature: share-links: the link's name
   });
   if (res.status === 413) throw new ShareTooBigError('Too big for a share link');
   // Refused for a reason the server gives: say it
   if (res.status === 400) throw new ShareRefusedError((await res.json().catch(() => null))?.error || 'The share service refused it');
   if (!res.ok) throw new Error(`Share failed (${res.status})`);
-  const { id } = await res.json();
+  const { id, deleteKey } = await res.json();
+  rememberKey(id, deleteKey);   // feature: share-links
   const imports = readImports();
   imports[id] = from;
   localStorage.setItem(IMPORTS_KEY, JSON.stringify(imports));
@@ -150,7 +153,8 @@ export async function copyShareLink(button) {
 
 let pending = null; // { id, name, description, events } of the link being opened
 
-// ?m=<id> in the address: fetch it and offer to add it to the bookshelves
+// ?m=<id> in the address: while it loads, a book turning its pages covers the screen (index.html draws it on the
+// first paint); then the shared book itself shows behind a card offering to add it to the bookshelves
 export async function openSharedLinkFromUrl() {
   const params = new URLSearchParams(location.search);
   const id = params.get('m');
@@ -160,58 +164,64 @@ export async function openSharedLinkFromUrl() {
   params.delete('m');
   params.delete('view');
   history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
-  const opened = () => document.documentElement.classList.remove('opening-link');
 
   const known = readImports()[id];
   if (known && listModels().some(m => m.id === known)) {
     openModel(known);
     land();
-    opened();
+    closeLinkLoader();
     showToast('Opened from your bookshelves');
     return;
   }
 
-  // Big models take a while to download: say so straight away
-  const content = document.getElementById('boardSheetContent');
-  content.innerHTML = `
-    <div class="sl-loading" role="status">
-      <span class="sl-spinner" aria-hidden="true"></span>
-      <div class="sheet-title">Opening shared model…</div>
-      <p class="sl-desc">Big models can take a few seconds.</p>
-    </div>`;
-  showSheet('boardSheet');
-
   let shared;
   try {
     const res = await fetch(`${API_BASE}/shares/${encodeURIComponent(id)}`);
-    if (!res.ok) throw new Error(String(res.status));
+    const opened = openedShare(id, await answerOf(res));   // feature: share-links: a removed link says so
+    if (opened.state === 'removed') { drawLinkLoader({ kind: 'share', removed: opened.message }); return; }   // feature: share-links
+    if (!res.ok) throw Object.assign(new Error(String(res.status)), { status: res.status });
     shared = await res.json();
+    drawLinkLoader({ kind: 'share', name: shared.name });
     shared.events = await unpackEvents(shared.events);
   } catch (e) {
-    hideAllSheets();
-    opened();
-    showToast("That shared model couldn't be found");
+    drawLinkLoader({ kind: 'share', problem: linkProblem('share', shared ? { unreadable: true } : e) });
     return;
   }
   pending = { ...shared, onPad };
-  opened();
-
+  // The shared book itself is what shows behind the card: a look, read only, nothing of it saved, none of yours shown
+  previewEvents(shared.events);
+  land();
+  closeLinkLoader();
+  const content = document.getElementById('boardSheetContent');
   content.innerHTML = `
     <div class="sheet-title">${escapeHtml(shared.name || 'Shared model')} <span class="bd-sheet-sub sl-sub">shared with you</span></div>
     ${shared.description ? `<p class="sl-desc">${escapeHtml(shared.description)}</p>` : ''}
-    <div class="share-preview-wrap sl-preview-wrap"><span class="sl-drawing">Drawing the picture…</span><img id="sharedPreview" alt="Preview of the shared model"></div>
     <button class="sheet-btn" data-shared-action="add">Add to my bookshelves</button>
     <button class="sheet-btn secondary" data-shared-action="dismiss">Not now</button>`;
   showSheet('boardSheet');
-  await ensureFonts();
-  renderModelImage({ shot: modelDetailShareShot(projectState(shared.events), { options: { showProps: false }, events: shared.events }), scale: 1.5 }).toBlob(blob => {
-    const img = document.getElementById('sharedPreview');
-    if (img && blob) { img.src = URL.createObjectURL(blob); img.previousElementSibling?.remove(); }
-  });
+}
+
+// Not now (or the card closed some other way): the shared book stays open to look at, read only, under a banner that
+// offers Add (src/features/linkLoading/shareBrowse.js). Nothing of it is saved.
+function dismissPending() {
+  if (!pending || isBrowsing()) return;
+  hideAllSheets();
+  beginBrowse({ name: pending.name, onAdd: addPending, onClose: closeBrowse, onLeave: () => { pending = null; endPreview(); } });
+}
+
+// ✕ on the banner: the look ends, and your own books are as they were
+function closeBrowse() {
+  endBrowse();
+  pending = null;
+  hideAllSheets();
+  endPreview();
+  window.EventPad.showLibrary();
 }
 
 function addPending() {
   if (!pending) return;
+  endBrowse();
+  endPreview();
   const modelId = createModel(pending.events || []);
   // A shared book opens as its outline (the board is a tap away), and starts there next time too
   setModelStartIn(modelId, 'outline');
@@ -226,12 +236,17 @@ function addPending() {
 }
 
 export function initShareLink() {
+  initLinkLoader({ toBookshelves: () => window.EventPad.showLibrary() });
+  initShareLinksSheet();   // feature: share-links
   document.getElementById('boardSheetContent')?.addEventListener('click', e => {
     const t = e.target.closest('[data-shared-action]');
     if (!t) return;
     if (t.dataset.sharedAction === 'add') addPending();
-    else { pending = null; hideAllSheets(); }
+    else dismissPending();
   });
+  // Swiped or tapped away: the same as Not now
+  const card = document.getElementById('boardSheet');
+  if (card) new MutationObserver(() => { if (pending && !isBrowsing() && !card.classList.contains('active')) dismissPending(); }).observe(card, { attributes: true, attributeFilter: ['class'] });
   const linkBtn = document.getElementById('shareLinkBtn');
   if (linkBtn) {
     linkBtn.style.display = LINKS_LIVE || LOCAL ? '' : 'none';

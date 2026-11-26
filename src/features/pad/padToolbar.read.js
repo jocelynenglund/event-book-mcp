@@ -31,6 +31,7 @@ export function padToolbar(state, { zoom = 1, selection = {}, editable = true, m
     selected: [notes ? plural(notes, 'note', 'notes') : '', frames ? plural(frames, 'frame', 'frames') : ''].filter(Boolean).join(', '),
     copy: editable ? { action: unlinks ? 'unlink' : 'link-copy', label: unlinks ? 'Unlink' : 'Link copy', ...slot(notes > 0, 'Select notes to link a copy of') } : null,
     remove: editable ? slot(notes + frames > 0, 'Select something to remove') : null,
+    ...(editable && notes === 1 && frames === 0 && pad.notes[chosen[0]].colour === 'arrow' ? { stretch: { action: 'stretch-arrow', label: '↔ Stretch', title: 'Stretch the chapter arrow over the frames below it' } } : {}),
     makeChapter: editable ? slot(frames > 0, 'Select a frame to make a chapter of') : null
   };
 }

@@ -12,6 +12,8 @@ import { projectState } from '../../core/projections.js';
 const KEEP = ['elements', 'slices', 'connections', 'scenarios', 'sliceOrder', 'chapters', 'chapterOrder',
   'parts', 'arranged', 'flows', 'modelName', 'modelDescription', 'preface', 'tags', 'updateRoles', 'modelSource', 'sliceDecisions', 'follow', 'pad'];
 
+KEEP.push('outlineGoals'); // feature: outline-goals
+
 export function snapshotEvents(events) {
   const state = projectState(events);
   const kept = Object.fromEntries(KEEP.map(k => [k, state[k]]));

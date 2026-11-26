@@ -73,6 +73,32 @@ export function showPad() {
   render();
 }
 
+// Views other features add beside Board / Outline / Pad (the top switch, ☰ and a screen of their own).
+// def: { id, label (the switch), menu (☰), container (the id of the element it draws into), render(state), focus?(arg), init?(), css? }
+const extraViews = new Map();
+export function registerView(def) {
+  extraViews.set(def.id, def);
+  const button = document.createElement('button');
+  button.dataset.viewSwitch = def.id; button.setAttribute('aria-pressed', 'false'); button.textContent = def.label;
+  document.getElementById('detailsBtn').append(button);
+  const item = document.createElement('button');
+  item.className = `burger-item burger-${def.id}`; item.id = `${def.id}Item`; item.textContent = def.menu;
+  item.addEventListener('click', () => { showView(def.id); window.EventPad.toggleBurger(); });
+  document.getElementById('prefaceItem').before(item);
+  const box = document.createElement('div');
+  box.id = def.container; box.className = `${def.id}-view`; box.style.display = 'none';
+  document.getElementById('padView').after(box);
+  if (def.css) { const style = document.createElement('style'); style.dataset.view = def.id; style.textContent = def.css; document.head.append(style); }
+  def.init?.();
+}
+export function showView(id, arg = null) {
+  if (!extraViews.has(id)) return;
+  view = id;
+  extraViews.get(id).focus?.(arg);
+  window.scrollTo(0, 0);
+  render();
+}
+
 export function showOutline() {
   view = 'details';
   overviewTab = 'outline';
@@ -218,10 +244,11 @@ export function render() {
   const isCompare = view === 'compare';
   const isPreface = view === 'preface';
   const isPad = view === 'pad' && !lit;
+  const isExtra = extraViews.has(view) && !lit;
   document.body.classList.add('board-mode');
   document.body.classList.toggle('pad-mode', isPad);
   // In a book (board, outline, a slice): it's the one most recently opened
-  if (isBoard || isDetails || isSlice || isPreface || isPad) markOpened(getCurrentModelId());
+  if (isBoard || isDetails || isSlice || isPreface || isPad || isExtra) markOpened(getCurrentModelId());
   document.body.classList.toggle('slice-mode', isSlice);
   document.body.classList.toggle('library-mode', isLibrary);
   document.getElementById('libraryView').style.display = isLibrary ? '' : 'none';
@@ -230,7 +257,7 @@ export function render() {
   const hasBack = isSlice || isCompare;
   document.querySelector('.header h1').hidden = !hasBack;
   document.body.classList.toggle('has-back', hasBack);
-  document.getElementById('libraryBtn').textContent = isSlice ? `‹ ${viewBeforeSlice === 'details' ? (overviewTab === 'outline' || lit ? 'Outline' : 'Details') : lit ? 'Read' : 'Board'}` : '‹ Bookshelves';
+  document.getElementById('libraryBtn').textContent = isSlice ? `‹ ${viewBeforeSlice === 'details' ? (overviewTab === 'outline' || lit ? 'Outline' : 'Details') : extraViews.get(viewBeforeSlice)?.label || (lit ? 'Read' : 'Board')}` : '‹ Bookshelves';
   document.getElementById('sliceView').style.display = isSlice ? '' : 'none';
   document.getElementById('compareView').style.display = isCompare ? '' : 'none';
   document.getElementById('prefaceView').style.display = isPreface ? '' : 'none';
@@ -245,6 +272,10 @@ export function render() {
   document.getElementById('modelTitle').classList.toggle('named', isLibrary || !!state.modelName);
   document.getElementById('boardView').style.display = isBoard && !lit ? '' : 'none';
   document.getElementById('padView').style.display = isPad ? '' : 'none';
+  extraViews.forEach(def => {
+    document.getElementById(def.container).style.display = isExtra && view === def.id ? '' : 'none';
+    document.getElementById(`${def.id}Item`).hidden = lit || isLibrary;
+  });
   document.getElementById('readView').style.display = isBoard && lit ? '' : 'none';
   document.getElementById('overviewView').style.display = isDetails ? '' : 'none';
   // Literature has no Details (the stickies' fields): the outline is all there is
@@ -253,15 +284,15 @@ export function render() {
   document.getElementById('outlineView').style.display = tab === 'outline' ? '' : 'none';
   document.getElementById('detailsView').style.display = tab === 'details' ? '' : 'none';
   document.querySelectorAll('.ov-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.getElementById('fab').style.display = isDetails || isPad || lit || isLibrary || isSlice || isCompare || isPreface ? 'none' : '';
+  document.getElementById('fab').style.display = isDetails || isPad || isExtra || lit || isLibrary || isSlice || isCompare || isPreface ? 'none' : '';
   if (!isBoard) document.getElementById('fabMenu')?.classList.remove('open');
   // Board | Outline in the header: the one you're on is lit (Details counts as the outline side).
   // A literature book says Read | Outline.
   const [firstView] = bookScreens(state).views;
   document.querySelectorAll('[data-view-switch]').forEach(b => {
     if (b.dataset.viewSwitch === 'board') b.textContent = firstView;
-    b.hidden = b.dataset.viewSwitch === 'pad' && lit;   // a story has no sketching canvas
-    const on = b.dataset.viewSwitch === 'board' ? isBoard : b.dataset.viewSwitch === 'pad' ? isPad : isDetails && !isPad;
+    b.hidden = b.dataset.viewSwitch !== 'board' && b.dataset.viewSwitch !== 'outline' && lit;   // a story has no sketching canvas, nor the views beside it
+    const on = b.dataset.viewSwitch === 'board' ? isBoard : b.dataset.viewSwitch === 'pad' ? isPad : extraViews.has(b.dataset.viewSwitch) ? isExtra && view === b.dataset.viewSwitch : isDetails && !isPad;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   });
@@ -270,6 +301,7 @@ export function render() {
   if (isBoard) lit ? renderRead() : renderBoard();
   if (isDetails) tab === 'outline' ? renderOutline() : renderDetails();
   if (isPad) renderPad(state);
+  if (isExtra) extraViews.get(view).render(state);
   if (isLibrary) renderLibrary();
   if (isSlice) chapterPageId ? renderChapterPage(chapterPageId) : renderSlicePage(slicePageId);
   if (isCompare) renderCompare();

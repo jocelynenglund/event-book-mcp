@@ -2138,8 +2138,38 @@ button.lb-label { border: none; background: none; cursor: pointer; margin: 0; }
 .dt-move-option[hidden] { display: none; }
 .dt-move-meta { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
-/* Opening a share link: the old model stays hidden until the shared one arrives */
+/* Opening a link: a little book turning its pages covers the screen from the first paint, until the shared book
+   (or the library book) is ready. The old model stays hidden underneath. Under the sheets (300), over the header (100). */
 html.opening-link #boardView, html.opening-link #libraryView, html.opening-link #overviewView, html.opening-link #modelTitle { visibility: hidden; }
+.link-loader { display: none; position: fixed; inset: 0; z-index: 250; background: var(--bg); color: var(--text);
+  flex-direction: column; align-items: center; justify-content: center; gap: 26px; padding: 24px; text-align: center; }
+html.opening-link .link-loader { display: flex; }
+html.opening-link #fab, html.opening-link .whatsnew-pill, html.opening-link #whatsNewPill { display: none; }
+.ll-book { position: relative; width: 148px; height: 100px; perspective: 700px; }
+.ll-left, .ll-right, .ll-page { position: absolute; top: 0; height: 100%; width: 50%; border: 2px solid var(--text); background: var(--surface); }
+.ll-left { left: 0; border-radius: 8px 0 0 8px; border-right-width: 1px; }
+.ll-right { left: 50%; border-radius: 0 8px 8px 0; border-left-width: 1px; }
+.ll-page { left: 50%; border-radius: 0 8px 8px 0; border-left-width: 1px; transform-origin: left center; backface-visibility: visible; box-shadow: inset 8px 0 8px -8px rgba(80, 55, 20, 0.25);
+  animation: ll-turn 2.4s ease-in-out infinite; }
+.ll-p2 { animation-delay: 0.45s; }
+.ll-p3 { animation-delay: 0.9s; }
+/* a page lifts from the right, turns over and rests on the left, then goes (the next is already turning) */
+@keyframes ll-turn {
+  0% { transform: rotateY(0deg); opacity: 0; }
+  6% { opacity: 1; }
+  50% { transform: rotateY(-178deg); opacity: 1; }
+  80% { transform: rotateY(-178deg); opacity: 1; }
+  100% { transform: rotateY(-178deg); opacity: 0; }
+}
+.ll-ribbon { position: absolute; top: -4px; left: calc(50% + 14px); width: 8px; height: 40px; background: var(--jam); border-radius: 0 0 2px 2px; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); }
+.ll-title { font: 600 18px/1.3 var(--font-display); color: var(--text); max-width: 22em; }
+.ll-text.failed .ll-title { margin-bottom: 18px; }
+/* Reduced motion: the book stays still, open, one page turned */
+@media (prefers-reduced-motion: reduce) {
+  .ll-page { animation: none; }
+  .ll-p1 { transform: rotateY(-172deg); }
+  .ll-p2, .ll-p3 { transform: rotateY(-4deg); }
+}
 .sl-loading { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18px 0 26px; gap: 6px; }
 .sl-loading .sheet-title { margin: 6px 0 0; }
 .sl-spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--hair); border-top-color: var(--jam); animation: sl-spin 0.9s linear infinite; }
@@ -4120,6 +4150,18 @@ body.pad-mode { overflow: hidden; }
 .pad-note-link { position: absolute; right: 6px; bottom: 5px; padding: 1px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.5); color: #fff; font: 700 12px var(--font-body); line-height: 1.4; border: 0; cursor: pointer; min-height: 24px; }
 .pad-note.lifted, .pad-frame.lifted { z-index: 20; cursor: grabbing; }
 .pad-note.lifted { box-shadow: 0 14px 28px -10px rgba(60, 40, 10, 0.55); }
+/* A chapter arrow: a long blue arrow (body and pointed head) with its heading on it, for the eye only. Its width is the note's own (inline); the shape is
+   drawn by ::before so the selection ring and the resize handle are not cut off. White on a mid blue reads on the light and the dark paper. */
+.pad-note[data-colour="arrow"] { --arrow-font: max(20px, calc(13px / var(--pad-zoom, 1))); height: calc(var(--arrow-font) * 2.8); padding: 0 46px 0 20px; background: none; box-shadow: none; overflow: visible; border-radius: 0; color: #fff; justify-content: flex-start; text-align: left; }
+.pad-note[data-colour="arrow"]::before { content: ""; position: absolute; inset: 0; background: #2f6fcf; clip-path: polygon(0 12%, calc(100% - 44px) 12%, calc(100% - 44px) 0, 100% 50%, calc(100% - 44px) 100%, calc(100% - 44px) 88%, 0 88%); filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.2)); }
+.pad-note[data-colour="arrow"][data-selected="true"]::before { background: #2560b8; }
+.pad-arrow-text { position: relative; min-width: 0; flex: 1; font: 700 var(--arrow-font)/1.2 var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pad-note[data-colour="arrow"] .pad-note-input { position: relative; color: #fff; text-align: left; font: 700 var(--arrow-font)/1.2 var(--font-body); }
+.pad-note[data-colour="arrow"] .pad-note-x { right: auto; left: 4px; top: -12px; }
+.pad-arrow-grip { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: max(48px, calc(44px / var(--pad-zoom, 1))); height: max(100%, calc(44px / var(--pad-zoom, 1))); cursor: ew-resize; touch-action: none; z-index: 2; }
+.pad-arrow-grip::after { content: "↔"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #fff; font: 700 15px/1 var(--font-body); opacity: 0.85; }
+.pad-swatch[data-colour="arrow"] { background: #2f6fcf; box-shadow: none; clip-path: polygon(0 28%, 58% 28%, 58% 0, 100% 50%, 58% 100%, 58% 72%, 0 72%); }
+.pad-kind-example .pad-note[data-colour="arrow"] { min-height: 56px; width: 100% !important; max-width: 100%; box-sizing: border-box; }
 .pad-ghost { position: fixed; z-index: 400; pointer-events: none; opacity: 0.92; }
 
 /* A frame: a dashed rounded outline round a sketched slice; only its top edge and corner take the pointer */
@@ -4178,6 +4220,28 @@ body.pad-mode { overflow: hidden; }
   .pad-btn { height: 40px; }
   .pad-swatch { width: 40px; height: 40px; flex: none; }
   .pad-swatches { gap: 10px; padding: 2px 0; }
+}
+/* Small phones: the toolbar is one row of the most used actions (＋ Note, ＋ Events, Frame, the mode) and ⋯, which opens the rest under it;
+   the nine colours are smaller so they all sit in the screen (the strip still scrolls if a phone is narrower) */
+.pad-more-btn, [data-pad-action="more"] { display: none; }
+@media (max-width: 480px) {
+  .pad-bar > #padToolbarSlot { padding-right: 12px; }
+  .pad-toolbar { flex-wrap: wrap; overflow: visible; -webkit-mask-image: none; mask-image: none; gap: 6px; padding: 0; margin: 0; }
+  .pad-toolbar::after { display: none; }
+  .pad-toolbar .pad-group { gap: 4px; }
+  .pad-toolbar .pad-group + .pad-group { padding-left: 0; border-left: 0; }
+  .pad-toolbar .pad-btn { padding: 0 9px; font-size: 13px; height: 38px; }
+  .pad-toolbar [data-pad-action="more"] { display: inline-block; min-width: 38px; padding: 0 6px; }
+  .pad-toolbar [aria-label="Create"] { order: 1; }
+  .pad-toolbar .pad-mode { order: 2; }
+  .pad-toolbar [aria-label="Selection"], .pad-toolbar .pad-zoom { order: 3; display: none; flex-basis: 100%; flex-wrap: wrap; }
+  #padToolbarSlot[data-more="true"] .pad-toolbar [aria-label="Selection"], #padToolbarSlot[data-more="true"] .pad-toolbar .pad-zoom { display: flex; }
+  .pad-toolbar .pad-zoom .pad-btn { min-width: 38px; }
+  .pad-swatch { width: 31px; height: 31px; }
+  .pad-swatches { gap: 6px; }
+  .pad-bar > #padSwatchSlot { padding-right: 12px; }
+  body:not(.library-mode) .header .sy-chip .sy-chip-text { display: none; }
+  body:not(.library-mode) .header .sy-chip { padding-left: 8px; padding-right: 8px; min-width: 34px; flex: none; overflow: visible; }
 }
 /* The notation guide: the card on a colour of the strip (hover, or hold on a phone) and the full guide (the toolbar's ?). Each draws its example with the Pad's own note */
 .pad-kind-slot { position: fixed; z-index: 70; width: min(340px, calc(100vw - 16px)); }
@@ -4291,12 +4355,49 @@ body.pad-mode { overflow: hidden; }
 .pad-place-where.loose { font-weight: 500; font-style: italic; opacity: 0.75; }
 .pad-place-chip { flex: none; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 12%, transparent); font: 700 11px var(--font-body); }
 .pad-place-chip.made { background: var(--note-event); color: var(--note-event-text); }
+.pad-place-chip.hidden { background: color-mix(in srgb, var(--text) 8%, transparent); font-style: italic; }
+/* Pad: drawing less. The shelf under the canvas holds the made frames put away (a chip each); a scenario note folds its strip behind ▸ N */
+#padShelfSlot { flex: none; }
+#padShelfSlot:empty { display: none; }
+.pad-shelf { display: flex; align-items: center; gap: 8px; padding: 6px 12px; overflow-x: auto; scrollbar-width: thin; border-top: 1px solid var(--border); background: var(--bg); }
+.pad-shelf-title { flex: none; font: 700 12px var(--font-body); letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, #7a6f60); }
+.pad-shelf-chip { flex: none; min-height: 34px; max-width: 260px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; border: 1px solid color-mix(in srgb, #3f7d32 45%, transparent); border-radius: 999px; background: color-mix(in srgb, #3f7d32 12%, var(--surface)); color: #2f6a24; font: 600 13px var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.pad-shelf-all { flex: none; margin-left: auto; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: 600 13px var(--font-body); white-space: nowrap; cursor: pointer; }
+.pad-frame-shelve { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: 700 12px var(--font-body); cursor: pointer; white-space: nowrap; }
+.pad-note-fold { position: absolute; left: 6px; bottom: 5px; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.5); color: #fff; font: 700 12px var(--font-body); line-height: 1.4; border: 0; cursor: pointer; min-height: 24px; }
 .pad-place-go { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line, #d9ccb6); background: var(--surface); color: var(--text); font: 700 18px/1 var(--font-body); cursor: pointer; }
-.pad-note.pad-note-flash { animation: pad-note-flash 1s ease-out; }
+.pad-note.pad-note-flash, .pad-frame.pad-note-flash { animation: pad-note-flash 1s ease-out; }
 @keyframes pad-note-flash { 0%, 55% { outline: 4px solid var(--accent); outline-offset: 3px; } 100% { outline: 4px solid transparent; outline-offset: 3px; } }
-@media (prefers-reduced-motion: reduce) { .pad-note.pad-note-flash { animation: none; outline: 4px solid var(--accent); outline-offset: 3px; } }
+@media (prefers-reduced-motion: reduce) { .pad-note.pad-note-flash, .pad-frame.pad-note-flash { animation: none; outline: 4px solid var(--accent); outline-offset: 3px; } }
 
 /* A slice jumped to flashes its header for about a second */
 .bd-head.bd-head-flash { animation: bd-head-flash 1s ease-out; }
 @keyframes bd-head-flash { 0%, 55% { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 10px; } 100% { outline: 3px solid transparent; outline-offset: 2px; } }
 @media (prefers-reduced-motion: reduce) { .bd-head.bd-head-flash { animation: none; outline: 3px solid var(--accent); outline-offset: 2px; } }
+
+/* feature: share-links (start) — the share sheet's Name field and the Share links sheet */
+.sl-name { display: block; margin: 10px 0 0; }
+.sl-name-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 4px; }
+.sl-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sl-row { padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); }
+.sl-row-name { font-weight: 700; word-break: break-word; }
+.sl-row-meta { font-size: 12px; color: var(--text-muted); margin: 2px 0 8px; }
+.sl-confirm { font-size: 13px; margin: 6px 0 8px; line-height: 1.35; }
+.sl-empty { color: var(--text-muted); font-size: 14px; margin: 8px 0 14px; }
+.sl-row .sl-actions { flex-wrap: wrap; }
+.sl-row .sl-actions .sheet-btn { min-width: 30%; }
+.sl-admin { margin: 6px 0 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.sl-admin .sheet-btn { margin-top: 8px; }
+/* feature: share-links (end) */
+
+/* Looking at a shared copy without adding it (src/features/linkLoading/shareBrowse.js): a slim bar on top of the header */
+.sc-banner { grid-area: banner; grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-width: 0;
+  margin: -2px 0 2px; padding: 5px 6px 5px 10px; border-radius: 10px; background: var(--surface-elevated); border: 1px solid var(--border);
+  color: var(--text); font: 600 12px var(--font-body); }
+.sc-note { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-add { flex: none; height: 30px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-text); font: 700 12px var(--font-body); cursor: pointer; }
+.sc-close { flex: none; width: 30px; height: 30px; border: 0; border-radius: 9px; background: none; color: var(--text-muted); font-size: 14px; cursor: pointer; }
+body.browsing-shared:not(.library-mode) .header { grid-template-areas: "banner banner banner banner" "home switch title menu"; row-gap: 6px; }
+body.browsing-shared.has-back:not(.library-mode) .header { grid-template-areas: "banner banner banner banner" "nav nav nav nav" "home switch title menu"; }
+body.browsing-shared.library-mode .sc-banner { display: none; }
+body.browsing-shared.header-hidden:not(.library-mode) .header > .sc-banner { display: flex !important; }

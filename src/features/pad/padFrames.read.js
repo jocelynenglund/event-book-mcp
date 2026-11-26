@@ -6,6 +6,7 @@
 // sketch changed since (`changed`: a note edited, recoloured, added or taken out; never for one made before that was recorded) and
 // whether Update chapter can carry it over (`canUpdate`). A frame is one slice, so one command, one view or one automation: a frame holding more than one
 // of them (two commands, a command and a view, an automation and a command) says so in `warning`. selectedIds and editing ({ id, value }: the name typed so far) are this device's.
+// A frame on the shelf (made, then shelved: padShelf.read.js) is not drawn: it is here only for withShelved (the shelf's chips, the places list); a selected made frame says it `canShelve`.
 // ===========================================
 
 import { notesInFrame, KIND_OF } from './sketch.js';
@@ -37,20 +38,20 @@ const defaultName = notes => {
   return note ? titleAndBody(note.text).title : '';
 };
 
-export function padFrames(state, { editable = true, selectedIds = [], editing = null } = {}) {
+export function padFrames(state, { editable = true, selectedIds = [], editing = null, withShelved = false } = {}) {
   const pad = state.pad || { notes: {}, frames: {} };
   return {
     editable,
-    frames: Object.values(pad.frames).map(f => {
-      const inside = notesInFrame(pad, f), own = editing?.id === f.id && editing.value != null ? editing.value : f.name;
+    frames: Object.values(pad.frames).filter(f => withShelved || !f.shelved).map(f => {
+      const inside = notesInFrame(pad, f), movers = notesInFrame(pad, f, true), own = editing?.id === f.id && editing.value != null ? editing.value : f.name;
       const fallback = defaultName(inside), chapter = f.chapterId && state.chapters[f.chapterId] ? { chapterId: f.chapterId, name: state.chapters[f.chapterId].name } : null;
       const changed = !!chapter && changedSince(pad, f);
       const label = chapter && (chapter.name.length > CHIP_MAX ? `${chapter.name.slice(0, 22).trimEnd()}…` : chapter.name);
       return {
         frameId: f.id, x: f.x, y: f.y, w: f.w, h: f.h, name: own, shownName: own.trim() || fallback || 'Untitled', nameIsDefault: !own.trim(),
-        noteIds: inside.map(n => n.id), noteCount: inside.length, warning: warningOf(inside),
+        noteIds: movers.map(n => n.id), noteCount: inside.length, warning: warningOf(inside),
         selected: selectedIds.includes(f.id), editing: editing?.id === f.id, editable, chapter,
-        made: !!chapter, changed, canUpdate: editable && changed && !!state.slices[f.sliceId],
+        made: !!chapter, shelved: !!f.shelved, canShelve: editable && !!chapter && !f.shelved && selectedIds.includes(f.id), changed, canUpdate: editable && changed && !!state.slices[f.sliceId],
         chip: chapter ? { label: `→ ${label}`, title: `In chapter ${chapter.name}`, changedText: changed ? 'changed since' : null } : null
       };
     })

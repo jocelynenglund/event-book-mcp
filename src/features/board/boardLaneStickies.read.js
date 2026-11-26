@@ -14,6 +14,12 @@ import { fieldsFolded, foldedLabel } from './foldedFields.js';
 import { stickyFieldGaps } from '../fieldSources/stickyFieldGaps.read.js';
 import { stickyFieldMappings, mappedFrom } from '../fieldMapping/stickyFieldMappings.read.js';
 import { screenInSlice } from '../pad/screenInSlice.read.js';
+import { screenPageChipsExtra } from '../pages/screenPageChips.read.js'; // feature: pages
+
+// What other features add to a sticky: (state, element) → { kind, view } or null (the Board card draws each, by its kind: board.parts.js)
+const cardExtraViews = [
+  screenPageChipsExtra, // feature: pages
+];
 import { slicesHolding } from './sheets/stickyPlaces.read.js';
 
 const typeNames = { command: 'Command', event: 'Event', readModel: 'Read model', processor: 'Automation', screen: 'Screen' };
@@ -77,8 +83,9 @@ function cardOf(el, slice, state, { trigger, first, shownFlowId, gaps, mappings,
   const outcome = el.type === 'event' ? elementFlow(el, slice, state) : null;
   const props = el.properties || [];
   const wire = screenInSlice(state, slice.id, el.id);   // a screen made from a Pad sketch draws it, seen from this slice
+  const extras = cardExtraViews.map(extra => extra(state, el)).filter(Boolean);
   return {
-    ...base, ref: false, ...(wire ? { screen: wire } : {}),
+    ...base, ref: false, ...(wire ? { screen: wire } : {}), ...(extras.length ? { extras } : {}),
     label: elementLabel(el),
     attrs: externalAttr(el),
     to: el.type === 'event' && el.published && !el.external ? (el.to || []).join(', ') : '',

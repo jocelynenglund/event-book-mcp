@@ -39,6 +39,12 @@ const editedOn = at => at && !isNaN(new Date(at)) ? SHORT_DATE.format(new Date(a
 // The few books opened last lie flat on top of the bookcase
 export const RECENT_FLAT = 3;
 
+// How thick a spine stands: a soft curve over what the book holds (slices; a story's paragraphs; a build
+// book's built slices), from the least that still shows a few letters (44 px) to the most a phone's shelf can
+// bear (96 px). Only the slices decide it, never the title. Heights are not touched.
+const SPINE_MIN = 44, SPINE_MAX = 96;
+export const spineThickness = count => Math.min(SPINE_MAX, Math.round(SPINE_MIN + 7 * Math.sqrt(Math.max(0, count || 0))));
+
 // One book, as its spine needs it. updatedAt: when it last changed (ISO).
 function bookOf({ id, updatedAt, events, state }, loan) {
   state ||= projectState(events);
@@ -62,6 +68,9 @@ function bookOf({ id, updatedAt, events, state }, loan) {
     // A builder has the plan: how far it has got
     progress: planBuildProgress(state, id),
     slices, scenarios: Object.keys(state.scenarios).length, story,
+    // Its size: how thick the spine stands, and what the hover says ("10 slices", "1 paragraph")
+    thickness: spineThickness(slices),
+    size: { count: slices, text: `${slices} ${story ? 'paragraph' : 'slice'}${slices === 1 ? '' : 's'}` },
     build,
     // 📈: a build book with usage data (the nightly usage import)
     usage: build != null && !!latestUsage(events),

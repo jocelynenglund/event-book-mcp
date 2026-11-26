@@ -11,12 +11,14 @@
 
 import { appendEvent, EventTypes, canEditCurrent } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
+import { addEventProperties } from '../outline/command.js';
 import { addStep, addScenario, chapterId as chapterNamed } from '../planFile/build.js';
 import { addHotspotComment } from '../comments/command.js';
 import { padMakeChapter } from './padMakeChapter.read.js';
-import { madeOf } from './padMade.rules.js';
+import { madeOf, ownFieldLines } from './padMade.rules.js';
 import { placeScreens } from './screenSketch.command.js';
 import { mapScreensOf } from './screenMappings.command.js';
+import { notesInFrame } from './sketch.js';
 
 const refuse = refused => ({ refused, chapterId: null, slices: 0 });
 
@@ -24,7 +26,7 @@ const refuse = refused => ({ refused, chapterId: null, slices: 0 });
 export function stepOf(slice) {
   const kept = slice.lines.filter(l => l.included);
   const events = kept.filter(l => l.role === 'event').map(l => (l.external ? { name: l.name, external: true } : l.name));   // an event marked (external) is another system's
-  const fields = [...new Map(kept.filter(l => l.role === 'field').map(l => [l.name.toLowerCase(), l.type ? `${l.name}:${l.type}` : l.name])).values()];   // "amount: number" keeps its type
+  const fields = [...new Map(ownFieldLines(kept).map(l => [l.name.toLowerCase(), l.type ? `${l.name}:${l.type}` : l.name])).values()];   // "amount: number" keeps its type
   if (slice.kind === 'automation') return autoStepOf(slice, kept.find(l => l.role === 'automation').automation, events, fields);
   const notes = [...kept.filter(l => l.role === 'field' && l.note).map(l => `${l.name}: ${l.note}`), ...kept.filter(l => l.role === 'note').map(l => l.text)];
   const main = kept.find(l => l.role === 'command' || l.role === 'view');
@@ -44,6 +46,18 @@ function autoStepOf(slice, auto, events, fields) {
   };
 }
 
+// What a view frame's orange notes say about their events: the fields each was drawn with (a step's fields are its own note's: ownFieldLines)
+export function eventFieldsOf(slice) {
+  const kept = slice.lines.filter(l => l.included);
+  const by = new Map();   // an event on two notes (the note and its linked copy) is one event: its fields once
+  kept.filter(l => l.role === 'event').forEach(e => {
+    const have = by.get(e.name.toLowerCase()) || { name: e.name, fields: [] };
+    kept.filter(l => l.role === 'field' && l.noteId === e.noteId).forEach(l => { if (!have.fields.some(f => f.split(':')[0].toLowerCase() === l.name.toLowerCase())) have.fields.push(l.type ? `${l.name}:${l.type}` : l.name); });
+    by.set(e.name.toLowerCase(), have);
+  });
+  return [...by.values()].filter(e => e.fields.length);
+}
+
 // The frames in the order they are made: an automation whose read model is a view made later in this batch waits for it (and then links to it)
 export function makeOrder(slices) {
   const view = slice => slice.lines.find(l => l.role === 'view')?.name.toLowerCase();
@@ -57,7 +71,8 @@ export function makeOrder(slices) {
   return ordered;
 }
 
-export function makeChapter({ frameIds = [], chapterName = '', names = {}, off = [] }) {
+// shelve: each made frame goes on the shelf at once (the Make chapter sheet ticks it): the Pad draws less (shelf.command.js)
+export function makeChapter({ frameIds = [], chapterName = '', names = {}, off = [], shelve = false }) {
   if (!canEditCurrent()) return refuse('Read only: check the book out to make a chapter');
   const state = projectState();
   if (!frameIds.some(id => state.pad.frames[id])) return refuse('Select a frame first');
@@ -68,6 +83,7 @@ export function makeChapter({ frameIds = [], chapterName = '', names = {}, off =
     const chapterId = chapterNamed(String(chapterName).trim());
     const sliceIds = made.map(slice => {
       const sliceId = addStep(stepOf(slice), chapterId);
+      if (slice.kind !== 'automation') addEventProperties(sliceId, eventFieldsOf(slice));
       const refused = placeScreens(sliceId, slice.lines.filter(l => l.included && l.role === 'screen').map(l => ({ name: l.name, text: l.screenText })));
       if (refused) throw new Error(refused);
       slice.lines.filter(l => l.included && l.role === 'hotspot').forEach(l => addHotspotComment(sliceId, l.text));
@@ -78,6 +94,7 @@ export function makeChapter({ frameIds = [], chapterName = '', names = {}, off =
     if (mapped) throw new Error(mapped);
     const now = projectState();
     made.forEach((slice, i) => appendEvent(EventTypes.PadFrameConverted, { frameId: slice.frameId, chapterId, sliceId: sliceIds[i], made: madeOf(now, now.pad.frames[slice.frameId], slice, sliceIds[i], off) }));
+    if (shelve) made.forEach(slice => appendEvent(EventTypes.PadFrameShelved, { frameId: slice.frameId, noteIds: notesInFrame(now.pad, now.pad.frames[slice.frameId]).map(n => n.id) }));
     return { refused: null, chapterId, slices: made.length };
   } catch (e) { return refuse(e.message); }
 }

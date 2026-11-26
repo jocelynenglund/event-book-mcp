@@ -117,7 +117,24 @@ function drawAutomation(ctx, n, c) {
   paragraph(ctx, n.automation.rows.map(r => (r.kind === 'reads' ? `reads ${r.text}` : r.kind === 'target' ? `→ ${r.text}` : r.text)), n.x + pad, y + 6, n.w - pad * 2, px * 0.87, n.y + n.h - 8, c.text);
 }
 
+// A chapter arrow: a long blue arrow with its heading on it, for the eye only
+function drawArrow(ctx, n) {
+  const head = 44, band = n.h * 0.12;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(n.x, n.y + band); ctx.lineTo(n.x + n.w - head, n.y + band); ctx.lineTo(n.x + n.w - head, n.y); ctx.lineTo(n.x + n.w, n.y + n.h / 2);
+  ctx.lineTo(n.x + n.w - head, n.y + n.h); ctx.lineTo(n.x + n.w - head, n.y + n.h - band); ctx.lineTo(n.x, n.y + n.h - band); ctx.closePath();
+  ctx.fillStyle = '#2f6fcf'; ctx.fill();
+  ctx.font = font(700, 20); ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'middle';
+  const room = n.w - head - 32;
+  let label = n.title;
+  while (label.length > 1 && ctx.measureText(label).width > room) label = label.slice(0, -2) + '…';
+  ctx.fillText(label, n.x + 20, n.y + n.h / 2);
+  ctx.restore();
+}
+
 function drawNote(ctx, n, t) {
+  if (n.colour === 'arrow') return drawArrow(ctx, n);
   const c = FILL[n.colour] || FILL.blue;
   ctx.save();
   ctx.shadowColor = t.shadow; ctx.shadowBlur = 12; ctx.shadowOffsetY = 6;
