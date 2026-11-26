@@ -32,7 +32,8 @@ export function screenHeight(lines) {
   return Math.max(WIRE.min, WIRE.bar + WIRE.pad * 2 + body);
 }
 
-const sizeOf = n => (n.colour === 'arrow' ? { w: n.w, h: ARROW_HEIGHT } : n.screen ? { w: SCREEN_WIDTH, h: screenHeight(n.screen.lines) } : { w: n.colour === 'scenario' ? SCENARIO_WIDTH : NOTE_SIZE, h: NOTE_SIZE });
+// a note is as tall as its text needs (padNoteHeight.rules.js), never under NOTE_SIZE
+const sizeOf = n => (n.colour === 'arrow' ? { w: n.w, h: ARROW_HEIGHT } : n.screen ? { w: SCREEN_WIDTH, h: screenHeight(n.screen.lines) } : { w: n.colour === 'scenario' ? SCENARIO_WIDTH : NOTE_SIZE, h: n.h });
 
 export function padPictureShot(state, { selection = null, options = {} } = {}) {
   const pad = state.pad || { notes: {}, frames: {} };
@@ -43,7 +44,7 @@ export function padPictureShot(state, { selection = null, options = {} } = {}) {
   const title = state.modelName || 'Event Book', credit = 'Made with Event Book';
   if (!pickedNotes.length && !pickedFrames.length) return { empty: true, title, subtitle: 'Nothing on the Pad yet', credit, width: MIN_WIDTH, height: HEAD + 2 * MARGIN + FOOT, crop: null, frames: [], notes: [] };
 
-  const boxes = [...pickedNotes.map(n => ({ x: n.x, y: n.y, w: n.w, h: n.h })), ...pickedFrames.map(f => ({ x: f.x, y: f.y, w: f.w, h: f.h }))];
+  const boxes = [...pickedNotes.map(n => ({ x: n.x, y: n.y, w: n.w, h: n.h })), ...pickedFrames.map(f => ({ x: f.x, y: f.y, w: f.w, h: f.drawnH }))];
   const x0 = Math.min(...boxes.map(b => b.x)), y0 = Math.min(...boxes.map(b => b.y));
   const w = Math.max(...boxes.map(b => b.x + b.w)) - x0, h = Math.max(...boxes.map(b => b.y + b.h)) - y0;
   const width = Math.max(MIN_WIDTH, w + 2 * MARGIN), height = HEAD + h + 2 * MARGIN + FOOT;
@@ -51,7 +52,7 @@ export function padPictureShot(state, { selection = null, options = {} } = {}) {
   const subtitle = ['Pad', selection ? 'a selection' : null, [pickedNotes.length && plural(pickedNotes.length, 'note', 'notes'), pickedFrames.length && plural(pickedFrames.length, 'frame', 'frames')].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
   return {
     empty: false, title, subtitle, credit, width, height, crop: { x: x0 - MARGIN, y: y0 - MARGIN, w: w + 2 * MARGIN, h: h + 2 * MARGIN },
-    frames: pickedFrames.map(f => place({ x: f.x, y: f.y, w: f.w, h: f.h, name: f.shownName, nameIsDefault: f.nameIsDefault, noteCount: f.noteCount, made: options.showMade && f.chip ? f.chip.label : null })),
+    frames: pickedFrames.map(f => place({ x: f.x, y: f.y, w: f.w, h: f.drawnH, name: f.shownName, nameIsDefault: f.nameIsDefault, noteCount: f.noteCount, made: options.showMade && f.chip ? f.chip.label : null })),
     notes: pickedNotes.map(n => place({ x: n.x, y: n.y, w: n.w, h: n.h, colour: n.colour, kind: n.kind, title: n.title, bodyLines: n.bodyLines, size: n.size, places: n.places, scenario: n.scenario, screen: n.screen, automation: n.automation ?? null }))
   };
 }

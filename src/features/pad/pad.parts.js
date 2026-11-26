@@ -45,7 +45,7 @@ export function padFrame(frame) {
   const chip = frame.chip ? `<button class="pad-frame-chip" data-pad-action="open-chapter" data-chapter="${escapeHtml(frame.chapter.chapterId)}" title="${escapeHtml(frame.chip.title)}"><span class="pad-frame-tick">✓</span> <span class="pad-frame-chip-text">${escapeHtml(frame.chip.label)}</span>${frame.chip.changedText ? ` <span class="pad-frame-changed">· ${escapeHtml(frame.chip.changedText)}</span>` : ''}</button>` : '';
   return `
     <div class="pad-frame" data-component="Pad frame" data-key="${escapeHtml(frame.frameId)}" data-pad-frame="${escapeHtml(frame.frameId)}" ${frame.selected ? 'data-selected="true"' : ''}
-         ${frame.made ? 'data-made="true"' : ''} ${frame.changed ? 'data-changed="true"' : ''} style="left:${frame.x}px;top:${frame.y}px;width:${frame.w}px;height:${frame.h}px">
+         ${frame.made ? 'data-made="true"' : ''} ${frame.changed ? 'data-changed="true"' : ''} style="left:${frame.x}px;top:${frame.y}px;width:${frame.w}px;height:${frame.drawnH}px">
       <div class="pad-frame-head" data-pad-frame-head="${escapeHtml(frame.frameId)}">
         ${name}
         ${chip}
@@ -94,17 +94,18 @@ export function padSwatches(view) {
 
 // One kind of note, written out: its name, what it is for, how it is written, its example drawn as that note (the Pad note component), and
 // "Add this example" when the book can be changed. Used by the hover card and by each entry of the guide.
-const kindBody = (k, canAdd) => `
+const kindBody = (k, canAdd, variants = []) => `
       <div class="pad-kind-name">${escapeHtml(k.name)}</div>
       <p class="pad-kind-purpose">${escapeHtml(k.purpose)}</p>
       <ul class="pad-kind-format">${k.format.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
       <div class="pad-kind-example">${padNote(k.example)}</div>
-      ${canAdd ? `<button class="pad-kind-add" data-pad-action="add-example" data-colour="${escapeHtml(k.colour)}">Add this example</button>` : ''}`;
+      ${variants.length ? `<div class="pad-kind-variants">${variants.map(v => `<figure class="pad-kind-variant"><div class="pad-kind-variant-note">${padNote(v.example)}</div><figcaption>${escapeHtml(v.label)}</figcaption></figure>`).join('')}</div>` : ''}
+      ${canAdd ? `<button class="pad-kind-add" data-pad-action="add-example" data-colour="${escapeHtml(k.key)}">Add this example</button>` : ''}`;
 
 // The card that opens on a colour of the strip. view: Pad Kind Card
 export function padKindCard(view) {
   return `
-    <div class="pad-kind-card" data-component="Pad kind card" data-key="${escapeHtml(view.colour)}" role="dialog" aria-label="${escapeHtml(view.name)} note">${kindBody(view, view.canAdd)}
+    <div class="pad-kind-card" data-component="Pad kind card" data-key="${escapeHtml(view.key)}" role="dialog" aria-label="${escapeHtml(view.name)} note">${kindBody(view, view.canAdd, view.variants)}
     </div>`;
 }
 
@@ -114,7 +115,7 @@ export function padGuide(view) {
     <div class="pad-guide" data-component="Pad guide" data-key="pad-guide">
       <div class="sheet-title">Notation guide</div>
       <p class="pad-guide-intro">Each colour of note means something. Type it as in the example; Make chapter reads it.</p>
-      ${view.kinds.map(k => `<section class="pad-guide-kind" data-kind="${escapeHtml(k.colour)}">${kindBody(k, view.canAdd)}</section>`).join('')}
+      ${view.kinds.map(k => `<section class="pad-guide-kind" data-kind="${escapeHtml(k.key)}">${kindBody(k, view.canAdd)}</section>`).join('')}
       <div class="pad-guide-rules-title">The Pad in short</div>
       <ul class="pad-guide-rules">${view.rules.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
       <button class="sheet-btn" data-pad-action="guide-close">Close</button>
@@ -277,4 +278,9 @@ export function padShelf(view) {
       ${view.chips.map(c => `<button type="button" class="pad-shelf-chip" data-pad-action="unshelve" data-frame="${escapeHtml(c.frameId)}" title="${escapeHtml(c.title)}">${escapeHtml(c.label)}</button>`).join('')}
       ${view.shelveAll ? `<button type="button" class="pad-shelf-all" data-pad-action="shelve-all" title="${escapeHtml(view.shelveAll.title)}">${escapeHtml(view.shelveAll.label)}</button>` : ''}
     </div>`;
+}
+
+// The book's name at the start of the Pad's bottom row; tapping it opens the book sheet, as on Board and Outline. view: Pad Book Name
+export function padBookName(view) {
+  return `<button type="button" class="bd-book-title pad-book-title" data-component="Pad book name" data-key="pad-book-name" data-book-title title="${escapeHtml(view.title)}">${escapeHtml(view.title)}</button>`;
 }

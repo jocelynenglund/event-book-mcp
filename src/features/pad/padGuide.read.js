@@ -4,9 +4,9 @@
 // example drawn as that note), then the Pad's general rules. `canAdd`: "Add this example" is offered on each (not where the book can not be changed).
 // ===========================================
 
-import { KINDS, RULES } from './padGuide.rules.js';
+import { GUIDE_ENTRIES, RULES } from './padGuide.rules.js';
 import { kindView } from './padKindCard.read.js';
 
 export function padGuide(state, { editable = true } = {}) {
-  return { kinds: KINDS.map(kindView), rules: RULES, canAdd: editable };
+  return { kinds: GUIDE_ENTRIES.map(kindView), rules: RULES, canAdd: editable };
 }

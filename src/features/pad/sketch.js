@@ -25,7 +25,7 @@ export const NOTE_GAP = 24, ROW_OF = 5;            // ＋ Events: the space betw
 export const COLOURS = ['blue', 'orange', 'green', 'red', 'white', 'scenario', 'screen', 'automation', 'arrow'];
 // A chapter arrow (classic event modeling's blue arrow with a heading over a run of slices): a note of its own kind, for the eye only. It is as wide as
 // note.w says (it is the one note with a width of its own) and ARROW_HEIGHT tall; it is never part of a slice (notesInFrame leaves it out)
-export const ARROW_WIDTH = 520, ARROW_HEIGHT = 56, ARROW_MIN = 160, ARROW_MAX = 3000;
+export const ARROW_WIDTH = 520, ARROW_HEIGHT = 56, ARROW_MIN = 160, ARROW_MAX = 20000; // wide enough for a chapter over many frames (a 6-frame run is ~4,300)
 export const arrowWidth = w => Math.min(ARROW_MAX, Math.max(ARROW_MIN, num(w) || ARROW_WIDTH));
 // A note's colour is what it stands for: blue a command, orange an event, green a view, red a hotspot (a question, a risk), white a plain note,
 // warm grey a scenario (Given / When / Then, typed freely: padScenario.rules.js), a white window a screen ({ Read Model }, [ Input ], ( Button ): padScreen.rules.js), lilac for an automation (⚙ reads a read model, → a command or an event: padAutomation.rules.js)

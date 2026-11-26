@@ -17,8 +17,9 @@ import { isAgent } from '../library/sections.js';
 import { itsybitMark } from '../../ui/itsybitMark.js';
 import { byName } from '../../ui/byName.js';
 import { librarySignIn } from './librarySignIn.read.js';
-import { libraryAccountBar, saveChipButton } from './sync.parts.js';
+import { libraryAccountBar, saveChipButton, checkoutChipButton } from './sync.parts.js';
 import { saveChip } from './saveChip.read.js';
+import { checkoutChip } from './checkoutChip.read.js';
 import { reviewOf } from '../review/client.js';
 import { drawLinkLoader, closeLinkLoader } from '../linkLoading/loader.js';
 import { linkProblem } from '../linkLoading/linkLoadingState.read.js';
@@ -113,12 +114,12 @@ function openTakeOver(modelId) {
   const h = holderOf(modelId);
   if (isAgent(h)) return openBoardSheet(`
     <div class="sheet-title">Take back from ${escapeHtml(h.deviceName || 'the agent')}?</div>
-    <p class="sy-p">Its next change will be refused. What it sent already is here.</p>
+    <p class="sy-p">${escapeHtml(agentName(h))} has it checked out; you'll see their changes as they come. Its next change will be refused. What it sent already is here.</p>
     <button class="sheet-btn" data-sync-action="takeover-yes" data-model="${modelId}">Take back</button>
     <button class="sheet-btn secondary" data-sync-action="close">Not now</button>`);
   openBoardSheet(`
     <div class="sheet-title">Take over from ${escapeHtml(h?.deviceName || 'the other device')}?</div>
-    <p class="sy-p">It's checked out there${h?.since ? ` since ${escapeHtml(new Date(h.since).toLocaleString())}` : ''}. Changes made there that haven't reached the server yet stay on that device and won't come here.</p>
+    <p class="sy-p">${escapeHtml(h?.deviceName || 'The other device')} has it checked out; you'll see their changes as they come. It's checked out there${h?.since ? ` since ${escapeHtml(new Date(h.since).toLocaleString())}` : ''}. Changes made there that haven't reached the server yet stay on that device and won't come here.</p>
     <button class="sheet-btn" data-sync-action="takeover-yes" data-model="${modelId}">Take over</button>
     <button class="sheet-btn secondary" data-sync-action="close">Not now</button>`);
 }
@@ -147,27 +148,19 @@ export function updateCheckoutBanner() {
   const show = account() && !isPreviewing() && isKept(id) && !isBuildShelf(id) && !document.body.classList.contains('library-mode');
   // A published edition is frozen, kept on the server or not
   if (!show) { el?.remove(); agentBanner(null, id); setReadOnly(!canEditCurrent() && !document.body.classList.contains('library-mode')); return; }
-  if (!el) {
-    el = document.createElement('button'); el.id = 'syCheckout'; el.className = 'sy-chip';
-    document.getElementById('modelTitle').after(el);
-  }
-  const l = holderLabel(id);
   const h = holderOf(id);
-  const [action, label, title] = !h ? ['checkout', '☁ Check out', 'Checked in: check it out to edit']
-    : h.you ? ['checkin', '✏️ Check in', 'Checked out here: check it in when you’re done']
-    : isAgent(h) ? ['takeover', h.deviceName || 'An agent', `${h.deviceName || 'An agent'} is editing it: tap to take it back`]
-    : ['takeover', `🔒 ${h.deviceName || 'Other device'}`, `Checked out on ${h.deviceName || 'another device'}: tap to take over`];
-  el.dataset.state = l.cls;
-  el.dataset.syncAction = action;
-  el.dataset.model = id;
-  el.title = title;
-  el.setAttribute('aria-label', title);
-  // The icon, then the words (a phone shows the icon only; the words stay in aria-label)
-  if (h && !h.you && isAgent(h)) el.innerHTML = `${itsybitMark({ size: 13 })}<span class="sy-chip-text"> ${escapeHtml(label)}</span>`;
-  else { const [icon, ...words] = label.split(' '); el.innerHTML = `<span class="sy-chip-icon">${escapeHtml(icon)}</span><span class="sy-chip-text"> ${escapeHtml(words.join(' '))}</span>`; }
+  const v = checkoutChip(h);
+  const html = checkoutChipButton(v, { mark: itsybitMark({ size: 13 }) });
+  // Drawn again only when it changed (a new holder, a new name): the same chip is left alone
+  if (!el || el.dataset.state !== v.state || el.title !== v.title || el.dataset.model !== id) {
+    const fresh = Object.assign(document.createElement('div'), { innerHTML: html }).firstElementChild;
+    fresh.dataset.model = id;
+    if (el) el.replaceWith(fresh); else document.getElementById('modelTitle').after(fresh);
+    el = fresh;
+  }
   agentBanner(h, id);
   // Not checked out here: taps only read (features/readOnly)
-  setReadOnly(!h?.you || isFrozenCurrent(), action, h && !h.you && isAgent(h) ? agentName(h) : null);
+  setReadOnly(!h?.you || isFrozenCurrent(), v.action, h && !h.you && isAgent(h) ? agentName(h) : null);
 }
 
 // The ☁ chip beside Share in an open book's top bar (Board, Outline, Pad): ☁ Save to library for a book only on this device,

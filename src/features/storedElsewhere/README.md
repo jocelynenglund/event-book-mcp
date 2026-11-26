@@ -18,7 +18,7 @@ capitals: `table`, `config`, `document`, `legacy table`…) and an optional **na
   `storedElsewhere.parts.js`, command `storedElsewhere.command.js`).
 - **Pad**: an orange note whose first line ends with a one-word kind in brackets — `FriendTable (table)`, `Pricing (config)`,
   `Party settings (document)` — is stored elsewhere: drawn brown with a small kind tag, the name drops the marker, Make chapter / Update chapter set
-  `ElementStorageSet`. `(external)` keeps its own meaning (it is not a kind). The notation guide has a line for it. (A pasted list's `Name (table)`
+  `ElementStorageSet`. `(external)` keeps its own meaning (it is not a kind). The notation guide has its own entry for it (`storedElsewhere.guide.js`, registered in `padGuide.rules.js`) and the event swatch's card shows a small brown example. (A pasted list's `Name (table)`
   line is read as a field list, as before: type the marker on the note.)
 - **Plan file / agent tools**: `add_steps` event `{ storage: { kind, name } }` (and `storage` beside the event of a do / see step); `table: "<name>"` keeps
   working as a legacy table. `plan.schema.json`, `llms.txt` / `llm.txt`. The outline says `(stored as table: Friends)`.
@@ -35,6 +35,7 @@ capitals: `table`, `config`, `document`, `legacy table`…) and an optional **na
 | `storedElsewhere.parts.js` | the Stored as sheet, the Pad storage tag |
 | `sheet.js` | the sheet's taps and `EventPad.menuStoredAs` |
 | `storedElsewhere.styles.js` | the sheet's and the Pad note's CSS |
+| `storedElsewhere.guide.js` | its entry and mini example in the Pad's notation guide |
 | `storedElsewhere.mcp.js` | the outline note for the agent tools |
 
 ## Where it hooks in, and what is generalised in place

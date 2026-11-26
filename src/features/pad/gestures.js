@@ -66,7 +66,7 @@ export function onDown(e) {
   const t = target(e), touch = e.pointerType === 'touch', editable = canEditCurrent();
   const held = (t.kind === 'note' || t.kind === 'frame') && isSelected(t.kind, t.id);   // already selected (as after ＋ Many): a finger moves it at once
   gesture = { id: e.pointerId, t, touch, held, sx: e.clientX, sy: e.clientY, shift: e.shiftKey, alt: e.altKey && t.kind === 'note', moved: false, vp: { ...S.vp }, type: 'press', editable };
-  if (t.kind === 'resize') { if (!editable) { gesture = null; return; } const f = t.arrow ? arrowStart(S.scene, t.id) : S.scene.frames.find(x => x.frameId === t.id); gesture.type = 'resize'; gesture.f = f; return; }
+  if (t.kind === 'resize') { if (!editable) { gesture = null; return; } const f = t.arrow ? arrowStart(S.scene, t.id) : S.scene.frames.find(x => x.frameId === t.id); gesture.type = 'resize'; gesture.f = t.arrow ? f : { ...f, h: f.drawnH ?? f.h }; return; }
   if (t.kind === 'note' || t.kind === 'frame') {
     // The thing pressed becomes the selection (unless it is already part of one, which a drag then moves whole)
     if (!e.shiftKey && !isSelected(t.kind, t.id)) {
@@ -111,8 +111,8 @@ function startArea(g) {
 function covered(a, b) {
   const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y), within = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
   return {
-    noteIds: S.scene.notes.filter(n => within(n.x + (n.w || NOTE_SIZE) / 2, n.y + (n.w ? 28 : NOTE_SIZE / 2))).map(n => n.noteId),
-    frameIds: S.scene.frames.filter(f => within(f.x + f.w / 2, f.y + f.h / 2)).map(f => f.frameId)
+    noteIds: S.scene.notes.filter(n => within(n.x + (n.w || NOTE_SIZE) / 2, n.y + (n.w ? 28 : (n.drawnH || NOTE_SIZE) / 2))).map(n => n.noteId),
+    frameIds: S.scene.frames.filter(f => within(f.x + f.w / 2, f.y + (f.drawnH ?? f.h) / 2)).map(f => f.frameId)
   };
 }
 

@@ -25,7 +25,7 @@ const font = (weight, px, family = BODY) => `${weight} ${px}px ${family}`;
 function paragraph(ctx, lines, x, y, maxW, px, bottom, color) {
   ctx.fillStyle = color;
   for (const raw of lines) {
-    for (const line of wrap(ctx, raw, maxW, 6)) {
+    for (const line of wrap(ctx, raw, maxW, 60)) {
       if (y + px * 1.3 > bottom) return y;
       ctx.fillText(line, x, y);
       y += px * 1.35;

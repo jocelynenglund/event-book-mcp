@@ -14,11 +14,12 @@
 // padScreenState (this device's state), padViewport, gestures, keyboard, noteEditing, padActions and padSheets.
 // ===========================================
 
-import { updateSaveChip } from '../sync/view.js';
+import { updateSaveChip, updateCheckoutBanner } from '../sync/view.js';
 import { padNotes } from './padNotes.read.js';
 import { padFrames } from './padFrames.read.js';
 import { padHint as hintView } from './padHint.read.js';
 import { padNote, padFrame, padHint } from './pad.parts.js';
+import { growToFit } from './padGrow.js';
 import { initGuide } from './guideInput.js';
 import { suggestClear, initSuggest } from './suggestInput.js';
 import { initClipboard } from './clipboard.js';
@@ -46,6 +47,7 @@ function shell(container) {
 
 // Draws the Pad into #padView, from the book feed.js replayed for this draw
 export function renderPad(state) {
+  updateCheckoutBanner();
   updateSaveChip();   // the ☁ chip in the top bar: Save to library, Saved, Saving…, Not saved
   const container = $('padView');
   if (!container) return;
@@ -68,6 +70,7 @@ export function renderPad(state) {
   if (!S.fitted) { S.fitted = true; const saved = store.get(VIEW_KEY(S.bookNow)); if (saved) S.vp = saved; else fit(false); }
 
   $('padWorld').innerHTML = S.scene.frames.map(padFrame).join('') + S.scene.notes.map(padNote).join('');
+  growToFit();
   drawBar();
   drawShelf(state);
   const hint = hintView(state, { editable, draft: S.draft });
@@ -91,7 +94,7 @@ export function initPad() {
   view.addEventListener('pointercancel', e => { forgetPointer(e.pointerId); cancelGesture(); });
   view.addEventListener('wheel', e => { if (e.target.closest('#padStage')) onWheel(e); }, { passive: false });
   view.addEventListener('input', e => {
-    if (S.editing && e.target.matches?.('[data-pad-input]')) { S.editing.value = e.target.value; if (e.target.matches('textarea')) suggestNote(e.target); }
+    if (S.editing && e.target.matches?.('[data-pad-input]')) { S.editing.value = e.target.value; if (e.target.matches('textarea')) { suggestNote(e.target); growToFit(); } }
   });
   view.addEventListener('keyup', e => {
     if (S.editing && e.target.matches?.('textarea[data-pad-input]') && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) suggestNote(e.target, false);

@@ -131,6 +131,7 @@ export function rank(candidates, query, limit = LIMIT) {
       }
       if (typed && c.name.toLowerCase().startsWith(typed)) score -= 2;
       if (c.inFrame) score -= 1.5;
+      if (c.lead) score -= 4;                                                 // a draft of the chapter (the Outline's add forms)
       if (c.kind === 'literal') score += 0.1;                                 // the outcomes after the names
       return { ...c, score };
     })

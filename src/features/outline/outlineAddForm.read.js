@@ -1,7 +1,6 @@
 // ===========================================
 // OUTLINE ADD FORM (SV) - what the "Add a step" sheet offers for one kind of step under a chapter: the
-// chapter's name, the kinds to switch between, each field with the names the book already has for it (so a
-// step can reuse an event or read model), and which of those names are elements the book has (a step with
+// chapter's name, the kinds to switch between, each field (its names are suggested as you type: Pad Suggestions), and which of those names are elements the book has (a step with
 // an existing name reuses the element rather than copying it; a to-do list is flagged).
 //
 // What the outline can add, and how each kind is asked for. An automation reads as a sentence — When … using
@@ -9,7 +8,6 @@
 // system), or a to-do list it works through (a new read model gets its own view beside it).
 // ===========================================
 
-import { byName } from '../../core/constants.js';
 import { outlineAddHint } from './outlineAddHint.read.js';
 
 export const addKinds = {
@@ -44,8 +42,6 @@ export function outlineAddForm(state, { chapterId = null, kind = 'SC' } = {}) {
     }
     return [type, byKey];
   }));
-  const names = type => [...new Set(elements.filter(e => e.type === type).map(e => e.name))]
-    .map(name => ({ name })).sort(byName).map(n => n.name);
   const shape = addKinds[kind] ? kind : 'SC';
   return {
     kind: shape,
@@ -53,7 +49,7 @@ export function outlineAddForm(state, { chapterId = null, kind = 'SC' } = {}) {
     chapterName: chapterId && state.chapters[chapterId] ? state.chapters[chapterId].name : null,
     kinds: addKindChoices.map(k => ({ ...k, active: k.kind === kind })),
     propsNote: spec.propsNote,
-    fields: spec.fields.map((f, i) => ({ ...f, last: i === spec.fields.length - 1, names: names(f.type) })),
+    fields: spec.fields.map((f, i) => ({ ...f, last: i === spec.fields.length - 1 })),
     known
   };
 }
