@@ -10,10 +10,17 @@ export const EventTypes = {
   ElementRenamed: 'ElementRenamed',
   ElementTodoSet: 'ElementTodoSet',
   ElementListSet: 'ElementListSet',   // a read model that is a list of rows   // a read model that's a saga's to-do list
+  ScreenSketchSet: 'ScreenSketchSet', // a screen sticky's wireframe, as the Pad's screen note typed it ({ Read Model }, [ Input ], ( Button ): pad/padScreen.rules.js) { elementId, text }
   UpdateRoleSet: 'UpdateRoleSet',     // an event adds to a to-do list, or ticks an item off
   PropertyAdded: 'PropertyAdded',
   PropertyRemoved: 'PropertyRemoved',
   PropertyGeneratedSet: 'PropertyGeneratedSet', // made by the system, not carried from events
+  FieldSetBySystem: 'FieldSetBySystem',         // a field that comes from nowhere in the model on purpose (an id, the clock, a computed value): not a gap { elementId, field, how }
+  FieldSetBySystemCleared: 'FieldSetBySystemCleared', // taken back: it needs a source again { elementId, field }
+  FieldMapped: 'FieldMapped',                   // a field comes from another sticky's field ("orderRef ← Order Placed.orderId"): it has a source { elementId, field, from: { elementId, field } }
+  FieldMappingCleared: 'FieldMappingCleared',   // unmapped: it comes from nowhere again { elementId, field }
+  FieldMarkedQuery: 'FieldMarkedQuery',         // a read model's field is a query parameter: the caller asks with it, so it needs no event source { elementId, field }
+  FieldQueryCleared: 'FieldQueryCleared',       // no longer a query parameter { elementId, field }
 
   
   // Connection events
@@ -43,6 +50,7 @@ export const EventTypes = {
   StructureApproved: 'StructureApproved',     // round one: the chapters and slices are right, as laid out { approvedBy, chapters, slices }
   ParagraphWritten: 'ParagraphWritten',       // round two for an article: a point's actual text { paragraphId, sliceId, text, by }
   ParagraphEdited: 'ParagraphEdited',         // { paragraphId, text }
+  ParagraphDeleted: 'ParagraphDeleted',       // an agent takes back its own unedited paragraph { paragraphId, sliceId }
   BookKindChosen: 'BookKindChosen',           // when a book is made: fact (the model, today's Event Book) or literature (a story: paragraphs and sentences) { bookId, kind }
   DraftImported: 'DraftImported',             // her own text came in as a literature book (features/literature) { title, author, paragraphs, sentences }
   SentenceAdded: 'SentenceAdded',             // a literature point's sentence, where a scenario would sit { sentenceId, sliceId, text, by }
@@ -74,6 +82,7 @@ export const EventTypes = {
   UsageImported: 'UsageImported',             // a build book gets an app's usage for a window (features/usage); the book stays published { app, at, since, days, total, counts, unmatched }
   BuildFollowed:'BuildFollowed',             // a plan follows an app's build book: its newest edition marks Done { app, followedBy }
   PlanRetired: 'PlanRetired',                 // a plan whose every slice is built is put away: read only, on the Retired shelf { modelId, app, edition, retiredAt }
+  RetireEvidenceNoted: 'RetireEvidenceNoted', // an agent's evidence that slices not matched in the built book are built (PR, store tests), kept for the owner's Retire anyway { entries: [{ sliceId, text }], by }
   BuildUnfollowed: 'BuildUnfollowed',         // it stops; Done stays { app }
   CompareSettled: 'CompareSettled',           // a compare confirmed or rejected: the draft goes up { draft }
   SliceAdopted: 'SliceAdopted',               // compare: the built slice took the planned one's place { sliceId, commit }
@@ -90,6 +99,7 @@ export const EventTypes = {
   ModelSourceSet: 'ModelSourceSet',       // the code it was built from: repo and commit (a test export) // an acceptance criterion (must have) or not (nice to have)       // onto another slice (e.g. one whose own slice was deleted)
   GivenSet: 'GivenSet',
   WhenSet: 'WhenSet',
+  ScenarioQuerySet: 'ScenarioQuerySet',      // a view scenario's query: what the caller asks the view with, free text ('name starts with a', 'name = a*') { scenarioId, text }; '' takes it away
   ThenEventSet: 'ThenEventSet',
   ThenRejectionSet: 'ThenRejectionSet',
   ThenNothingSet: 'ThenNothingSet',          // accepted but nothing changes (an idempotent command): { scenarioId, reason }
@@ -125,6 +135,19 @@ export const EventTypes = {
   SlicesPaired: 'SlicesPaired',
   SlicesUnpaired: 'SlicesUnpaired',   // an automation's two halves go their own ways again
   SliceActorSet: 'SliceActorSet',     // who drives a slice's top lane: 'screen' (a person) or 'processor'
+
+  // The Pad: a free sketching canvas of plain sticky notes in the book (features/pad). Sketching is not modelling: none of these clears Refined
+  PadNoteAdded: 'PadNoteAdded',               // a plain note, blue (command) | orange (event) | green (view): { noteId, x, y, colour, text }
+  PadNoteMoved: 'PadNoteMoved',               // dropped somewhere else (one per note, on drop): { noteId, x, y }
+  PadNoteEdited: 'PadNoteEdited',             // { noteId, text }
+  PadNoteRecoloured: 'PadNoteRecoloured',     // { noteId, colour }
+  PadNoteRemoved: 'PadNoteRemoved',           // { noteId }; a linked note's original leaving hands over to its oldest copy
+  PadNoteLinked: 'PadNoteLinked',             // a linked copy: another place for the same note, saying what the original says { noteId, linkOf, x, y }
+  PadNoteUnlinked: 'PadNoteUnlinked',         // a copy becomes a note of its own, keeping the text { noteId }
+  PadFrameAdded: 'PadFrameAdded',             // a dashed frame round a sketched slice: { frameId, x, y, w, h, name }; its notes are the ones whose middle is inside
+  PadFrameChanged: 'PadFrameChanged',         // only what changed: { frameId, x?, y?, w?, h?, name? }
+  PadFrameRemoved: 'PadFrameRemoved',         // its notes stay { frameId }
+  PadFrameConverted: 'PadFrameConverted',     // Make chapter built it into the board: the notes stay as the sketch { frameId, chapterId, sliceId?, made? } (made: a snapshot of what it was made from, see pad/padMade.rules.js; Update chapter records it again)
 
   // Comments: talk about the model, not the model. Allowed on read-only and published
   // books, sent from any device, and they never clear Refined or Done.
@@ -172,30 +195,6 @@ export const typeLabels = {
   processor: 'Processor'
 };
 
-// Element actions by type
-export const elementActions = {
-  event: [
-    { label: 'What produces this?', target: 'command', relation: 'producer', sliceType: 'SC' },
-    { label: 'What does this update?', target: 'readModel', relation: 'consumer', sliceType: 'SV' }
-  ],
-  command: [
-    { label: 'What screen triggers this?', target: 'screen', relation: 'input' },
-    { label: 'What events does this produce?', target: 'event', relation: 'produces', sliceType: 'SC' }
-  ],
-  readModel: [
-    { label: 'Who produces this?', target: 'event', relation: 'updatedBy', sliceType: 'SV', multiPicker: true },
-    { label: 'What screen displays this?', target: 'screen', relation: 'display' }
-  ],
-  processor: [
-    { label: 'Triggered by State View', target: 'event', relation: 'trigger', svPicker: true },
-    { label: 'Produces State Change', target: 'command', relation: 'invokes', scPicker: true }
-  ],
-  screen: [
-    { label: 'Connect to command', target: 'command', relation: 'triggers', picker: true },
-    { label: 'Connect to read model', target: 'readModel', relation: 'displays', picker: true }
-  ]
-};
-
 // Connection labels
 export const connectionLabels = {
   producer: 'produces',
@@ -224,6 +223,9 @@ export const reverseConnectionLabels = {
   context: 'read by'
 };
 
+// A field's name for matching: case, [] and ? markers ignored ("Items[]" and "items", "why?" and "WHY" are one field)
+export const fieldKey = name => String(name ?? '').toLowerCase().replace(/\[\s*\]|\?/g, '').trim();
+
 // A property as written on cards and pictures: arrays get [] ("items[]")
 export function propLabel(p) {
   return p.name + (p.type === 'array' ? '[]' : '') + (p.type === 'array' && p.items?.length ? `{${p.items.join(', ')}}` : '');
@@ -240,7 +242,7 @@ export function splitItemFields(text) {
 export const propertyTypes = ['string', 'number', 'decimal', 'boolean', 'date', 'guid', 'array', 'object'];
 
 // Split on commas, but not inside {…} (an array's item fields)
-function splitEntries(text) {
+export function splitEntries(text) {
   const out = [];
   let depth = 0, cur = '';
   for (const ch of text) {
@@ -258,7 +260,10 @@ export function parsePropertyText(text, defaultType = 'string', have = []) {
   const seen = new Set(have.map(n => n.toLowerCase()));
   const parsed = [];
   let skipped = 0;
-  splitEntries(text).forEach(full => {
+  splitEntries(text).forEach(typed => {
+    // "?name": a query parameter (a read model's field the caller asks with)
+    const query = /^\s*\?/.test(typed);
+    const full = query ? typed.replace(/^\s*\?\s*/, '') : typed;
     // "stuff[]{stuffId, name}": an array whose items have these fields
     const { text: entry, items } = splitItemFields(full);
     const m = entry.match(/^(.*?)\s*:\s*([a-z]+)$/i);
@@ -270,7 +275,7 @@ export function parsePropertyText(text, defaultType = 'string', have = []) {
     if (!name) return;
     if (seen.has(name.toLowerCase())) { skipped++; return; }
     seen.add(name.toLowerCase());
-    parsed.push({ name, type: type || defaultType, ...(items ? { items } : {}) });
+    parsed.push({ name, type: type || defaultType, ...(items ? { items } : {}), ...(query ? { query: true } : {}) });
   });
   return { parsed, skipped };
 }

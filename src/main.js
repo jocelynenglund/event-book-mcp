@@ -8,15 +8,14 @@ import { leaveOldAddress, tidyMovedMark, moveIn } from './core/moveHouse.js';
 import { formatBytes } from './ui/bytes.js';
 import { initSheets, showSheet, hideAllSheets } from './ui/sheets.js';
 import { initReferences } from './features/references/sheet.js';
-import { render as renderFeed, toggleDetailsView, setOverviewTab, showSliceOnBoard, getView, showLibrary, showBoard, showOutline, showStart, showPreface, startReading, showSlicePage, leaveSlicePage, sliceOpenedFrom, wasInLibrary, isNewVisit, onRender } from './ui/feed.js';
+import { render as renderFeed, toggleDetailsView, setOverviewTab, showSliceOnBoard, getView, showLibrary, showBoard, showOutline, showPad, showStart, showPreface, startReading, showSlicePage, leaveSlicePage, sliceOpenedFrom, wasInLibrary, isNewVisit, onRender } from './ui/feed.js';
 
 // Features
-import { showActions } from './features/connect/actionSheet.js';
-import { dispatchConnection } from './features/connect/command.js';
-import { showPicker, pickElement, showSVPicker, pickSVTrigger, showMultiPicker, toggleMultiPickerItem, confirmMultiPick, createNewFromPicker, createNewProducerEvent, showSCPicker, createNewSCCommand, pickSCSlice, showDirectPicker, pickScreenForSlice, createScreenForSlice } from './features/connect/pickers.js';
-import { initBoard, openChapterPicker, toggleFabMenu, openUpdatedByPicker, openProcessorInputs } from './features/board/sheets.js';
+import { initBoard, openChapterPicker, toggleFabMenu, openUpdatedByPicker, openProcessorInputs, openCellSheet } from './features/board/sheets.js';
+import { openEventsSheet } from './features/board/sheets/events.js';
 import { initDetails } from './features/details/view.js';
 import { initOutline } from './features/outline/view.js';
+import { initPad } from './features/pad/view.js';
 import { initLiterature } from './features/literature/view.js';
 import { initWaiting } from './features/literature/waiting.js';
 import { initVotes } from './features/literature/votesView.js';
@@ -129,7 +128,7 @@ import { initLive } from './features/live/live.js';
 import { initCompare, openComparePicker } from './features/compare/view.js';
 import { initPreface } from './features/preface/view.js';
 import { initSync } from './features/sync/client.js';
-import { initSyncView, updateCheckoutBanner } from './features/sync/view.js';
+import { initSyncView, updateCheckoutBanner, updateSaveChip } from './features/sync/view.js';
 import { openBoardSheet } from './features/board/sheets/shared.js';
 import { showCompare } from './ui/feed.js';
 import { openReplay } from './features/replay/replay.js';
@@ -142,13 +141,13 @@ import { approveStructure } from './features/article/command.js';
 import { nickname } from './features/comments/command.js';
 import { initShareImage } from './features/shareImage/sheet.js';
 import { initShareLink } from './features/shareLink/link.js';
-import { promptSliceName, dispatchNameSlice, dismissSlicePrompt, initNameSlice } from './features/nameSlice/sheet.js';
 import { undo, clearAll } from './features/undo/command.js';
 import { toggleEventLog, copyEvent, copyAllEvents, exportModel, importModel } from './features/eventLog/panel.js';
 import { exportForEventmodelers } from './features/eventmodelers/export.js';
 import { openPropertySheet, saveProperty, deleteProperty, initProperties } from './features/properties/sheet.js';
+import { initTraceStrip } from './features/fieldTrace/strip.js';
 import { deleteElement } from './features/deleteElement/command.js';
-import { openElementMenu, menuRename, menuProperties, menuConnect, menuDelete, menuRemoveFromSlice, menuToggleExternal, menuTogglePublished, menuToggleTable, menuComment, menuToggleTrigger, menuToggleTodo, menuToggleList, menuUpdatedBy, menuProcessorInputs, menuShowElement, menuSetElementFlow } from './features/elementMenu/sheet.js';
+import { openElementMenu, menuRename, menuProperties, menuScreenText, menuSliceEvents, menuSliceScreen, menuReaders, menuProducer, menuDelete, menuRemoveFromSlice, menuToggleExternal, menuTogglePublished, menuToggleTable, menuComment, menuToggleTrigger, menuToggleTodo, menuToggleList, menuUpdatedBy, menuProcessorInputs, menuShowElement, menuSetElementFlow } from './features/elementMenu/sheet.js';
 import { 
   openAddScenarioSheet, 
   openEditScenarioSheet, 
@@ -162,6 +161,7 @@ import {
   givenRemove,
   thenRowAdd,
   thenRowRemove,
+  queryClear,
   propItemAdd,
   selectWhenCommand,
   selectThenType,
@@ -177,21 +177,6 @@ import { openScenariosSheet } from './features/board/sheets/scenarios.js';
 // ===========================================
 
 window.EventPad = {
-  // connect
-  showActions,
-  dispatchConnection,
-  showPicker,
-  pickElement,
-  showSVPicker,
-  pickSVTrigger,
-  showMultiPicker,
-  toggleMultiPickerItem,
-  confirmMultiPick,
-  createNewFromPicker,
-  createNewProducerEvent,
-  showSCPicker,
-  createNewSCCommand,
-  pickSCSlice,
   newChapter: () => openChapterPicker(null),
   showSliceOnBoard,
   openUpdatedByPicker,
@@ -199,15 +184,12 @@ window.EventPad = {
   showLibrary,
   showBoard,
   showOutline,
+  showPad,
   showStart,
   showPreface,
   startReading,
-  showDirectPicker,
-  
-  // nameSlice
-  promptSliceName,
-  dispatchNameSlice,
-  dismissSlicePrompt,
+  openCellSheet,
+  openEventsSheet,
   
   // undo
   undo,
@@ -235,7 +217,11 @@ window.EventPad = {
   openElementMenu,
   menuRename,
   menuProperties,
-  menuConnect,
+  menuScreenText,
+  menuSliceEvents,
+  menuSliceScreen,
+  menuReaders,
+  menuProducer,
   menuDelete,
   menuRemoveFromSlice,
   menuToggleExternal,
@@ -250,15 +236,6 @@ window.EventPad = {
   menuShowElement,
   menuSetElementFlow,
   
-  // slices
-  addScreenToSlice: (sliceId) => {
-    import('./features/connect/pickers.js').then(({ showAddScreenToSlice }) => {
-      showAddScreenToSlice(sliceId);
-    });
-  },
-  pickScreenForSlice,
-  createScreenForSlice,
-
   exportNotation,
   exportDraft,
   // burger
@@ -331,6 +308,7 @@ window.EventPad = {
   givenRemove,
   thenRowAdd,
   thenRowRemove,
+  queryClear,
   propItemAdd,
   selectWhenCommand,
   selectThenType,
@@ -428,13 +406,14 @@ async function init() {
   
   // Initialize UI components
   initSheets();
-  initNameSlice();
   initProperties();
+  initTraceStrip();
   initScenarios();
   initDebugConsole();
   initBoard();
   initDetails();
   initOutline();
+  initPad();
   initLiterature();
   initVotes();
   initWaiting();
@@ -448,7 +427,7 @@ async function init() {
   document.getElementById('libraryBtn').addEventListener('click', () => getView() === 'slice' ? leaveSlicePage() : showLibrary());
   document.getElementById('detailsBtn').addEventListener('click', e => {
     const b = e.target.closest('[data-view-switch]');
-    if (b) b.dataset.viewSwitch === 'board' ? showBoard() : showOutline();
+    if (b) b.dataset.viewSwitch === 'board' ? showBoard() : b.dataset.viewSwitch === 'pad' ? showPad() : showOutline();
   });
   document.querySelectorAll('.ov-tab').forEach(b => b.addEventListener('click', () => setOverviewTab(b.dataset.tab)));
   initShareImage();
@@ -486,6 +465,7 @@ async function init() {
   });
   onRender(() => { header.querySelector('.hd-strip-title').textContent = document.getElementById('modelTitle').textContent; });
   onRender(updateCheckoutBanner);
+  onRender(updateSaveChip);
   onRender(updateReviewChip);
   initStatusFilter(renderFeed);
   initUsageStats();

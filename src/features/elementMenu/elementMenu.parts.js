@@ -1,6 +1,7 @@
 // ===========================================
 // ELEMENT MENU - Parts of a sticky's ⋮ menu, each drawn from its view alone
-// (Element Menu State, Element Menu Options, Element Menu Readers, Element Menu Flow Choices, Element Menu Consumers).
+// (Element Menu State, Element Menu Options, Element Menu Flow Choices, Element Menu Consumers), and the readers of an event
+// from Element Menu Readers (the sheet "Read models that read it" opens).
 // A root carries data-component and data-key.
 // ===========================================
 
@@ -71,11 +72,10 @@ export function elementMenuConsumers(c) {
     </div>`;
 }
 
-// The whole menu: flows, readers, the options, then (an integration event) who it is published to
-export function elementMenuBody({ flows, readers, options, consumers }) {
+// The whole menu: flows, (an integration event) who it is published to, then the options
+export function elementMenuBody({ flows, options, consumers }) {
   return `
     ${flows ? flowChoicesSection(flows) : ''}
-    ${readers ? readersSection(readers) : ''}
     ${consumers ? elementMenuConsumers(consumers) : ''}
     ${options.map(elementMenuOption).join('')}
   `;

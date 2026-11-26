@@ -1,5 +1,5 @@
 // ===========================================
-// ARRANGE - Folding a part into its bookend. A per-device view preference (like a chapter's fold), so it lives in
+// ARRANGE - Folding a part to a sliver under its tab. A per-device view preference (like a chapter's fold), so it lives in
 // localStorage, not in the book's events. Open until folded.
 // ===========================================
 

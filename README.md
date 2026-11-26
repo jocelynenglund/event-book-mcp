@@ -31,12 +31,14 @@ the live view"*.
 
 | | Needs |
 |---|---|
-| Modelling: `new_model`, `add_steps`, `add_scenarios`, `outline`, `edit_slice`, `arrange_chapters` (order and parts), renames, moves, comments | Nothing: all on your machine |
+| Modelling: `new_model`, `add_steps`, `add_scenarios`, `outline`, `edit_slice`, `arrange_chapters` (order and parts), `fix_gaps` / `apply_fix` (information completeness), `map_field` / `trace_field` (where a field comes from, and how it travels), renames, moves, comments. Every slice has a short stable ref (`#k3f9q`, shown by `outline`) that every tool accepts instead of its S-number: S-numbers shift when slices are inserted, so replies list what shifted and an S-number the book has moved since you last looked is refused | Nothing: all on your machine |
+| Sketching: `new_model {sketch: true}`, `pad_outline`, `pad_add_notes`, `pad_frame`, `pad_link_copy`, `pad_move`, `pad_remove`, `pad_rename_frame`, `pad_make_chapter`, `pad_update_chapter`, `live_view {view: "pad"}`: fill the Pad with frames of notes, look at it live, then make the chapter | Nothing: local, like modelling |
+| `update_mcp`: pull the newest version of this server (a fast-forward of your clone), then `/mcp` → reconnect. The first reply of a session says when an update is waiting | Needs git and network access to the repo (not private; just git) |
 | `live_view`: Event Book on `http://localhost:7979/?live`, following the model as it's built | Nothing: served from this repo |
 | `export_file`, then ☰ → Import in [Event Book](https://eventbook.itsybit.se/) | Nothing: Event Book keeps books in your browser |
 | `import_file`: bring in a test export, a `docs/slices.json` plan, or a plan file (`eventbook-plan/1`, below) | Nothing |
 | `share_link`: a link that opens a copy of the model, on any device | Uploads the model (without history) to Event Book's share service |
-| `connect_library`, `keep_model`, editing a ☁ book, `press_queue`, `start_building`, `finish_building`, `retire_plan` (for ☁ plans) | An Event Book account (invite only for now) |
+| `connect_library`, `keep_model`, editing a ☁ book, `press_queue`, `start_building`, `finish_building`, `retire_plan` (for ☁ plans; `map` pairs a renamed slice with its built name, `evidence` records why an unmatched slice is built, for the owner's "Retire anyway") | An Event Book account (invite only for now) |
 | `generate_specs {repo, language: "js"}`: a failing Given/When/Then spec and a stub for each refined slice, in your repo; the plan remembers each slice's spec file, so the built code pairs with it exactly, whatever the names | `npm install --save-dev itsybit-gwt` there ([itsybit-gwt](https://www.npmjs.com/package/itsybit-gwt), MIT), then `node --test` |
 
 ## Plan without this server
@@ -56,8 +58,16 @@ and the plan file (`eventbook-plan/1`, schema at
 | `EVENTPAD_LIVE_PORT` | The live view's port (default 7979; the next free one is used) |
 | `EVENTPAD_AUTHOR` | The name comments and drafts are signed with |
 
-This repo is generated from Event Book's own source on each release, so the server runs
-the same commands as the app. Please report issues there rather than editing the copy here.
+## Found a problem or have an idea?
+
+Tell us from Event Book itself: ☰ → 💬 Send feedback at
+[eventbook.itsybit.se](https://eventbook.itsybit.se). It goes privately to Jocelyn. If you leave
+its toggle on, it adds your last steps: what you tapped, never what you wrote. A problem with
+these tools is welcome there too: they share one source with the app, so a fix lands in both.
+
+This repo is generated from Event Book's own source on each release, so the server runs the
+same commands as the app. Changes made here would be overwritten by the next release, so Send
+feedback is the way to suggest one.
 
 ## Licence
 

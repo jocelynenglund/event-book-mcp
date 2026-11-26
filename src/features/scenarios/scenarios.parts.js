@@ -13,11 +13,18 @@ const refHtml = r => r
   ? `<span class="gwt-ref" data-type="${r.type}"${r.attrs}>${escapeHtml(r.name)}</span>${valuesHtml(r.values)}`
   : '<span class="gwt-missing">(removed)</span>';
 
+// A view's rows: a small table, a column per field and a row per entry ("(empty)" when there are none)
+const tableHtml = t => t.rows.length
+  ? `<table class="gwt-table"><thead><tr>${t.columns.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${t.rows.map(r =>
+    `<tr>${r.map(c => `<td>${c ? (c.alias ? `<span class="gwt-id">${escapeHtml(c.text)}</span>` : escapeHtml(c.text)) : ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+  : '<span class="gwt-none">(empty)</span>';
+
 function bodyHtml(b) {
   if (b.none) return `<span class="gwt-none">${b.none}</span>`;
   if (b.rejected !== undefined) return `<span class="gwt-reject">Rejected: ${escapeHtml(b.rejected)}</span>`;
   if (b.nothing !== undefined) return `<span class="gwt-none">Nothing${b.nothing ? ` (${escapeHtml(b.nothing)})` : ''}</span>`;
-  if (b.rows) return `${refHtml(b.ref)}<span class="gwt-rows">${b.rows.map(r => `<span class="gwt-row">${valuesHtml(r)}</span>`).join('')}</span>`;
+  if (b.query !== undefined) return `<span class="gwt-query">${escapeHtml(b.query)}</span>`;
+  if (b.table) return `${refHtml(b.ref)}<span class="gwt-rows">${tableHtml(b.table)}</span>`;
   if (b.rowCount) return `${refHtml(b.ref)} <span class="gwt-values">(${b.rowCount} ${b.rowCount === 1 ? 'row' : 'rows'})</span>`;
   return refHtml(b.ref);
 }

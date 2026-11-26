@@ -41,6 +41,26 @@ export function propertyEditor(form) {
       <input type="checkbox" id="prEditGenerated" ${form.generated ? 'checked' : ''}>
       <span><b>Generated</b> — made by the system, not carried from events. Never offered for copying.</span>
     </label>
+    <div class="pr-system">
+      <label for="prEditSystemHow"><b>Set by the system</b> — it has no source in the model on purpose (an id, the clock, a computed value), so it is not flagged.</label>
+      <div class="pr-form">
+        <input type="text" class="sheet-input" id="prEditSystemHow" value="${escapeHtml(form.system || '')}" placeholder="new id, the clock, computed from items" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button class="sheet-btn secondary" data-prop-action="system-set">${form.system ? 'Change how' : 'Set by the system'}</button>
+        ${form.system ? '<button class="sheet-btn secondary" data-prop-action="system-clear">Unset</button>' : ''}
+      </div>
+    </div>
+    ${form.canQuery ? `<div class="pr-query">
+      <span><b>Query parameter</b> — the caller asks the view with it (<code>?${escapeHtml(form.name)}</code>), so it needs no event source.</span>
+      <button class="sheet-btn secondary" data-prop-action="${form.query ? 'query-clear' : 'query-set'}" aria-pressed="${form.query}">${form.query ? 'Not a query parameter' : 'Query parameter'}</button>
+    </div>` : ''}
+    <div class="pr-from">
+      ${form.from
+        ? `<span class="pr-from-now">Comes from <b>${escapeHtml(form.from.text)}</b></span>
+      <button class="sheet-btn secondary" data-prop-action="map">Change…</button>
+      <button class="sheet-btn secondary" data-prop-action="unmap">Unmap</button>`
+        : '<button class="sheet-btn secondary" data-prop-action="map">Comes from…</button>'}
+      <button class="sheet-btn secondary" data-prop-action="trace" title="Follow this property through the book">⤳ Trace</button>
+    </div>
     <div class="pr-actions">
       <button class="sheet-btn danger" data-prop-action="delete">Delete</button>
       <button class="sheet-btn secondary" data-prop-action="cancel">Cancel</button>

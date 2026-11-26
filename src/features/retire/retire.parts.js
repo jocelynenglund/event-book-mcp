@@ -41,7 +41,10 @@ export function builtFromList(v) {
 export function retireAnywaySheet(v) {
   return `<div class="ed-sheet-card rt-anyway" data-component="Retire anyway sheet" data-key="${escapeHtml(v.modelId)}">
       <p class="rt-anyway-text">${escapeHtml(v.text)}</p>
-      <ul class="rt-anyway-list">${v.unconfirmed.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>
+      <ul class="rt-anyway-list">${v.unconfirmed.map(n => {
+        const notes = (v.evidence || []).find(e => e.slice === n)?.notes || [];
+        return `<li>${escapeHtml(n)}${notes.map(x => `\n<div class="rt-evidence">Evidence: ${escapeHtml(x)}</div>`).join('')}</li>`;
+      }).join('')}</ul>
       <div class="ed-actions">
         <button class="ed-btn primary" data-library-action="retire-anyway-go" data-model="${escapeHtml(v.modelId)}">Retire</button>
         <button class="ed-btn" data-library-action="close">Cancel</button>

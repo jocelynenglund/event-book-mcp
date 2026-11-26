@@ -74,7 +74,7 @@ export function refreshShared() {
     for (const [id, s] of Object.entries(sharedBooks())) {
       if (!live.has(s.key)) { setShared(id, null); if (listModels().some(m => m.id === id)) deleteModel(id); changed = true; }
     }
-    if (listModels().some(m => m.id === open)) openModel(open);
+    if (getCurrentModelId() !== open && listModels().some(m => m.id === open)) openModel(open);
     return changed;
   })().finally(() => { refreshing = null; });
 }

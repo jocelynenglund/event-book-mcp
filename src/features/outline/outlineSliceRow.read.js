@@ -1,7 +1,7 @@
 // ===========================================
 // OUTLINE - Slice row (SV: Outline Slice Row)
-// One slice as the Outline's row draws it: number, title, kind, chain, description, paragraphs, refined,
-// verdict while verifying, usage, waiver, fields, scenarios (each with its open comments and verdicts), open
+// One slice as the Outline's row draws it: number, title, kind, chain, what an automation reads, description, paragraphs, refined,
+// verdict while verifying, usage, waiver, how many fields have no source, fields, scenarios (each with its open comments and verdicts), open
 // comments, and whether it can step up or down. slice: one of the Outline Layout's rows; first/last: its place.
 // ===========================================
 
@@ -15,9 +15,14 @@ import { scenarioTesters } from '../verify/scenarioTesters.read.js';
 import { sliceVerdict } from '../verify/sliceVerdict.read.js';
 import { nickname } from '../comments/command.js';
 import { sliceActor } from '../board/command.js';
+import { automationReads } from '../board/processorReads.js';
 import { sliceComments } from '../comments/read.js';
 import { usageBadge } from '../usage/view.js';
 import { sliceProgress } from '../buildProgress/sliceProgress.read.js';
+import { gapCount, tidyCount, fieldSources } from '../fieldSources/rules.js';
+import { mappingOf } from '../fieldMapping/mappings.js';
+import { fieldKey } from '../../core/constants.js';
+import { isQueryField } from '../viewQueries/queryFields.js';
 
 // Short enough to leave the slice name room on a phone; the colour bar says the rest
 const shortKind = { SC: 'Change', SV: 'View', AU: 'Automation' };
@@ -31,18 +36,28 @@ function chainOf(slice, state) {
   return (laneFlow[slice.type] || [0, 1, 2]).flatMap(l => els.filter(e => laneOf[e.type] === l)).map(e => e.name);
 }
 
-// A slice's fields, each name once. One that only some of its stickies carry wears their types.
-function fieldsOf(slice, state) {
+// A slice's fields, each name once. One that only some of its stickies carry wears their types. One that is a gap on
+// a sticky of the slice (no source, or a piece of a field written as prose) says where: gap { elementId, field, tidy }.
+// One that comes from another sticky's field says which (from: "Order Placed.orderId"); onTrace: it is on the traced
+// path (trace: Field Trace). at: the sticky and property a tap on the chip opens (the gap's, else the mapped one, else the first).
+function fieldsOf(slice, state, trace) {
   const carriers = slice.elements.map(id => state.elements[id]).filter(e => e?.properties?.length);
+  const { at } = fieldSources(state);
   const byName = new Map();
   carriers.forEach(el => el.properties.forEach(p => {
     const key = p.name.toLowerCase();
-    if (!byName.has(key)) byName.set(key, { prop: p, on: [] });
-    byName.get(key).on.push(el);
+    if (!byName.has(key)) byName.set(key, { prop: p, on: [], gap: null, from: null, first: { elementId: el.id, propertyId: p.id }, mapped: null, onTrace: false });
+    const f = byName.get(key);
+    f.on.push(el);
+    const g = at.get(`${slice.id}|${el.id}|${p.name}`);
+    if (g && !f.gap) f.gap = { elementId: el.id, field: p.name, tidy: g.kind === 'tidy', propertyId: p.id };
+    const m = mappingOf(state, el, p.name);
+    if (m && !f.from) { f.from = m.from.text; f.mapped = { elementId: el.id, propertyId: p.id }; }
+    if (trace?.keys.includes(`${el.id}|${fieldKey(p.name)}`)) f.onTrace = true;
   }));
   // The ones every sticky shares first, then the marked ones
-  return [...byName.values()].map(({ prop, on }) => ({
-    prop,
+  return [...byName.values()].map(({ prop, on, gap, from, first, mapped, onTrace }) => ({
+    prop, gap, from, onTrace, query: on.some(el => isQueryField(el, prop.name)), at: gap ? { elementId: gap.elementId, propertyId: gap.propertyId } : mapped || first,
     marks: carriers.length > 1 && on.length < carriers.length ? [...new Set(on.map(el => el.type))] : []
   })).sort((a, b) => !!a.marks.length - !!b.marks.length);
 }
@@ -65,7 +80,7 @@ function scenariosOf(slice, state, edition, threads) {
   return { scenarios, elements };
 }
 
-export function outlineSliceRow(state, slice, { first = false, last = false } = {}) {
+export function outlineSliceRow(state, slice, { first = false, last = false, trace = null } = {}) {
   const edition = verifyingEdition(state);
   const threads = sliceComments(state, slice.id).threads;
   const { scenarios, elements } = scenariosOf(slice, state, edition, threads);
@@ -78,6 +93,7 @@ export function outlineSliceRow(state, slice, { first = false, last = false } = 
     actor,
     kind: `${actor === 'processor' && slice.type !== 'AU' ? '⚙ ' : ''}${shortKind[slice.type] || slice.type}`,
     chain: chainOf(slice, state),
+    reads: automationReads(state, slice),
     description: slice.description || '',
     paragraphs: paragraphsOf(state, slice.id).map(p => p.text),
     refined: !!refinedState(state, slice.id)?.refined,
@@ -85,7 +101,10 @@ export function outlineSliceRow(state, slice, { first = false, last = false } = 
     sliceVerdict: edition == null ? null : sliceVerdict(state, edition, slice.id),
     usage: usageBadge(slice, state),
     waived: slice.waived || null,
-    fields: fieldsOf(slice, state),
+    noSource: gapCount(state, [slice.id]),
+    tidy: tidyCount(state, [slice.id]),
+    fields: fieldsOf(slice, state, trace),
+    traced: !!trace?.slices.includes(slice.id),
     scenarios, elements,
     comments: threads.filter(t => !t.scenarioId && !t.resolved),
     canMoveUp: !first, canMoveDown: !last

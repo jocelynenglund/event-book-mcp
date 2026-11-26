@@ -10,6 +10,7 @@ import { renderGwt, pendingMark } from '../scenarios/view.js';
 import { refinedPill } from './refinedPill.js';
 import { sliceProgressChip } from '../buildProgress/progress.parts.js';
 import { propLabel } from '../../core/constants.js';
+import { noSourceMark } from '../fieldSources/fieldGaps.parts.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -17,14 +18,30 @@ const fieldMark = { command: '🟦', event: '🟧', readModel: '🟩', processor
 const markName = { command: 'command', event: 'event', readModel: 'view', processor: 'automation', screen: 'screen' };
 const partLabel = { given: 'Given', when: 'When', then: 'Then' };
 
+// An automation says which view slice it reads (a tap goes to it), or, the older way, the event that wakes it
+const readsLine = row => row.reads.length ? `<span class="ol-reads">${row.reads.map(r => r.sliceId
+  ? `${r.label} <button class="ol-reads-slice" data-outline-action="jump" data-slice="${r.sliceId}" aria-label="Show ${escapeHtml(r.name)} on the board">${escapeHtml(r.name)}</button>`
+  : `${r.label} ${escapeHtml(r.name)}`).join(' · ')}</span>` : '';
 const chainText = row => row.chain.length ? row.chain.map(escapeHtml).join(' → ') : '<i>empty</i>';
+
+// One field of a slice. A gap (no source, or a piece of prose) is a button with a ⚠: it opens that field's sheet. Any
+// other is a button too: it opens the field's editor (Comes from…, Trace), or, in a book that can't be changed here, traces it.
+// A ← after the name says it comes from another sticky's field; on-trace: it is on the traced path.
+const fieldChip = sliceId => ({ prop, marks, gap, from, onTrace, query, at }) => {
+  const arrow = from ? ` <span class="fm-chip-mark" title="comes from ${escapeHtml(from)}">←</span>` : '';
+  const label = `${marks.map(t => fieldMark[t]).join('')}${marks.length ? ' ' : ''}${query ? '?' : ''}${escapeHtml(propLabel(prop))}${prop.type && prop.type !== 'string' ? ` <i>${escapeHtml(prop.type)}</i>` : ''}${arrow}`;
+  const on = `${from ? ' mapped' : ''}${onTrace ? ' on-trace' : ''}`;
+  return gap
+    ? `<button class="ol-field has-gap${on}" data-outline-action="field-gap" data-el="${gap.elementId}" data-slice="${sliceId}" data-field="${escapeHtml(gap.field)}" aria-label="${escapeHtml(gap.field)} ${gap.tidy ? 'needs tidying' : 'has no source'}: tap for why and the fix">${label}<span class="fg-mark-chip" aria-hidden="true"> ⚠</span></button>`
+    : `<button class="ol-field${on}" data-outline-action="field-menu" data-el="${at.elementId}" data-prop="${at.propertyId}" data-slice="${sliceId}" data-field="${escapeHtml(prop.name)}" aria-label="${escapeHtml(prop.name)}${from ? `, comes from ${escapeHtml(from)}` : ''}: edit, map or trace it">${label}</button>`;
+};
 
 function fieldList(row) {
   if (!row.fields.length) return '';
   const used = [...new Set(row.fields.flatMap(f => f.marks))];
   return `
     <div class="ol-fieldlist">
-      ${row.fields.map(({ prop, marks }) => `<span class="ol-field">${marks.map(t => fieldMark[t]).join('')}${marks.length ? ' ' : ''}${escapeHtml(propLabel(prop))}${prop.type && prop.type !== 'string' ? ` <i>${escapeHtml(prop.type)}</i>` : ''}</span>`).join('')}
+      ${row.fields.map(fieldChip(row.sliceId)).join('')}
       ${used.length ? `<span class="ol-field-key">Squares: which stickies carry it (${used.map(t => `${fieldMark[t]} ${markName[t] === 'event' || markName[t] === 'automation' ? 'an' : 'the'} ${markName[t]}`).join(' · ')}); no square: all of them</span>` : ''}
     </div>`;
 }
@@ -139,7 +156,7 @@ function details(row, ui) {
   const valuesOn = !!(ui.showFields || ui.values);
   const values = list && !ui.showFields && row.scenarios.some(s => s.hasValues)
     ? `<button class="ol-gwt-toggle ol-values-pill ${valuesOn ? 'on' : ''}" data-outline-action="values-one" data-slice="${row.sliceId}" aria-pressed="${valuesOn}">${valuesOn ? '✓ values' : 'values'}</button>` : '';
-  return `<div class="ol-pills">${pill}${toggle}${values}${refined}${sliceProgressChip(row.progress)}${waivedMark({ waived: row.waived })}${commentButton(row, null)}</div>${inlineComments(row, null)}${fieldsOpen ? fieldList(row) : ''}${list}`;
+  return `<div class="ol-pills">${pill}${toggle}${values}${refined}${sliceProgressChip(row.progress)}${waivedMark({ waived: row.waived })}${noSourceMark(row.noSource, { long: true, tidy: row.tidy, where: 'outline', slice: row.sliceId })}${commentButton(row, null)}</div>${inlineComments(row, null)}${fieldsOpen ? fieldList(row) : ''}${list}`;
 }
 
 // One slice: its row, then its pills and open scenarios. ui: selecting, selected, open, query (searching),
@@ -147,7 +164,7 @@ function details(row, ui) {
 export function outlineRow(row, ui = {}) {
   const sel = !!ui.selected;
   return `
-    <div class="ol-item" data-component="Outline row" data-key="${row.sliceId}">
+    <div class="ol-item" data-component="Outline row" data-key="${row.sliceId}"${row.traced ? ' data-traced="true"' : ''}>
     <div class="ol-row ${sel ? 'selected' : ''}">
       ${ui.selecting ? `<button class="ol-check" data-outline-action="toggle" data-slice="${row.sliceId}" aria-label="Select">${sel ? '✓' : ''}</button>` : ''}
       <span class="ol-dot" data-slice-type="${row.type}" data-actor="${row.actor}"></span>
@@ -157,6 +174,7 @@ export function outlineRow(row, ui = {}) {
         ${ui.verifying && row.sliceVerdict ? sliceVerdictBadge(row.sliceVerdict) : ''}
         ${row.usage}
         <span class="ol-summary">${chainText(row)}</span>
+        ${readsLine(row)}
         ${row.description ? `<span class="ol-desc">${escapeHtml(row.description)}</span>` : ''}
         ${row.paragraphs.map(text => `<span class="ol-para">${escapeHtml(text)}</span>`).join('')}
       </div>
@@ -201,6 +219,7 @@ export function outlineChapterHead(chapter, ui = {}) {
         <div class="ol-ch-text">
           <button class="ol-chapter-name" data-outline-action="chapter-menu" data-chapter="${chapter.id}" aria-label="${escapeHtml(chapter.name)}: chapter menu (rename, move, delete)"><span class="ch-more" aria-hidden="true">⋮</span>${ui.bookmarked ? '<span class="ch-mark" aria-label="Bookmarked">🔖</span> ' : ''}${escapeHtml(chapter.name)}</button>
           <span class="ol-count">${count}${bands}</span>
+          ${noSourceMark(chapter.noSource, { long: true, tidy: chapter.tidy, where: 'outline', chapter: chapter.id })}
         </div>
         <div class="ol-step" ${ui.searching ? 'hidden' : ''}>
           <button aria-label="Chapter earlier" data-outline-action="chapter-up" data-chapter="${chapter.id}" ${chapter.first ? 'disabled' : ''}>↑</button>
@@ -220,12 +239,13 @@ export function outlineSearchBox(view) {
       </div>`;
 }
 
-// Above the chapters: how many slices match, Fields, Select / Done, and the open comments. view: Outline Toolbar Options, and whether Fields is on and the outline is selecting (a device's own)
+// Above the chapters: how many slices match, Fields, Select / Done, Arrange, and the open comments. view: Outline Toolbar Options, and whether Fields is on and the outline is selecting (a device's own)
 export function outlineToolbar(view) {
   return `<div class="ol-toolbar" data-component="Outline toolbar" data-key="toolbar">
       <span class="ol-total">${view.total}</span>
       ${view.fields ? `<button class="ol-select ol-fields-toggle ${view.showFields ? 'on' : ''}" data-outline-action="fields" aria-pressed="${!!view.showFields}">${view.showFields ? '✓ Fields' : 'Fields'}</button>` : ''}
       ${view.select ? `<button class="ol-select" data-outline-action="select">${view.selecting ? 'Done' : 'Select'}</button>` : ''}
+      ${view.arrange ? `<button class="ol-select ol-arrange-toggle" data-outline-action="arrange" title="Set up parts and chapters: drag, rename, add">Arrange</button>` : ''}
       ${view.openComments ? `<button class="ol-select ol-cm-next" data-outline-action="next-comment">💬 ${view.openComments} open</button>` : ''}
     </div>`;
 }

@@ -11,6 +11,9 @@ import { waivedMark } from '../scenarioWaiver/view.js';
 import { usageLineHtml, usageChipHtml } from '../usage/view.js';
 import { specTrailHtml } from '../specs/specs.parts.js';
 import { conversationView } from '../comments/comments.parts.js';
+import { fieldGapMark } from '../fieldSources/fieldGaps.parts.js';
+import { fieldMappingMark } from '../fieldMapping/fieldMapping.parts.js';
+import { screenWire } from '../pad/screenWire.parts.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const external = el => `${el.external ? ' data-external="true"' : ''}${el.table ? ' data-table="true"' : ''}${el.published && !el.external ? ' data-published="true"' : ''}`;
@@ -66,8 +69,9 @@ export function slicePageSticky(s) {
       <span class="sp-sticky-kind">${escapeHtml(s.kind)}${usageChipHtml(s.used)}</span>
       <span class="sp-sticky-name">${escapeHtml(s.name)}</span>
       ${s.to ? `<span class="sp-sticky-to">→ ${escapeHtml(s.to)}</span>` : ''}
+      ${s.screen ? screenWire(s.screen) : ''}
       ${s.fields.length ? `<span class="sp-props">${s.fields.map(f => `
-        <span class="sp-prop"><span>${escapeHtml(f.label)}</span><i>${escapeHtml(f.type)}</i></span>`).join('')}</span>` : ''}
+        <span class="sp-prop"${f.gap ? ' data-gap="true"' : ''}><span${f.gap ? ' class="fg-name"' : ''}>${escapeHtml(f.label)}</span>${f.from ? fieldMappingMark(f.from) : ''}<i>${escapeHtml(f.type)}</i>${f.gap ? fieldGapMark(f.gap, 'page') : ''}</span>`).join('')}</span>` : ''}
     </button>`;
 }
 
@@ -83,7 +87,7 @@ const show = v => (typeof v === 'string' ? v : JSON.stringify(v));
 // A list read model's rows as a table, one column per field
 function rowsHtml(rows) {
   const cols = [...new Set(rows.flatMap(r => Object.keys(r || {})))];
-  if (!cols.length) return '';
+  if (!cols.length) return '<div class="sp-none">(empty)</div>';
   // Wide rows don't fit a phone as a table: each row as its own short list instead
   if (cols.length > 3) {
     return rows.map((r, i) => `<div class="sp-record"><div class="sp-record-n">Row ${i + 1}</div>
@@ -130,6 +134,7 @@ export function slicePageScenario(scn) {
       </button>
       ${src}
       ${step('Given', given)}
+      ${scn.query ? step('Q', `<div class="sp-query">${escapeHtml(scn.query)}</div>`) : ''}
       ${scn.when ? step('When', refHtml(scn.when)) : ''}
       ${step('Then', then)}
     </article>`;

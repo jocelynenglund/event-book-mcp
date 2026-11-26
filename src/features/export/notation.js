@@ -45,7 +45,7 @@ function sliceLines(slice, state) {
   const actor = processor ? 'A' : screen ? 'S' : '';
   // An automation: the read models it reads, the events that trigger it (from the model, not the board)
   const linked = (rel, mine, other) => !processor ? [] : state.connections
-    .filter(c => c.relation === rel && c[mine] === processor.id && state.elements[c[other]]).map(c => ident(state.elements[c[other]].name));
+    .filter(c => c.relation === rel && c[mine] === processor.id && state.elements[c[other]] && !state.elements[c[other]].orphaned).map(c => ident(state.elements[c[other]].name));
   const reads = linked('context', 'from', 'to'), on = linked('trigger', 'to', 'from');
   const note = [screen ? `screen: ${screen.name}` : '', processor ? `automation: ${processor.name}` : '', on.length ? `on ${on.join(', ')}` : ''].filter(Boolean).join(' · ');
   commands.forEach(c => out.push(`${actor ? `${actor},` : ''}C: ${sticky(c)}${reads.length ? ` [${reads.join(', ')}]` : ''}${note ? `  # ${note}` : ''}`));

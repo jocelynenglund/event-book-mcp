@@ -9,7 +9,8 @@
 
 import { keptAfterKeep } from '../library/sections.js';
 import { deviceLabel } from './deviceName.js';
-import { readModelEvents, replaceModelEvents, listModels, getCurrentModelId, createModel, onAppend, setEditGuard, deleteModel } from '../../core/eventStore.js';
+import { readModelEvents, replaceModelEvents, listModels, getCurrentModelId, createModel, onAppend, onOpenModel, setEditGuard, setTypeGuard, deleteModel } from '../../core/eventStore.js';
+import { EventTypes } from '../../core/constants.js';
 import { isBuildBook } from '../buildVersions/rules.js';
 import { packSnapshotsInBrowser, unpackSnapshotsInBrowser } from '../../core/packedSnapshot.js';
 
@@ -127,6 +128,7 @@ export const canEdit = id => !account() || !isKept(id) || !!holderOf(id)?.you;
 function setHolder(id, holder) {
   const k = kept();
   if (!k[id]) return;
+  if ((k[id].holder?.deviceId || null) !== (holder?.deviceId || null)) refused.delete(id);
   k[id] = { ...k[id], holder: holder || null };
   write(KEPT_KEY, k);
 }
@@ -141,11 +143,11 @@ export async function checkOut(modelId) {
     throw e;
   }
   notify();
-  return syncModel(modelId);   // the latest, now that it's yours
+  return syncModel(modelId, { force: true });   // the latest, now that it's yours
 }
 
 export async function checkIn(modelId) {
-  await syncModel(modelId);    // send the last changes first
+  await syncModel(modelId, { force: true });    // send the last changes first
   const r = await call('POST', `${path(modelId)}/checkin`);
   setHolder(modelId, r.holder);
   notify();
@@ -155,7 +157,7 @@ export async function takeOver(modelId) {
   const r = await call('POST', `${path(modelId)}/takeover`);
   setHolder(modelId, r.holder);
   notify();
-  return syncModel(modelId);
+  return syncModel(modelId, { force: true });
 }
 
 // Before changing a library book from its menu (rename): checked in, it's checked out here
@@ -188,6 +190,9 @@ const status = {};            // modelId → 'syncing' | 'ok' | 'error: …'
 export const shelfStatus = id => status[id] || (isKept(id) ? 'ok' : null);
 const listeners = new Set();
 export function onSyncChange(fn) { listeners.add(fn); }
+// Events came down for a book: (modelId, count). The open screen redraws when it is the open book
+const pulledListeners = new Set();
+export function onPulled(fn) { pulledListeners.add(fn); }
 function notify() { listeners.forEach(fn => { try { fn(); } catch (e) { /* a view's problem */ } }); }
 
 export async function keepOnServer(modelId) {
@@ -195,7 +200,7 @@ export async function keepOnServer(modelId) {
   // Keeping it checks it out here (the server does that on the first push): borrowed straight away
   write(KEPT_KEY, keptAfterKeep(kept(), modelId, serverId));
   notify();
-  return syncModel(modelId);
+  return syncModel(modelId, { force: true });
 }
 
 export async function stopKeeping(modelId) {
@@ -246,9 +251,24 @@ const dropUndone = (events, undone = []) => { const u = new Set(undone); return 
 
 // Up what the server lacks, down what this device lacks, then drop undone batches
 const running = new Map();
-export function syncModel(modelId) {
+// The brake: a book is asked of the server at most once per MIN_GAP_MS unless a person asked ({ force: true }: check in/out,
+// send now, keep, take back, start-up, the tab coming back). Calls inside the gap share one trailing sync, so no loop
+// elsewhere can flood the host (it once fetched a book's events dozens of times a second).
+const MIN_GAP_MS = () => { try { return Number(localStorage.getItem('eventpad_sync_gap_ms')) || 5000; } catch (e) { return 5000; } };
+const refused = new Set();      // modelIds the server answered 409 to: their unsent changes wait for a new holder
+const lastRun = new Map();      // modelId → when its last sync started
+const trailing = new Map();     // modelId → the one sync waiting for the gap to pass
+export function syncModel(modelId, { force = false } = {}) {
   if (!account() || !isKept(modelId)) return Promise.resolve();
   if (running.has(modelId)) return running.get(modelId);
+  if (!force) {
+    const wait = (lastRun.get(modelId) || 0) + MIN_GAP_MS() - Date.now();
+    if (wait > 0) {
+      if (!trailing.has(modelId)) trailing.set(modelId, new Promise(resolve => setTimeout(() => { trailing.delete(modelId); resolve(syncModel(modelId)); }, wait)));
+      return trailing.get(modelId);
+    }
+  }
+  lastRun.set(modelId, Date.now());
   const job = (async () => {
     status[modelId] = 'syncing'; notify();
     try {
@@ -263,7 +283,9 @@ export function syncModel(modelId) {
       const got = [];
       // Changes go up only from the device that has it checked out; anyone can fetch.
       // Comments are talk, not changes: they go up from any device
-      const mine = !k.holder || k.holder.you;
+      // A book the server refused changes for (409) is not tried again until its holder changes or a person asks
+      if (force) refused.delete(modelId);
+      const mine = (!k.holder || k.holder.you) && !refused.has(modelId);
       const sendable = mine ? fresh : fresh.filter(e => commentEventTypes.has(e.type));
       let sentOk = true;
       for (const part of parts(sendable)) {
@@ -273,6 +295,7 @@ export function syncModel(modelId) {
           if (e.status !== 409) throw e;
           // Checked out elsewhere meanwhile: fetch instead; our changes stay here, unsent
           if (e.body?.holder !== undefined) setHolder(modelId, e.body.holder);
+          refused.add(modelId);
           sentOk = false;
           r = await call('POST', `${path(modelId)}/events`, { after, events: [] });
         }
@@ -293,6 +316,7 @@ export function syncModel(modelId) {
         write(KEPT_KEY, now);
       }
       status[modelId] = 'ok';
+      if (incoming.length) pulledListeners.forEach(fn => { try { fn(modelId, incoming.length); } catch (e) { /* a view's problem */ } });
       return { up: fresh.length, down: incoming.length };
     } catch (e) {
       status[modelId] = `error: ${e.message}`;
@@ -328,16 +352,85 @@ async function healLost(modelId) {
   }
 }
 
-export async function syncAll() {
+// What the save chip needs to know of a book (read from what's here: no request): signed in, kept, how its last sync
+// ended, how many changes still wait to go up (those this device may send), whether the server refused them (409)
+export function saveFacts(id) {
+  const k = kept()[id];
+  let unsent = 0;
+  if (account() && k) {
+    const synced = new Set(k.synced);
+    const mine = (!k.holder || k.holder.you) && !refused.has(id);
+    unsent = readModelEvents(id).filter(e => !synced.has(e.id) && (mine || commentEventTypes.has(e.type))).length;
+  }
+  return { signedIn: !!account(), reviewer: isReviewerAccount(), kept: !!k, build: isBuildShelf(id),
+    status: status[id] || null, unsent, parked: refused.has(id), backoffMs: syncBackoff() };
+}
+
+let allRunning = null, lastAll = 0;
+// THE REQUEST BUDGET, in one place. The shared host (event-store-api Program.cs, GlobalLimiter) allows 60 requests per 10 s
+// per client IP, a fixed window with no queue; CORS preflights (OPTIONS) count too, and its 429 carries no CORS headers (the
+// browser reports it as status 0) and no Retry-After. Every call here costs 2 requests (preflight + POST), so a batch of book
+// syncs runs at most 2 in flight and starts at most 2 a second (~4 requests/s, ~40 per 10 s with room for the person's own
+// calls). A 429 or status 0 backs the whole batch off for at least the 10 s window (doubling to 2 min); then it resumes slowly.
+const BUDGET = {
+  parallel: 2,
+  startGapMs: 500,          // between starts of book syncs in a batch: 2 a second at most
+  backoffFirstMs: 10_000,   // the host's window
+  backoffMaxMs: 120_000
+};
+const BATCH_START_GAP_MS = () => { try { return Number(localStorage.getItem('eventpad_batch_gap_ms')) || BUDGET.startGapMs; } catch (e) { return BUDGET.startGapMs; } };
+const BACKOFF_FIRST_MS = () => { try { return Number(localStorage.getItem('eventpad_backoff_ms')) || BUDGET.backoffFirstMs; } catch (e) { return BUDGET.backoffFirstMs; } };
+let backoffMs = 0, backoffUntil = 0, backoffTimer = null;
+const overloaded = e => e instanceof SyncError && (e.status === 429 || e.status === 0);
+function backOff() {
+  backoffMs = backoffMs ? Math.min(backoffMs * 2, BUDGET.backoffMaxMs) : BACKOFF_FIRST_MS();
+  backoffUntil = Date.now() + backoffMs;
+  clearTimeout(backoffTimer);
+  backoffTimer = setTimeout(() => { backoffTimer = null; syncAll({ force: true }).catch(() => {}); }, backoffMs);
+}
+export const syncBackoff = () => backoffUntil > Date.now() ? backoffUntil - Date.now() : 0;
+
+export function syncAll({ force = false } = {}) {
+  // Never re-enters itself: a call while one runs shares it, and one more than once per gap is skipped (a person's Sync is not)
+  if (allRunning) return allRunning;
+  if (!force && Date.now() - lastAll < MIN_GAP_MS()) return Promise.resolve();
+  if (!force && syncBackoff() > 0) return Promise.resolve();   // waiting out a 429: the retry timer is set
+  lastAll = Date.now();
+  return allRunning = syncEverything().finally(() => { allRunning = null; });
+}
+
+// Does this kept book need a request? Its position differs from the server's count (the same unit: events stored), it has
+// changes or comments not sent yet, events it synced are missing here, or its holder changed (checked by the caller).
+function needsSync(id, row) {
+  const k = kept()[id];
+  if (!k) return false;
+  if (!row) return !(k.position > 0) && !k.synced?.length;   // kept here, not on the server yet: it goes up (one the server let go of was unlinked already)
+  if (row.count !== k.position) return true;
+  const synced = new Set(k.synced || []);
+  const local = readModelEvents(id);
+  const mine = (!k.holder || k.holder.you) && !refused.has(id);
+  if (local.some(e => !synced.has(e.id) && (mine || commentEventTypes.has(e.type)))) return true;
+  const have = new Set(local.map(e => e.id));
+  return (k.synced || []).some(sid => !have.has(sid));
+}
+const holderKey = h => h ? `${h.deviceId || ''}|${!!h.you}` : '';
+
+async function syncEverything() {
   if (!account()) return;
-  // Who holds what, from the library listing
+  const changed = new Set();
+  let rows;
+  // Who holds what, and how far each book is, from the library listing: asked once
   try {
-    const rows = await serverLibrary();
-    const byServerId = new Map(rows.map(r => [r.modelId, r.holder || null]));
+    rows = await serverLibrary();
+    const byServerId = new Map(rows.map(r => [r.modelId, r]));
     const gone = [];
     Object.entries(kept()).forEach(([id, k]) => {
       const sid = k.serverId || id;
-      if (byServerId.has(sid)) setHolder(id, byServerId.get(sid));
+      const row = byServerId.get(sid);
+      if (row) {
+        if (holderKey(k.holder) !== holderKey(row.holder)) changed.add(id);
+        setHolder(id, row.holder || null);
+      }
       // Let go on the server (a replaced build book, released from another device): this copy
       // stays here as a private book, and nothing is pushed back, which would keep it again
       else if (k.position > 0 || k.synced?.length) gone.push(id);
@@ -363,9 +456,28 @@ export async function syncAll() {
       const row = rows.find(r => r.name === name && !here.has(r.modelId));
       if (row) { try { await download(row.modelId); } catch (e) { /* it stays under "not on this device" */ } }
     }
-  } catch (e) { /* offline: the shelves say so */ }
-  const ids = Object.keys(kept()).filter(id => listModels().some(m => m.id === id));
-  for (const id of ids) { try { await syncModel(id); } catch (e) { /* shown on the shelf */ } }
+  } catch (e) {
+    // Offline or refused: the shelves say so, and the whole batch waits. Nothing is synced blind
+    if (overloaded(e)) backOff();
+    return;
+  }
+  const byServerId = new Map(rows.map(r => [r.modelId, r]));
+  const queue = Object.keys(kept())
+    .filter(id => listModels().some(m => m.id === id))
+    .filter(id => changed.has(id) || needsSync(id, byServerId.get(kept()[id]?.serverId || id)));
+  let stop = false, nextStart = 0;
+  const worker = async () => {
+    while (!stop && queue.length) {
+      const id = queue.shift();
+      const at = Math.max(Date.now(), nextStart);   // claimed before waiting, so the two workers keep the gap between them
+      nextStart = at + BATCH_START_GAP_MS();
+      if (at > Date.now()) await new Promise(r => setTimeout(r, at - Date.now()));
+      if (stop) return;
+      try { await syncModel(id, { force: true }); backoffMs = 0; }
+      catch (e) { if (overloaded(e)) { stop = true; backOff(); } /* else shown on the shelf */ }
+    }
+  };
+  await Promise.all(Array.from({ length: BUDGET.parallel }, worker));
 }
 
 // An action undone here that the server already has: undone on every device
@@ -412,9 +524,32 @@ function checkInOnClose() {
   });
 }
 
+// A book open here while another device holds it (the agent writing, say): it was only fetched at start-up
+// and when the tab came back, so it showed the copy from then. Now it is fetched when opened, and while it
+// stays open (visible tab, shelves closed) every 30 s: only the events after its position come down, and
+// nothing at all is asked while this device holds it or the book isn't kept.
+const POLL_MS = () => { try { return Number(localStorage.getItem('eventpad_poll_ms')) || 30_000; } catch (e) { return 30_000; } };
+let lastPoll = 0;
+function pollHeldElsewhere() {
+  const id = getCurrentModelId();
+  if (!account() || !isKept(id) || document.visibilityState !== 'visible' || document.body.classList.contains('library-mode')) return;
+  const holder = holderOf(id);
+  if (!holder || holder.you || Date.now() - lastPoll < POLL_MS()) return;
+  lastPoll = Date.now();
+  syncModel(id).catch(() => {});
+}
+
+let inited = false;
 export function initSync() {
+  if (inited) return;   // a second call would double every listener
+  inited = true;
+  onOpenModel(id => { if (account() && isKept(id)) { lastPoll = Date.now(); syncModel(id).catch(() => {}); } });
+  setInterval(pollHeldElsewhere, 1000);
   // A shelf kept on the server changes only where it's checked out
   setEditGuard(id => canEdit(id), id => blocked(id));
+  // A build book is never checked out, yet its reader may lay its chapters out: arranging goes onto it wherever it is kept
+  const arranging = new Set([EventTypes.ChaptersArranged, EventTypes.PartStarted, EventTypes.PartRenamed, EventTypes.PartRemoved]);
+  setTypeGuard((id, type) => arranging.has(type) && isKept(id) && isBuildShelf(id) ? true : null);
   onAppend(event => {
     const id = getCurrentModelId();
     if (!isKept(id) || !account() || (!canEdit(id) && !commentEventTypes.has(event?.type))) return;

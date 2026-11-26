@@ -63,6 +63,14 @@ export function setWhen(scenarioId, commandId, values) {
   });
 }
 
+// Set the query of a view scenario (SV scenarios only): one line of free text, "name starts with a"; '' takes it away
+export function setQuery(scenarioId, text) {
+  appendEvent(EventTypes.ScenarioQuerySet, {
+    scenarioId,
+    text: String(text ?? '').trim()
+  });
+}
+
 // Set Then event (SC scenarios - success)
 export function setThenEvent(scenarioId, eventId, values) {
   appendEvent(EventTypes.ThenEventSet, {

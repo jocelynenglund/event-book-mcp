@@ -3,9 +3,10 @@
 // ===========================================
 
 import { getEventStream, EventTypes, storedEvents, readModelEvents } from './eventStore.js';
-import { byName } from './constants.js';
+import { byName, fieldKey } from './constants.js';
 import { isSliceEdit, editedSlices } from './sliceEdits.js';
 import { editionOf } from '../features/editions/rules.js';
+import { padFold } from '../features/pad/sketch.js';
 import { chapterMoved, chaptersArranged, partStarted, partRenamed, partRemoved, chapterRemoved, layoutByName, layoutOnSnapshot } from '../features/arrange/arrangement.js';
 
 // Element ordering hierarchy (top to bottom)
@@ -82,6 +83,7 @@ export function projectState(eventStream = getEventStream()) {
     sliceOrder: [],    // slice ids, left to right on the board
     chapters: {},      // id -> { id, name }
     chapterOrder: [],  // chapter ids, left to right
+    pad: { notes: {}, frames: {} },   // the sketch: noteId -> { id, x, y, colour, text }, frameId -> { id, x, y, w, h, name, chapterId } (features/pad)
     parts: [],         // { id, name, firstChapter }: names over runs of chapters, by place (features/arrange)
     arranged: false,   // the chapters were laid out by someone: a build's snapshot keeps that layout
     flows: {},         // id -> { id, chapterId, name }
@@ -155,6 +157,10 @@ export function projectState(eventStream = getEventStream()) {
         if (state.elements[event.data.elementId]) state.elements[event.data.elementId].list = !!event.data.list;
         break;
 
+      case EventTypes.ScreenSketchSet:
+        if (state.elements[event.data.elementId]) state.elements[event.data.elementId].sketch = String(event.data.text ?? '');
+        break;
+
       case EventTypes.ElementTodoSet:
         if (state.elements[event.data.elementId]) state.elements[event.data.elementId].todo = !!event.data.todo;
         break;
@@ -223,6 +229,42 @@ export function projectState(eventStream = getEventStream()) {
         if (prop) prop.generated = !!event.data.generated;
         break;
       }
+
+      // A field that has no source in the model on purpose, with how it comes about (keyed by its name, matched loosely)
+      case EventTypes.FieldSetBySystem:
+        if (state.elements[event.data.elementId]) (state.elements[event.data.elementId].setBySystem ||= {})[fieldKey(event.data.field)] = { field: event.data.field, how: event.data.how || 'the system' };
+        break;
+
+      case EventTypes.FieldSetBySystemCleared:
+        if (state.elements[event.data.elementId]?.setBySystem) {
+          delete state.elements[event.data.elementId].setBySystem[fieldKey(event.data.field)];
+          if (!Object.keys(state.elements[event.data.elementId].setBySystem).length) delete state.elements[event.data.elementId].setBySystem;
+        }
+        break;
+
+      // A field that comes from another sticky's field (keyed by its name, matched loosely): { field, from: { elementId, field } }
+      case EventTypes.FieldMapped:
+        if (state.elements[event.data.elementId]) (state.elements[event.data.elementId].mappings ||= {})[fieldKey(event.data.field)] = { field: event.data.field, from: { elementId: event.data.from.elementId, field: event.data.from.field } };
+        break;
+
+      case EventTypes.FieldMappingCleared:
+        if (state.elements[event.data.elementId]?.mappings) {
+          delete state.elements[event.data.elementId].mappings[fieldKey(event.data.field)];
+          if (!Object.keys(state.elements[event.data.elementId].mappings).length) delete state.elements[event.data.elementId].mappings;
+        }
+        break;
+
+      // A read model's field the caller asks with (keyed by its name, matched loosely): { field }
+      case EventTypes.FieldMarkedQuery:
+        if (state.elements[event.data.elementId]) (state.elements[event.data.elementId].queryFields ||= {})[fieldKey(event.data.field)] = { field: event.data.field };
+        break;
+
+      case EventTypes.FieldQueryCleared:
+        if (state.elements[event.data.elementId]?.queryFields) {
+          delete state.elements[event.data.elementId].queryFields[fieldKey(event.data.field)];
+          if (!Object.keys(state.elements[event.data.elementId].queryFields).length) delete state.elements[event.data.elementId].queryFields;
+        }
+        break;
 
       case EventTypes.PropertyRemoved:
         if (state.elements[event.data.elementId]) {
@@ -356,6 +398,10 @@ export function projectState(eventStream = getEventStream()) {
       case EventTypes.ChapterMoved: chapterMoved(state, event.data); break;   // old books
 
       case EventTypes.ChaptersArranged: chaptersArranged(state, event.data); break;
+      case EventTypes.PadNoteAdded: case EventTypes.PadNoteMoved: case EventTypes.PadNoteEdited: case EventTypes.PadNoteRecoloured: case EventTypes.PadNoteRemoved: case EventTypes.PadNoteLinked: case EventTypes.PadNoteUnlinked:
+      case EventTypes.PadFrameAdded: case EventTypes.PadFrameChanged: case EventTypes.PadFrameRemoved: case EventTypes.PadFrameConverted:
+        padFold(state, event); break;
+
       case EventTypes.PartStarted: partStarted(state, event.data); break;
       case EventTypes.PartRenamed: partRenamed(state, event.data); break;
       case EventTypes.PartRemoved: partRemoved(state, event.data); break;
@@ -489,6 +535,12 @@ export function projectState(eventStream = getEventStream()) {
       case EventTypes.BuildUnfollowed:
         state.follow = null;
         break;
+      case EventTypes.RetireEvidenceNoted:
+        for (const e of event.data.entries || []) {
+          const notes = ((state.retireEvidence ||= {})[e.sliceId] ||= []);
+          if (e.text && !notes.some(n => n.text === e.text)) notes.push({ text: e.text, by: event.data.by || null });
+        }
+        break;
       case EventTypes.PlanRetired:
         state.retired = { app: event.data.app || null, edition: event.data.edition ?? null, retiredAt: event.data.retiredAt || event.timestamp || null,
           ...(event.data.byOwner ? { byOwner: true, unconfirmed: event.data.unconfirmed || [] } : {}) };
@@ -572,7 +624,11 @@ export function projectState(eventStream = getEventStream()) {
         break;
 
       case EventTypes.ParagraphEdited:
-        if (state.paragraphs?.[event.data.paragraphId]) state.paragraphs[event.data.paragraphId].text = event.data.text;
+        if (state.paragraphs?.[event.data.paragraphId]) Object.assign(state.paragraphs[event.data.paragraphId], { text: event.data.text, edited: true });
+        break;
+
+      case EventTypes.ParagraphDeleted:
+        if (state.paragraphs) delete state.paragraphs[event.data.paragraphId];
         break;
 
       case EventTypes.PlanSentToPress:
@@ -673,6 +729,13 @@ export function projectState(eventStream = getEventStream()) {
         }
         break;
         
+      // A view scenario's query sits in its When, where a change's command does: { query: 'free text' }
+      case EventTypes.ScenarioQuerySet:
+        if (state.scenarios[event.data.scenarioId]) {
+          state.scenarios[event.data.scenarioId].when = event.data.text?.trim() ? { query: event.data.text.trim() } : null;
+        }
+        break;
+
       case EventTypes.ThenEventSet:
         if (state.scenarios[event.data.scenarioId]) {
           state.scenarios[event.data.scenarioId].then = {
@@ -713,6 +776,11 @@ export function projectState(eventStream = getEventStream()) {
         break;
     }
   }
+
+  // A sticky whose slices were all deleted stays in the book but sits in no slice: its links are not drawn,
+  // listed or counted anywhere (a processor's reads, triggers), so no arrow shows from or to it
+  const sliced = new Set(Object.values(state.slices).flatMap(s => s.elements));
+  everSliced.forEach(id => { if (state.elements[id] && !sliced.has(id)) state.elements[id].orphaned = true; });
 
   // Auto-infer AU slices for processors from older models: connected, but never
   // placed in a slice

@@ -7,6 +7,7 @@
 // (read model) or an automation, named after its command or read model.
 // ===========================================
 
+import { updateSaveChip } from '../sync/view.js';
 import { statusChips, filtering as staged, emptyText } from '../filter/status.js';
 import { projectState } from '../../core/projections.js';
 import { openProgressHistory } from '../buildProgress/sheet.js';
@@ -34,6 +35,7 @@ import { outlineAddHint } from './outlineAddHint.read.js';
 import { outlineEditForm } from './outlineEditForm.read.js';
 import { outlineAutomationPartner } from './outlineAutomationPartner.read.js';
 import { outlineVerdictForm } from './outlineVerdictForm.read.js';
+import { renderArrange, isArranging, initOutlineArrange } from '../outlineArrange/view.js';
 import { setMustHave } from '../scenarios/command.js';
 import { render, showSlicePage } from '../../ui/feed.js';
 import { showToast } from '../../ui/toast.js';
@@ -45,6 +47,10 @@ import { addOutlineProperties, reoutlineSlice } from './command.js';
 import { toastWithUndo } from '../undo/command.js';
 import { openChapterMenu, openChapterPicker, openSliceMenu } from '../board/sheets.js';
 import { openBoardSheet } from '../board/sheets/shared.js';
+import { onFieldTap, onCountTap } from '../fieldSources/sheet.js';
+import { openPropertySheet } from '../properties/sheet.js';
+import { activeFieldTrace, startTrace } from '../fieldTrace/traceState.js';
+import { drawTraceStrip } from '../fieldTrace/strip.js';
 import { openShareSheet } from '../shareImage/sheet.js';
 import { hideAllSheets } from '../../ui/sheets.js';
 import { isReadOnly } from '../readOnly/sheet.js';
@@ -52,7 +58,7 @@ import { openScenariosSheet } from '../board/sheets/scenarios.js';
 import { openThread, openCommentsList } from '../comments/sheet.js';
 import { canAddScenariosHere, reviewOf } from '../review/client.js';
 import { recordVerdict } from '../verify/command.js';
-import { getCurrentModelId, getEventStream } from '../../core/eventStore.js';
+import { getCurrentModelId, getEventStream, canArrangeCurrent } from '../../core/eventStore.js';
 import { isBuildBook } from '../buildVersions/rules.js';
 import { usageButton } from '../usage/view.js';
 import { renderLiteratureOutline } from '../literature/view.js';
@@ -205,16 +211,20 @@ function saveEdit() {
 }
 
 export function renderOutline() {
+  updateSaveChip();   // the ☁ chip in the top bar: Save to library, Saved, Saving…, Not saved
   const container = document.getElementById('outlineView');
   if (!container) return;
   // One replay of the book per draw: the layout and each part's own view read from it
   const state = projectState();
+  // Arrange mode (this device's): only the parts and chapters
+  if (isArranging()) { renderArrange(container, state); pinOutline(); return; }
   const built = isBuildBook(getEventStream());
   const layout = outlineLayout(state, { query, folded: isChapterFolded });
   // A literature book's outline is its paragraphs and sentences: no scenarios, stickies or add steps
   if (layout.literature) { screenNow = { layout, rows: {} }; renderLiteratureOutline(container); return; }
   const rows = {};
-  layout.chapters.forEach(ch => ch.rows.forEach(r => { rows[r.slice.id] = outlineSliceRow(state, r.slice, r); }));
+  const trace = activeFieldTrace(state);
+  layout.chapters.forEach(ch => ch.rows.forEach(r => { rows[r.slice.id] = outlineSliceRow(state, r.slice, { ...r, trace }); }));
   screenNow = { layout, rows };
 
   const rowUi = row => ({
@@ -243,19 +253,21 @@ export function renderOutline() {
   if (!container.querySelector('#olSearch')) container.innerHTML = `${outlineSearchBox(outlineSearchField(state, { query }))}<div id="olBody"></div>`;
   container.querySelector('.ol-search-clear').hidden = !query;
   container.querySelector('#olBody').innerHTML = `
-    ${outlineToolbar({ ...outlineToolbarOptions(state, layout), showFields, selecting })}
+    ${outlineToolbar({ ...outlineToolbarOptions(state, layout, { arrangeable: canArrangeCurrent() }), showFields, selecting })}
     ${verifyLine(layout.verify)}
     ${roundsLine(layout.rounds)}
     ${sections || (layout.searching ? `<div class="ol-empty">Nothing matches "${escapeHtml(query)}"</div>` : staged() ? `<div class="ol-empty">${emptyText()}</div>` : '')}
     ${outlineNewChapterButton(outlineCanAddChapter(state, layout))}
     ${moveBar}
     ${bottomBar(state, layout)}`;
+  container.classList.toggle('tracing', !!trace);
+  drawTraceStrip(trace);
   pinOutline();
 }
 
 // Not checked out here: expanding, folding, fields and scenarios still open; a slice's row
 // opens its page, a scenario its slice's scenarios to read; anything that would change it does nothing
-const readOnlyReads = new Set(['chapter-menu', 'jump', 'open-slice', 'gwt', 'expand', 'collapse-all', 'comment', 'next-comment', 'testers', 'progress-history', 'verdict', 'verdict-save', 'nice', 'values-one', 'fields-one', 'fields', 'fold', 'search-clear', 'share-slice', 'add-scenario']);
+const readOnlyReads = new Set(['field-gap', 'field-menu', 'fix-list', 'chapter-menu', 'jump', 'open-slice', 'gwt', 'expand', 'collapse-all', 'comment', 'next-comment', 'testers', 'progress-history', 'verdict', 'verdict-save', 'nice', 'values-one', 'fields-one', 'fields', 'fold', 'search-clear', 'share-slice', 'add-scenario']);
 function readOnlyTap(a, t) {
   if (readOnlyReads.has(a)) return false;
   if (a === 'edit') { hideAllSheets(); openSliceMenu(t.dataset.slice); }   // read-only: only sharing
@@ -274,6 +286,10 @@ function handleClick(e) {
   if (a === 'up' || a === 'down') { stepSlice(id, a === 'up' ? -1 : 1); render(); }
   else if (a === 'jump') { hideAllSheets(); window.EventPad.showSliceOnBoard(id); }
   else if (a === 'progress-history') openProgressHistory(id);
+  else if (a === 'field-gap') onFieldTap(t.dataset.el, id, t.dataset.field);
+  // Any other field: its editor (Comes from…, Trace); a book that can't be changed here traces it
+  else if (a === 'field-menu') { if (isReadOnly()) startTrace(t.dataset.el, t.dataset.field); else openPropertySheet(t.dataset.el, t.dataset.prop); }
+  else if (a === 'fix-list') onCountTap(t);
   else if (a === 'open-slice') { hideAllSheets(); showSlicePage(id); }
   else if (a === 'add-scenario') openScenariosSheet(id, { readOnly: isReadOnly() && !canAddScenariosHere() });
   else if (a === 'select') { selecting = !selecting; selected.clear(); renderOutline(); }
@@ -447,6 +463,7 @@ export function initOutline() {
   window.addEventListener('scroll', onOutlineScroll, { passive: true });
   view?.addEventListener('click', handleClick);
   view?.addEventListener('keydown', handleKey);
+  initOutlineArrange(view);
   view?.addEventListener('input', e => {
     if (e.target.id !== 'olSearch') return;
     query = e.target.value;

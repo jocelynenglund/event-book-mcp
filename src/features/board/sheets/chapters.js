@@ -71,7 +71,7 @@ export function openChapterMenu(chapterId) {
   if (!v) return;
   menuChapterId = chapterId;
   openBoardSheet(`
-    <div class="sheet-title">Chapter</div>
+    <div class="sheet-title" data-chapter-title style="overflow-wrap: anywhere">${escapeHtml(v.name)}</div>
     <div class="bd-inline-form">
       <input type="text" class="sheet-input" id="bdRenameChapter" value="${escapeHtml(v.name)}" placeholder="Chapter name">
       <button class="sheet-btn" data-board-action="rename-chapter">Save</button>

@@ -63,6 +63,7 @@ const src = new URL('../../src/', import.meta.url);
 const es = await import(new URL('core/eventStore.js', src));
 const pr = await import(new URL('core/projections.js', src));
 const c = await import(new URL('features/board/command.js', src));
+const { automationReads } = await import(new URL('features/board/processorReads.js', src));
 const arr = await import(new URL('features/arrange/command.js', src));
 const sc = await import(new URL('features/scenarios/command.js', src));
 const ol = await import(new URL('features/outline/command.js', src));
@@ -75,6 +76,7 @@ const { snapshotEvents } = await import(new URL('features/snapshot/command.js', 
 const gen = await import(new URL('features/specs/generate.js', src));
 const ps = await import(new URL('features/press/command.js', src));
 const rt = await import(new URL('features/retire/rules.js', src));
+const rtc = await import(new URL('features/retire/command.js', src));
 const pbv = await import(new URL('features/buildVersions/rules.js', src));
 const bp = await import(new URL('features/buildProgress/command.js', src));
 const { sliceProgress } = await import(new URL('features/buildProgress/sliceProgress.read.js', src));
@@ -83,11 +85,25 @@ const lit = await import(new URL('features/literature/command.js', src));
 const litr = await import(new URL('features/literature/rules.js', src));
 const sug = await import(new URL('features/literature/suggestions.js', src));
 const auto = await import(new URL('features/automate/command.js', src));
+const fsrc = await import(new URL('features/fieldSources/rules.js', src));
+const fixl = await import(new URL('features/fieldSources/fixList.read.js', src));
+const fixc = await import(new URL('features/fieldSources/fixes.command.js', src));
+const { fieldTrace } = await import(new URL('features/fieldTrace/fieldTrace.read.js', src));
+const { mappingOf, propOf } = await import(new URL('features/fieldMapping/mappings.js', src));
+const { splitStickyField } = await import(new URL('features/fieldMapping/fieldText.js', src));
+const { rowText } = await import(new URL('features/viewQueries/query.js', src));
+const { isQueryField } = await import(new URL('features/viewQueries/queryFields.js', src));
 // Steps and scenarios are built by the same code ☰ → Import uses for an Event Book plan file
-const { addStep, addScenario, checkScenario, chapterId: chapterIdIn, checkPlan, buildPlan } = await import(new URL('features/planFile/build.js', src));
+const { addStep, addFields, addScenario, checkScenario, chapterId: chapterIdIn, checkPlan, buildPlan } = await import(new URL('features/planFile/build.js', src));
 es.loadEventStream();
 
 const lib = await import('./library.mjs');
+const { padTools } = await import('./pad.mjs');
+const upd = await import('./update.mjs');
+// The version the server reports is the one literal in serverInfo below (scripts/pack-mcp.mjs and update_mcp read it from the file too)
+const SERVER_VERSION = fs.readFileSync(new URL(import.meta.url), 'utf8').match(/serverInfo: \{ name: 'eventpad', version: '([^']+)'/)?.[1] || '0.0.0';
+// The checkout this server runs from (EVENTPAD_MCP_CHECKOUT is for tests)
+const checkoutDir = process.env.EVENTPAD_MCP_CHECKOUT || path.dirname(new URL(import.meta.url).pathname);
 const codec = await import('../snapshotCodec.mjs');
 
 const PROD_API = 'https://labsapi-hmeva5cfhdfkejhz.westeurope-01.azurewebsites.net/api/eventpad';
@@ -99,23 +115,106 @@ const APP = process.env.EVENTPAD_APP || 'https://eventbook.itsybit.se/';
 
 const state = () => pr.projectState();
 const kindLabel = { SC: 'Do', SV: 'See', AU: 'Auto' };
-const sliceRefs = st => pr.getOrderedSlices(st).map((s, i) => ({ ref: `S${i + 1}`, slice: s }));
+const sliceRefs = st => pr.getOrderedSlices(st).map((s, i) => ({ ref: `S${i + 1}`, short: shortRef(s), slice: s }));
 
-// A slice by its S-number (from the outline), its id or its title
+// A slice's stable ref: "#" and the last 5 characters of its id (ids end in 5 random base-36 characters, never
+// change, and don't move when slices are inserted: unlike the S-number). findSlice takes it as the S-number or the title.
+const shortRef = s => `#${String(s.id).slice(-5).toLowerCase()}`;
+
+// What this session has been told about the slice numbering, per open model: slice id → { n, title }. An S-number
+// outline, add_steps or edit_slice printed is a promise; when a slice has moved since, naming it by that S-number is
+// refused (the caller means the slice they saw, which now has another number), so a shifted book never edits the wrong slice.
+const told = new Map();
+const toldNow = () => { const id = es.getCurrentModelId(); if (!told.has(id)) told.set(id, new Map()); return told.get(id); };
+function learnNumbers(st, ids) {
+  const m = toldNow(), all = pr.getOrderedSlices(st);
+  all.forEach((s, i) => {
+    if (ids && !ids.includes(s.id)) return;
+    for (const [k, v] of m) if (v.n === i + 1 && k !== s.id) m.delete(k);   // another slice had that number: its news is old
+    m.set(s.id, { n: i + 1, title: pr.sliceTitle(s, st) });
+  });
+}
+const forgetNumbers = () => toldNow().clear();
+// "S8 Seven (#k3f9q)": a slice as the replies name it (and what the caller now knows it as)
+function nameOf(slice, st = state()) {
+  const i = pr.getOrderedSlices(st).findIndex(x => x.id === slice.id);
+  learnNumbers(st, [slice.id]);
+  return `S${i + 1} ${pr.sliceTitle(slice, st)} (${shortRef(slice)})`;
+}
+// What moved since the caller was told: [{ id, from, to (null: gone), title }], in the new order
+function shifted(st, base) {
+  const now = new Map(pr.getOrderedSlices(st).map((s, i) => [s.id, i + 1]));
+  return [...base].filter(([id, v]) => now.get(id) !== v.n && (now.has(id) || v.gone))
+    .map(([id, v]) => ({ id, from: v.n, to: now.get(id) ?? null, title: st.slices[id] ? pr.sliceTitle(st.slices[id], st) : v.title }))
+    .sort((a, b) => (a.to ?? 1e9) - (b.to ?? 1e9));
+}
+const shiftLine = (x, st) => x.to ? `S${x.from} → S${x.to} ${x.title} (${shortRef({ id: x.id })})` : `S${x.from} ${x.title} (${shortRef({ id: x.id })}) is gone`;
+function staleNumbering(k, st, cur) {
+  const m = toldNow(), hit = [...m].find(([, v]) => v.n === k);
+  if (!hit || hit[0] === cur?.id) return;
+  const moved = shifted(st, new Map([...m].map(([id, v]) => [id, { ...v, gone: true }])));
+  const lines = moved.slice(0, 12).map(x => x.to ? `S${x.from} is now S${x.to} (${x.title}) ${shortRef({ id: x.id })}` : `S${x.from} (${x.title}) ${shortRef({ id: x.id })} was deleted`);
+  throw new Error(`Numbering changed since your last outline: ${lines.join('; ')}${moved.length > 12 ? `; and ${moved.length - 12} more` : ''}. Nothing was changed: S${k} is ${cur ? `now ${pr.sliceTitle(cur, st)}` : 'no slice now'}. Use the ref (${shortRef({ id: hit[0] })} is the one you saw as S${k}) or the title, or re-read the outline.`);
+}
+
+// A slice by its stable ref (#k3f9q), its S-number (from the outline), its id or its title
 function findSlice(ref, st = state()) {
   const all = sliceRefs(st);
   const key = String(ref).trim().toLowerCase();
+  if (/^#[a-z0-9_-]+$/.test(key)) {
+    const hits = all.filter(x => x.short === key);
+    if (hits.length > 1) throw new Error(`${hits.length} slices share the ref ${ref}: use their full ids (${hits.map(x => x.slice.id).join(', ')})`);
+    if (!hits.length) throw new Error(`No slice "${ref}" (use a ref like #k3f9q from the outline, an S-number, or its title)`);
+    return hits[0].slice;
+  }
+  const num = /^s(\d+)$/.exec(key);
+  if (num) staleNumbering(Number(num[1]), st, all[Number(num[1]) - 1]?.slice);
   const hit = all.find(x => x.ref.toLowerCase() === key || x.slice.id === ref)
     || all.find(x => pr.sliceTitle(x.slice, st).toLowerCase() === key);
-  if (!hit) throw new Error(`No slice "${ref}" (use an S-number from the outline, or its title)`);
+  if (!hit) throw new Error(`No slice "${ref}" (use a ref like #k3f9q or an S-number from the outline, or its title)`);
   return hit.slice;
+}
+
+// What the caller knew of the numbering before a tool that edits ran (what it was told, else what was there), and what
+// that tool shifted: "S3 → S4 Three (#k3f9q)" for every slice that moved, so the caller's picture is right again
+function numberingBefore() {
+  const st = state(), base = new Map(pr.getOrderedSlices(st).map((x, i) => [x.id, { n: i + 1, title: pr.sliceTitle(x, st), gone: true }]));
+  for (const [id, v] of toldNow()) if (base.has(id)) base.set(id, { ...v, gone: true });
+  return base;
+}
+function numberingNote(base) {
+  const st = state(), moved = shifted(st, base).filter(x => x.to), m = toldNow();
+  for (const id of [...m.keys()]) if (!st.slices[id]) m.delete(id);
+  const fresh = pr.getOrderedSlices(st).map(x => x.id).filter(id => !base.has(id));
+  if (!moved.length) { learnNumbers(st, fresh); return ''; }
+  const shown = moved.slice(0, 40);
+  learnNumbers(st, [...shown.map(x => x.id), ...fresh]);
+  return `\nNumbering changed (S-numbers shift when a slice is inserted, moved or deleted; the ref never does):\n${shown.map(x => shiftLine(x, st)).join('\n')}${moved.length > shown.length ? `\n… and ${moved.length - shown.length} more: re-read the outline` : ''}`;
+}
+
+// "Scenarios now (2):" and one line each (★ must have, ✓ nice to have): what a slice has after a change to it
+function scenariosNow(slice, st = state()) {
+  const scns = [...pr.getScenariosForSlice(slice.id, st)].sort((a, b) => !!b.mustHave - !!a.mustHave);
+  return scns.length ? `\nScenarios now (${scns.length}):\n${scns.map(x => `  ${x.mustHave ? '★' : '✓'} ${x.name}`).join('\n')}` : '\nScenarios now: none';
+}
+
+// The sticky called this (any kind) that carries this field: slice narrows it down; throws one line when there isn't exactly one
+function stickyNamed(name, field, slice, st = state()) {
+  const key = String(name).trim().toLowerCase();
+  const pool = slice ? findSlice(slice, st).elements.map(id => st.elements[id]) : Object.values(st.elements);
+  const named = [...new Map(pool.filter(e => e && e.name.trim().toLowerCase() === key).map(e => [e.id, e])).values()];
+  if (!named.length) throw new Error(`No sticky "${name}"${slice ? ` on ${pr.sliceTitle(findSlice(slice, st), st)}` : ''}`);
+  const carrying = named.filter(e => propOf(e, field));
+  if (!carrying.length) throw new Error(`${named[0].name} has no field ${field}`);
+  if (carrying.length > 1) throw new Error(`${carrying.length} stickies are called "${name}" and carry ${field} (${carrying.map(e => e.type).join(', ')}): give slice to say which`);
+  return carrying[0];
 }
 
 const chapterId = name => chapterIdIn(name);
 // What an event is beyond a plain event: an old table read as events, another system's, or one of ours published to other systems
 const eventMark = el => (el.table ? ` (legacy table${typeof el.table === 'string' ? ': ' + el.table : ''})` : '') + (el.external ? ' (external)' : '')
   + (el.published && !el.external ? ` (integration${el.to?.length ? ' → ' + el.to.join(', ') : ''})` : '');
-const props = el => (el.properties?.length ? ` (${el.properties.map(p => p.name + (p.type && p.type !== 'string' ? ':' + p.type : '')).join(', ')})` : '');
+const props = el => (el.properties?.length ? ` (${el.properties.map(p => (isQueryField(el, p.name) ? '?' : '') + p.name + (p.type && p.type !== 'string' ? ':' + p.type : '') + (mappingOf(state(), el, p.name) ? ` ← ${mappingOf(state(), el, p.name).from.text}` : '')).join(', ')})` : '');
 
 // A literature book's outline: paragraphs in order, each with its sentences numbered (where scenarios would be)
 function literatureOutline(st, { chapter } = {}) {
@@ -124,7 +223,7 @@ function literatureOutline(st, { chapter } = {}) {
   if (ar.inRounds(st)) lines.push(ar.reviewRounds(st).text);
   const open = litr.openSuggestions(st);
   if (open.length) lines.push(`${open.length} suggestion${open.length === 1 ? '' : 's'} open: only the author accepts them`);
-  const refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref]));
+  const refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref])), shorts = new Map(sliceRefs(st).map(x => [x.slice.id, x.short])), shown = [];
   pr.getBoardGroups(st).forEach(g => {
     if (chapter && g.chapter?.name.toLowerCase() !== chapter.toLowerCase()) return;
     if (!g.slices.length && !g.chapter) return;
@@ -132,7 +231,8 @@ function literatureOutline(st, { chapter } = {}) {
     lines.push('', `## ${g.chapter ? g.chapter.name : 'Not in a chapter'}${g.chapter?.parked ? ' (parked: not in the story or the post)' : ''}${g.slices.length && !g.chapter?.parked ? ` · ${pr.refinedLabel(refined, g.slices.length)}` : ''}`);
     g.slices.forEach(s => {
       const sentences = litr.sentencesOf(st, s.id);
-      lines.push(`${refs.get(s.id)} [¶] ${pr.sliceTitle(s, st)}${!s.refined ? '' : ' · ☐ refined'}${litr.isOpenGap(st, s) ? ' · (a gap: only the author fills it)' : !sentences.length && !litr.pointText(st, s.id) ? ' · (empty)' : ''}`);
+      lines.push(`${refs.get(s.id)} [¶] ${pr.sliceTitle(s, st)}${!s.refined ? '' : ' · ☐ refined'}${litr.isOpenGap(st, s) ? ' · (a gap: only the author fills it)' : !sentences.length && !litr.pointText(st, s.id) ? ' · (empty)' : ''} · ${shorts.get(s.id)}`);
+      shown.push(s.id);
       if (s.description) lines.push(`   ${s.description}`);
       ar.paragraphsOf(st, s.id).forEach(p => lines.push(`   ¶ ${p.text}`));
       const said = threadsToRead(st, s.id);
@@ -145,6 +245,8 @@ function literatureOutline(st, { chapter } = {}) {
       });
     });
   });
+  if (!chapter) forgetNumbers();
+  learnNumbers(st, shown);
   return lines.join('\n');
 }
 
@@ -152,7 +254,7 @@ function outline({ chapter, scenarios = false } = {}) {
   const st = state();
   if (litr.isLiterature(st) && Object.keys(st.slices).length) return literatureOutline(st, { chapter });
   if (!Object.keys(st.slices).length) return `${st.modelName || 'Untitled model'}${st.tags?.length ? ` [${st.tags.join(', ')}]` : ''}: no slices yet.`;
-  const refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref]));
+  const refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref])), shorts = new Map(sliceRefs(st).map(x => [x.slice.id, x.short])), shown = [];
   const lines = [`${st.modelName || 'Untitled model'}${st.modelDescription ? ': ' + st.modelDescription : ''}${st.tags?.length ? ` [${st.tags.join(', ')}]` : ''}`];
   if (ar.inRounds(st)) lines.push(ar.reviewRounds(st).text);
   pr.getBoardGroups(st).forEach(g => {
@@ -175,9 +277,11 @@ function outline({ chapter, scenarios = false } = {}) {
       ];
       const scns = [...pr.getScenariosForSlice(s.id, st)].sort((a, b) => !!b.mustHave - !!a.mustHave);
       const must = scns.filter(x => x.mustHave).length;
-      lines.push(`${refs.get(s.id)} [${kind}] ${pr.sliceTitle(s, st)}: ${parts.join(' → ') || '(empty)'}${scns.length ? ` · ${scns.length} scenario${scns.length > 1 ? 's' : ''}${must ? ` (${must} must)` : ''}` : ''}${!s.refined ? '' : s.built ? ' · ☑ done' : ` · ☐ ready${st.specs?.[s.id] ? ' · 🧪 specs written' : ''}`}${progressText(st, s.id)}`);
+      lines.push(`${refs.get(s.id)} [${kind}] ${pr.sliceTitle(s, st)}: ${parts.join(' → ') || '(empty)'}${automationReads(st, s).map(r => ` · ${r.label} ${r.name}`).join('')}${scns.length ? ` · ${scns.length} scenario${scns.length > 1 ? 's' : ''}${must ? ` (${must} must)` : ''}` : ''}${!s.refined ? '' : s.built ? ' · ☑ done' : ` · ☐ ready${st.specs?.[s.id] ? ' · 🧪 specs written' : ''}`}${progressText(st, s.id)} · ${shorts.get(s.id)}`);
+      shown.push(s.id);
       if (s.description) lines.push(`   ${s.description}`);
       if (s.waived) lines.push(`   no scenario (waived)${s.waived.reason ? `: ${s.waived.reason}` : ''}`);
+      gapLines(st, s.id).forEach(l => lines.push(l));
       ar.paragraphsOf(st, s.id).forEach(p => lines.push(`   ¶ ${p.text}`));
       const said = threadsToRead(st, s.id);
       const talk = scnId => said.filter(c => (c.scenarioId || null) === scnId).forEach(c => lines.push(...threadLines(c, '     ', `${c.nickname}${c.part ? ` on the ${c.part}` : ''}: ${c.text}`)));
@@ -186,8 +290,21 @@ function outline({ chapter, scenarios = false } = {}) {
       else if (said.some(c => c.scenarioId)) lines.push(`     💬 ${said.filter(c => c.scenarioId).length} open on its scenarios (outline {scenarios:true} shows them)`);
     });
   });
+  if (!chapter) forgetNumbers();
+  learnNumbers(st, shown);
   return lines.join('\n');
 }
+
+// Fields with no source (event modeling's completeness check, a hint while planning, never a refusal): under their slice
+const gapLines = (st, sliceId) => {
+  const { gaps, tidy } = fsrc.fieldSources(st);
+  const mine = gaps.filter(g => g.sliceId === sliceId), prose = tidy.filter(t => t.sliceId === sliceId);
+  return mine.length || prose.length ? ['   Information completeness:',
+    ...mine.map(g => `   ⚠ no source: ${g.sticky}${g.field === '(the event)' ? '' : `.${g.field}`}: ${g.why} (fix: ${g.fix})`),
+    ...prose.map(t => `   ⚠ tidy: ${t.sticky}: fields written as prose (${t.fields.map(f => `"${f}"`).join(', ')}) (fix: tidy|${t.elementId})`)] : [];
+};
+// "⚠ 2 fields with no source", for the reply to an edit: what the slices it touched are missing (empty when nothing is)
+const gapNote = (st, sliceIds) => { const text = fsrc.completenessText(fsrc.gapCount(st, sliceIds), fsrc.tidyCount(st, sliceIds)); return text ? `\n⚠ Information completeness: ${text} (the outline lists them, fix_gaps offers the fixes: a hint, not a block)` : ''; };
 
 // Where a builder says the slice has got to (nothing once it is Done)
 const progressText = (st, sliceId) => { const v = sliceProgress(st, sliceId); return v ? ` · ${v.icon} ${v.label}${v.ago ? ` (${v.ago})` : ''}` : ''; };
@@ -204,10 +321,13 @@ function gwtText(x, st) {
   const name = id => st.elements[id]?.name || '(removed)';
   const given = (x.given || []).map(g => name(g.elementId) + vals(g.values)).join(', ') || 'nothing';
   const when = x.when?.commandId ? ` | When ${name(x.when.commandId)}${vals(x.when.values)}` : '';
+  const query = x.when?.query ? ` | Q ${x.when.query}` : '';
   const t = x.then;
+  // A view's rows, a line each under the scenario: "- name: anna, place: 1" ("- (empty)" when it shows none)
+  const rows = t?.type === 'readModel' && Array.isArray(t.rows) ? (t.rows.length ? t.rows.map(r => `\n       ${rowText(r)}`).join('') : '\n       - (empty)') : '';
   const then = t?.type === 'event' ? name(t.eventId) + vals(t.values) : t?.type === 'rejection' ? `rejected: ${t.reason}` : t?.type === 'nothing' ? `nothing (${t.reason})`
-    : t?.type === 'readModel' ? name(t.readModelId) + (t.rows?.length ? ' ' + JSON.stringify(t.rows) : vals(t.values)) : 'not set';
-  return `Given ${given}${when} | Then ${then}`;
+    : t?.type === 'readModel' ? name(t.readModelId) + (rows ? '' : vals(t.values)) : 'not set';
+  return `Given ${given}${when}${query} | Then ${then}${rows}`;
 }
 
 // ---------- Building ----------
@@ -522,14 +642,32 @@ function importDraftTool({ markdown, title, author }) {
 }
 
 // write_paragraphs: round two, a point's text (only once she has approved the structure)
-function writeParagraphsTool({ slice, paragraphs, as }) {
+function writeParagraphsTool({ slice, paragraphs, as, replace }) {
   const s = findSlice(slice);
   if (!s) throw new Error(`No slice "${slice}"`);
   const by = lib.agentName(as, process.env);
   const list = (Array.isArray(paragraphs) ? paragraphs : [paragraphs]).map(String).filter(x => x.trim());
   if (!list.length) throw new Error('Write something first');
+  // replace: first the point's old paragraphs go (all or none: one of hers stops it), then the new ones, in one action
+  const old = replace ? ar.paragraphsOf(state(), s.id) : [];
+  old.forEach(p => { const why = ar.paragraphProtection(state(), p); if (why) throw new Error(`Nothing replaced on ${pr.sliceTitle(s, state())}: ${why}`); });
+  old.forEach(p => { const why = ar.deleteParagraph({ paragraphId: p.id }); if (why) throw new Error(why); });
   for (const text of list) { const why = ar.writeParagraph({ sliceId: s.id, text, by }); if (why) throw new Error(why); }
-  return `${count(list.length, 'paragraph')} on ${pr.sliceTitle(s, state())}. The author reads and ticks Refined on the slice when it's right.`;
+  return `${replace && old.length ? `Replaced ${count(old.length, 'paragraph')} with ${list.length}` : count(list.length, 'paragraph')} on ${pr.sliceTitle(s, state())}. The author reads and ticks Refined on the slice when it's right.`;
+}
+
+// remove_paragraph: one of an agent's own paragraphs, by its place among the point's paragraphs or the start of its text
+function removeParagraphTool({ slice, index, text }) {
+  const s = findSlice(slice);
+  if (!s) throw new Error(`No slice "${slice}"`);
+  const mine = ar.paragraphsOf(state(), s.id), title = pr.sliceTitle(s, state());
+  if (index === undefined && !String(text || '').trim()) throw new Error('Say which paragraph: index (1 is the first of the point) or text (the start of it)');
+  const key = String(text || '').trim().toLowerCase();
+  const hit = index !== undefined ? mine[Number(index) - 1] : mine.find(p => p.text.toLowerCase().startsWith(key)) || mine.find(p => p.text.toLowerCase().includes(key));
+  if (!hit) throw new Error(`${title} has no paragraph ${index !== undefined ? index : `"${text}"`} (it has ${mine.length})`);
+  const why = ar.deleteParagraph({ paragraphId: hit.id });
+  if (why) throw new Error(why);
+  return `Removed paragraph ${mine.indexOf(hit) + 1} of ${title}. One undo in the app puts it back.`;
 }
 
 // A sentence of a literature point, by its number in the outline or the start of its text
@@ -665,8 +803,10 @@ async function builtBookFor(plan, against) {
   return loaded.sort((a, b) => b.at.localeCompare(a.at))[0];
 }
 
-// retire_plan: every slice matched in the app's built book → marked built at its commit, then retired (read only from then on)
-async function retirePlanTool({ model, against }) {
+// retire_plan: every slice matched in the app's built book → marked built at its commit, then retired (read only from then on).
+// map: [{ slice, built }] pairs a plan slice with the built slice of another name (a matching aid, not an override).
+// evidence: [{ slice, evidence }] retires nothing: it is kept on the plan for the owner's Retire anyway, shown beside each slice.
+async function retirePlanTool({ model, against, map, evidence }) {
   const opened = tools.find(t => t.name === 'open_model');
   await opened.run({ model, edit: true });
   let result, linked = false;
@@ -679,16 +819,31 @@ async function retirePlanTool({ model, against }) {
       const built = await builtBookFor(plan, against);
       const st = state();
       if (st.press?.stage === 'building') throw new Error(`${name} is being built by ${st.press.builder}: nothing was changed (stop_press is theirs to do)`);
-      const r = rt.retireShipped(es.getEventStream(), built.state, { modelId: es.getCurrentModelId(), commit: built.commit, edition: built.edition });
+      const pairs = (map || []).map(m => {
+        if (!m || !m.slice || !m.built) throw new Error('map takes pairs {slice: the plan slice, built: the built slice\'s name}');
+        return { sliceId: findSlice(m.slice).id, built: m.built };
+      });
+      const notes = (evidence || []).map(e => {
+        if (!e || !e.slice || !String(e.evidence || '').trim()) throw new Error('evidence takes {slice, evidence: what shows it is built, e.g. "PR #78, store tests"}');
+        return { sliceId: findSlice(e.slice).id, text: String(e.evidence).trim() };
+      });
+      const r = rt.retireShipped(es.getEventStream(), built.state, { modelId: es.getCurrentModelId(), commit: built.commit, edition: built.edition, map: pairs });
       if (r.already) return `${name} is already retired: nothing changed.`;
+      if (r.refused && notes.length && r.unmatched) {
+        // Not for an agent to retire: the evidence goes onto the plan for the owner's Retire anyway
+        const why = rtc.noteRetireEvidence(notes, lib.agentName(null, process.env));
+        if (why) throw new Error(why);
+        const sts = state(), title = id => pr.sliceTitle(sts.slices[id], sts);
+        return `Not retired: ${name}: ${r.refused.replace(/ Nothing was changed\.$/, '')}\nEvidence recorded for the owner (agents never retire an unmatched plan), waiting for Jocelyn's Retire anyway in the app, which shows it beside each slice:\n${notes.map(n => `- ${title(n.sliceId)}: ${n.text}`).join('\n')}`;
+      }
       if (r.refused) throw new Error(`Not retired: ${name}: ${r.refused}`);
       // Still waiting at the press: it is shipped, so it leaves the queue (the phone's Take back does the same)
       if (st.press?.stage === 'press') { const why = ps.stopPress(); if (why) throw new Error(why); }
       for (const e of r.events) if (!es.appendEvent(e.type, e.data)) throw new Error('Read only: nothing was changed');
-      return `Retired ${name}: ${count(r.confirmed, 'slice')} confirmed against ${built.name} @ ${built.commit}, on the Retired shelf`;
+      return `Retired ${name}: ${count(r.confirmed, 'slice')} confirmed against ${built.name} @ ${built.commit}, on the Retired shelf${r.mapped?.length ? `\nMatched by your map: ${r.mapped.map(x => `${x.title} → ${x.built}`).join('; ')}` : ''}${notes.length ? '\n(evidence not needed: every slice matched)' : ''}`;
     });
   } catch (e) { await closeModel().catch(() => {}); throw e; }
-  return `${result.split('\n')[0]}${linked ? `\n${await closeModel()}` : ''}`;
+  return `${result.split('\n').filter(l => !l.startsWith('☁ Sent')).join('\n')}${linked ? `\n${await closeModel()}` : ''}`;
 }
 
 // report_progress: the builder says where a slice has got to; each refusal is one line
@@ -922,6 +1077,14 @@ liveServer.on('error', e => {
 liveServer.on('listening', () => { liveUrl = `http://localhost:${port}/?live`; });
 liveServer.listen(port, '127.0.0.1');
 
+// The live page's address (on the Pad when asked), opened in the browser unless that is off (EVENTPAD_NO_BROWSER is for tests)
+function openLive(view, open) {
+  if (!liveUrl) throw new Error('The live view could not start (no free port 7979-7999)');
+  const url = view === 'pad' ? `${liveUrl}&view=pad` : liveUrl;
+  if (open && !process.env.EVENTPAD_NO_BROWSER) { try { (process.platform === 'darwin' ? spawn('open', [url], { detached: true, stdio: 'ignore' }) : process.platform === 'win32' ? spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }) : spawn('xdg-open', [url], { detached: true, stdio: 'ignore' })).on('error', () => { /* just the link */ }).unref(); } catch (e) { /* just the link */ } }
+  return url;
+}
+
 // ---------- Tools ----------
 
 const S = { type: 'string' };
@@ -958,15 +1121,16 @@ const tools = [
     } },
   { name: 'close_model', description: 'Done editing a ☁ shelf opened with edit:true: sends anything not sent yet and checks it in, so the phone can check it out.',
     inputSchema: { type: 'object', properties: {} }, run: closeModel },
-  { name: 'new_model', description: 'Start a new model and open it. kind: "fact" (default: an event model with a board, scenarios and specs) or "literature" (writing: a point is a paragraph, its sentences take the scenarios\' place, Read / Outline instead of the board). To bring an existing draft in, import_draft makes a literature book from its Markdown.',
-    inputSchema: { type: 'object', properties: { name: S, description: S, kind: { type: 'string', enum: ['fact', 'literature'] } }, required: ['name'] },
-    run: ({ name, description, kind }) => {
+  { name: 'new_model', description: 'Start a new model and open it. sketch: true also opens the Pad in the live view: sketch the feature there first (pad_add_notes), then pad_make_chapter. kind: "fact" (default: an event model with a board, scenarios and specs) or "literature" (writing: a point is a paragraph, its sentences take the scenarios\' place, Read / Outline instead of the board). To bring an existing draft in, import_draft makes a literature book from its Markdown.',
+    inputSchema: { type: 'object', properties: { name: S, description: S, kind: { type: 'string', enum: ['fact', 'literature'] }, sketch: { type: 'boolean' } }, required: ['name'] },
+    run: ({ name, description, kind, sketch }) => {
       if (kind && !['fact', 'literature'].includes(kind)) throw new Error('kind is "fact" or "literature"');
       es.createModel();
       c.nameModel(name);
       if (description) c.describeModel(description);
       if (kind) { const why = lit.chooseBookKind({ kind }); if (why) throw new Error(why); }
-      return `Opened new ${kind === 'literature' ? 'literature book' : 'model'} "${name}".`;
+      if (sketch && kind === 'literature') throw new Error('A literature book has no Pad: sketch is for event models');
+      return `Opened new ${kind === 'literature' ? 'literature book' : 'model'} "${name}".${sketch ? `\nSketch first. Pad: ${openLive('pad', true)}\nFill the Pad with pad_add_notes (frames of notes), let the person look and rearrange, then pad_make_chapter.` : ''}`;
     } },
   { name: 'edit_model', edits: true, description: 'kind: "literature" turns an outline with no stickies or scenarios into a literature book (Read / Outline). Rename the open model, replace its description (what it is: on its card, in the catalog, on the shared image), its preface (why it is being written: the first page the first time it is opened; a book without one shows its description) or set its tags (the whole set each time: leave one out to remove it; tidied to lower case, no repeats, at most 8, each up to 24 letters; [] clears them). A published book (a build book) takes a description, preface and tags, not a new name.',
     inputSchema: { type: 'object', properties: { name: S, description: S, preface: S, tags: { type: 'array', items: S }, kind: { type: 'string', enum: ['literature'] } } },
@@ -988,45 +1152,59 @@ const tools = [
       if (tags !== undefined) c.tagBook(tags);
       return `Updated the model: ${state().modelName}${kind ? ` (now ${kind})` : ''}.`;
     } },
-  { name: 'outline', description: 'The open model as a short outline: chapters (with "N of M refined"), slices (S-numbers to refer to them; "☐ ready" once refined, ready to build; "☑ done" once confirmed built from the tests), stickies with fields, scenario counts. scenarios:true lists each Given/When/Then (★ must have, ✓ nice to have).',
+  { name: 'outline', description: 'The open model as a short outline: chapters (with "N of M refined"), slices (S-numbers to refer to them, and each slice\'s stable ref #xxxxx at the end of its line: S-numbers shift when a slice is inserted, moved or deleted, the ref never does, and every tool that takes a slice takes the ref, the S-number or the title; an S-number the book has moved since your last outline is refused with the new numbering; "☐ ready" once refined, ready to build; "☑ done" once confirmed built from the tests), stickies with fields, scenario counts. Under a slice, "Information completeness:" lists its fields with no source (the information completeness check: a hint while planning, never a block). scenarios:true lists each Given/When/Then (★ must have, ✓ nice to have).',
     inputSchema: { type: 'object', properties: { chapter: S, scenarios: { type: 'boolean' } } }, run: outline },
   { name: 'add_steps', edits: true,
-    description: 'Add steps to a chapter (made if new), in order. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, table?, external?, published?, to?}: table is the name of a legacy table (old storage read as events), external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model), description. Stickies with the same name are reused.',
+    description: 'Add steps to a chapter (made if new), in order. The reply names each new slice (S-number and #ref) and ends with "Numbering changed:" listing every slice it shifted (S7 → S8 <title> (#ref)): use the ref from then on. Each step: kind "do" (screen?, command, event|events), "see" (events, readModel, list?, screen?) or "auto" (when? event, external?, using? readModel, todo?, processor, command, result|events). An event is a name or {name, table?, external?, published?, to?}: table is the name of a legacy table (old storage read as events), external says another system records it (inbound), published: true marks one of OUR events as an integration event, published to other systems (outbound, a contract: its fields are what they rely on; an external event cannot also be published) and to: ["Billing", "CRM"] names who consumes it; on a do or see step with one event, table / published / to beside it are shorthand (external: true also for several). list: true on a see step makes the read model a list of rows. Marks are set once on a reused sticky. Optional per step: name, fields (e.g. "orderId, size, items[]"; go on its command/event or read model; "orderRef ← Order placed.orderId" (or <-) is the field orderRef, which comes from the field orderId of the sticky Order placed, already in the book: it is mapped, so it has a source; a read-model field written ?name is a query parameter: the caller asks the view with it, so it needs no event source), description. Stickies with the same name are reused.',
     inputSchema: { type: 'object', properties: { chapter: S, steps: { type: 'array', items: { type: 'object' } } }, required: ['steps'] },
     run: ({ chapter, steps }) => {
       notLiterature('steps');
       const chId = chapterId(chapter);
       const ids = steps.map(s => addStep(s, chId));
-      const st = state(), refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref]));
-      return `Added ${ids.length} step${ids.length === 1 ? '' : 's'}: ${ids.map(id => `${refs.get(id)} ${pr.sliceTitle(st.slices[id], st)}`).join(', ')}`;
+      const st = state();
+      return `Added ${ids.length} step${ids.length === 1 ? '' : 's'}: ${ids.map(id => nameOf(st.slices[id], st)).join(', ')}${gapNote(st, ids)}`;
     } },
   { name: 'add_scenarios', edits: true,
-    description: 'Add Given/When/Then scenarios to a slice (S-number or title). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command), then {event, values} | {rejected: reason: the command is refused with a reason the caller sees} | {nothing: why: accepted but changes nothing, e.g. the same call twice or an automation with nothing to do; the reason is required, one line; not with event/rejected/readModel} | {readModel?, values | rows} (a See slice), mustHave (true: an acceptance criterion; otherwise a nice to have).',
+    description: 'Add Given/When/Then scenarios to a slice (#ref, S-number or title; the reply names it and lists its scenarios now). Each: name, given [{event, values}], when {values, command?} (a Do slice; defaults to its command) or when {query} (a See slice: what the caller asks the view with, one line of free text, e.g. "name starts with a" or "name = a*"; shown as a Q step), then {event, values} | {rejected: reason: the command is refused with a reason the caller sees} | {nothing: why: accepted but changes nothing, e.g. the same call twice or an automation with nothing to do; the reason is required, one line; not with event/rejected/readModel} | {readModel?, values | rows} (a See slice: rows is a list of {field: value}, or text with a row per line, "- name: anna, place: 1"; [] means it shows nothing), mustHave (true: an acceptance criterion; otherwise a nice to have).',
     inputSchema: { type: 'object', properties: { slice: S, scenarios: { type: 'array', items: { type: 'object' } } }, required: ['slice', 'scenarios'] },
     run: ({ slice, scenarios }) => {
       notLiterature('scenarios');
       const s = findSlice(slice);
       scenarios.forEach(checkScenario); // all checked before any is added
       scenarios.forEach(x => addScenario(s, x));
-      return `Added ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} to ${pr.sliceTitle(s, state())}.`;
+      return `Added ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} to ${nameOf(s)}.${gapNote(state(), [s.id])}${scenariosNow(s)}`;
     } },
-  { name: 'edit_slice', edits: true, description: 'Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (S-number or title).',
+  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (S-number or title). stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name).',
     inputSchema: { type: 'object', properties: { slice: S, name: S, description: S, fields: S, chapter: S, refined: { type: 'boolean' }, waived: { type: 'boolean' }, waivedReason: S, ready: { type: 'boolean', description: 'Older name for refined' }, delete: { type: 'boolean' },
-      automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when', 'processor'] }, person: { type: 'boolean' } }, required: ['slice'] },
-    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person }) => {
+      automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when', 'processor'] }, person: { type: 'boolean' },
+      stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' } }, required: ['slice'] },
+    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading }) => {
       if (refined === undefined) refined = ready;
       const s = findSlice(slice);
-      if (del) { c.deleteSlice(s.id); return `Deleted ${pr.sliceTitle(s, state())}.`; }
+      if (del) { const was = nameOf(s); c.deleteSlice(s.id); return `Deleted ${was}.`; }
       if (automation) {
         const odd = Object.keys(automation).filter(k => !['when', 'processor', 'view'].includes(k));
         if (odd.length) throw new Error(`automation takes when, processor and view; not ${odd.join(', ')}`);
         const why = auto.runSliceFromAutomation({ sliceId: s.id, processor: automation.processor, whenEvent: automation.when, viewSliceId: automation.view ? findSlice(automation.view).id : null });
-        if (why) throw new Error(why);
+        if (why) throw new Error(/already run by/.test(why) ? `${why}: to change what it reads use edit_slice {slice, stopReading: "<view>"}` : why);
+      }
+      if (stopReading) {
+        const st = state();
+        const partner = s.pairWith && st.slices[s.pairWith];
+        const procs = [...s.elements, ...(partner?.elements || [])].filter(id => st.elements[id]?.type === 'processor');
+        const key = String(stopReading).trim().toLowerCase();
+        // The view (by slice) or the read model itself (by name; also one whose slice is gone)
+        let view = null; try { view = findSlice(stopReading, st); } catch { /* by read model name */ }
+        const held = new Set(view ? view.elements : []);
+        const links = st.connections.filter(l => l.relation === 'context' && procs.includes(l.from) && st.elements[l.to] &&
+          (held.has(l.to) || st.elements[l.to].name.trim().toLowerCase() === key));
+        if (!links.length) throw new Error(`${pr.sliceTitle(s, st)} doesn't read "${stopReading}"`);
+        links.forEach(l => c.setReads(l.from, l.to, false));
       }
       if (person === true) { const why = auto.runSliceByPerson({ sliceId: s.id }); if (why) throw new Error(why); }
       if (name) c.nameSlice(s.id, name);
       if (description !== undefined) c.describeSlice(s.id, description);
-      if (fields) ol.addOutlineProperties(s.id, fields);
+      if (fields) addFields(s.id, fields);
       if (chapter) c.setSliceChapter(s.id, chapterId(chapter));
       // Waiving is an edit too (it takes refined back), so before refined below
       const by = lib.agentName(null, process.env);
@@ -1035,7 +1213,80 @@ const tools = [
       // After the edits above (each of which takes refined back)
       if (refined === false) c.clearSliceRefined(s.id);
       if (refined === true) { const refused = c.markSliceRefined(s.id); if (refused) throw new Error(`${pr.sliceTitle(s, state())} can't be marked refined: ${refused}`); }
-      return `Updated ${pr.sliceTitle(state().slices[s.id], state())}.`;
+      return `Updated ${nameOf(state().slices[s.id])}.${scenariosNow(state().slices[s.id])}`;
+    } },
+  { name: 'fix_gaps', description: 'The information completeness gaps of the open model (a slice, a chapter, or the whole book), each with its why and its one-tap fixes, every fix named by an id for apply_fix: add a field to the sticky it comes from, draw an event into a slice, set it by the system, remove it, map a field from another sticky\'s field (map|<sticky>|<field>: say which with map|<sticky>|<field>|<from sticky>|<from field>, or use map_field), or tidy fields written as prose (pages[] (pageId, finishedAt) split on its commas). The same list the person sees when they tap the count in the app. Slices that are ☑ Refined are listed but apply_fix will not change them.',
+    inputSchema: { type: 'object', properties: { slice: S, chapter: S }, required: [] },
+    run: ({ slice, chapter } = {}) => {
+      const st = state();
+      let scope = { all: true };
+      if (slice) scope = { sliceId: findSlice(slice, st).id };
+      else if (chapter) {
+        const ch = Object.values(st.chapters).find(x => x.name.trim().toLowerCase() === chapter.trim().toLowerCase());
+        if (!ch) throw new Error(`No chapter "${chapter}"`);
+        scope = { chapterId: ch.id };
+      }
+      const view = fixl.fixList(st, scope);
+      if (!view.total) return `Nothing left to fix${scope.all ? '' : ` in ${view.title}`}.`;
+      const refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref]));
+      const lines = [`${view.total} ${view.total === 1 ? 'gap' : 'gaps'} (apply_fix {fix} applies one fix; ☑ refined slices are left to the person)`];
+      view.groups.forEach(g => {
+        lines.push('', `${refs.get(g.sliceId)} ${g.slice}${st.slices[g.sliceId].refined ? ' · ☑ refined: apply_fix will refuse' : ''}`);
+        g.rows.forEach(r => {
+          lines.push(`- ${r.field && r.field !== '(the event)' ? `${r.sticky}.${r.field}` : r.sticky}: ${r.why}`);
+          r.fixes.forEach(f => lines.push(`    ${f.id}  ${f.label}`));
+        });
+      });
+      return lines.join('\n');
+    } },
+  { name: 'apply_fix', edits: true, description: 'Do one fix from fix_gaps (its id as the list gives it): add the field to the sticky it comes from, draw the event into the slice, set the field by the system (how: new id, the clock, computed from…), remove the field, or tidy fields written as prose. One undo-able step, the same code the buttons in the app run. Never changes a slice that is ☑ Refined (only the person does) and says so.',
+    inputSchema: { type: 'object', properties: { fix: S, how: S }, required: ['fix'] },
+    run: ({ fix, how }) => {
+      const label = fixl.fixList(state(), { all: true }).groups.flatMap(g => g.rows).flatMap(r => r.fixes).find(f => f.id === fix)?.label || fix;
+      const why = fixc.applyFix(fix, { how, agent: true });
+      if (why) throw new Error(`Not done: ${why}`);
+      const st = state();
+      return `Done: ${label.replace(/…$/, '')}${how && fix.startsWith('system|') ? ` (${how})` : ''}${gapNote(st, st.sliceOrder) || '\nNothing left to fix.'}`;
+    } },
+  { name: 'map_field', edits: true, description: 'Say a field comes from another sticky\'s field ("Payment requested.orderRef ← Order placed.orderId"): it has a source, so it is no longer an information completeness gap, and trace_field follows it. sticky + field is the field (slice narrows it down when two stickies share a name), from is "Sticky.field" of a sticky already in the book, or just an event\'s name ("ProductConfigured") for the whole event: "products[] ← each ProductConfigured" (items: true also gives a list the event\'s fields as item fields, each mapped to its event field). unmap: true takes the mapping back. Refused: a field that is not there, a field from itself, a loop; never changes a slice that is ☑ Refined (only the person does). The same code the app\'s Comes from… runs; one undo-able step.',
+    inputSchema: { type: 'object', properties: { sticky: S, field: S, from: S, items: { type: 'boolean' }, unmap: { type: 'boolean' }, slice: S }, required: ['sticky', 'field'] },
+    run: ({ sticky, field, from, items, unmap, slice }) => {
+      const st = state();
+      const el = stickyNamed(sticky, field, slice, st);
+      if (unmap) {
+        const why = fixc.applyFix(`unmap|${el.id}|${field}`, { agent: true });
+        if (why) throw new Error(`Not done: ${why}`);
+        return `${el.name}.${field} no longer comes from another field${gapNote(state(), state().sliceOrder)}`;
+      }
+      if (!from) throw new Error('from is "Sticky.field", e.g. "Order placed.orderId", or an event\'s name for the whole event, e.g. "ProductConfigured"');
+      // An event's name with no ".field" is the whole event; "each" may precede it
+      const wholeName = String(from).trim().replace(/^each\s+/i, '').trim();
+      const at = splitStickyField(from);
+      const named = n => Object.values(st.elements).filter(e => e.name.trim().toLowerCase() === n.toLowerCase());
+      const events = [...new Map(named(wholeName).filter(e => e.type === 'event').map(e => [e.id, e])).values()];
+      const asField = at && named(at.sticky).some(e => propOf(e, at.field));
+      if (!asField && (!at || events.length)) {
+        if (!events.length) throw new Error(`"${from}" is not "Sticky.field" and no event is called that: a whole source is an event`);
+        if (events.length > 1) throw new Error(`${events.length} events are called "${wholeName}": rename one`);
+        const why = fixc.applyFix(`map|${el.id}|${field}|${events[0].id}|${items ? '@event+items' : '@event'}`, { agent: true });
+        if (why) throw new Error(`Not done: ${why}`);
+        const now = state(), m = mappingOf(now, now.elements[el.id], field);
+        return `${el.name}.${propOf(now.elements[el.id], field).name} ← ${m ? m.from.text : events[0].name}${items ? ' (with the event\'s fields as item fields)' : ''}${gapNote(now, now.sliceOrder)}`;
+      }
+      const source = stickyNamed(at.sticky, at.field, null, st);
+      const why = fixc.applyFix(`map|${el.id}|${field}|${source.id}|${at.field}`, { agent: true });
+      if (why) throw new Error(`Not done: ${why}`);
+      const now = state();
+      return `${el.name}.${propOf(now.elements[el.id], field).name} ← ${source.name}.${propOf(now.elements[source.id], at.field).name}${gapNote(now, now.sliceOrder)}`;
+    } },
+  { name: 'trace_field', description: 'How a property travels through the book: its path in timeline order, every sticky that carries the field under the same name (case, [] and ? ignored) and the names it was mapped to or from (map_field, "orderRef ← Order placed.orderId"), each step Sticky.field with "(was name)" when it was renamed by a mapping and "⚠" when it has no source. The same path the app shows when the person taps Trace on a field.',
+    inputSchema: { type: 'object', properties: { sticky: S, field: S, slice: S }, required: ['sticky', 'field'] },
+    run: ({ sticky, field, slice }) => {
+      const st = state();
+      const el = stickyNamed(sticky, field, slice, st);
+      const trace = fieldTrace(st, { elementId: el.id, field });
+      if (!trace) throw new Error(`${el.name} is not on the board, so there is no path to follow`);
+      return `${trace.field}: ${trace.steps.map(s => `${s.sticky}${s.whole ? ' (whole event)' : `.${s.field}`}${s.renamedFrom ? ` (was ${s.renamedFrom})` : ''}${s.gap ? ' ⚠' : ''}`).join(' ▸ ')}`;
     } },
   { name: 'set_fields', edits: true, description: 'Give one sticky of a slice (its command, event or read model, by name) exactly these fields: missing ones added, unlisted ones removed, types updated. The sticky is shared, so every slice it is on changes with it.',
     inputSchema: { type: 'object', properties: { slice: S, sticky: S, fields: S }, required: ['slice', 'sticky', 'fields'] },
@@ -1065,7 +1316,7 @@ const tools = [
       const on = Object.values(state().slices).filter(x => x.elements.includes(el.id)).length;
       return `Renamed the ${el.type === 'readModel' ? 'read model' : el.type} ${el.name} → ${to} (on ${on} ${on === 1 ? 'slice' : 'slices'}).`;
     } },
-  { name: 'delete_scenario', edits: true, description: 'Delete one scenario of a slice, by its name (to change a scenario: delete it and add it again).',
+  { name: 'delete_scenario', edits: true, description: 'Delete one scenario of a slice, by its name (to change a scenario: delete it and add it again). The reply lists the scenarios it has left.',
     inputSchema: { type: 'object', properties: { slice: S, scenario: S }, required: ['slice', 'scenario'] },
     run: ({ slice, scenario }) => {
       const s = findSlice(slice), st = state();
@@ -1073,9 +1324,9 @@ const tools = [
       const hit = scns.find(x => (x.name || '').trim().toLowerCase() === scenario.trim().toLowerCase());
       if (!hit) throw new Error(`${pr.sliceTitle(s, st)} has no scenario "${scenario}" (it has: ${scns.map(x => x.name).join('; ') || 'none'})`);
       sc.deleteScenario(hit.id, s.id);
-      return `Deleted "${hit.name}" from ${pr.sliceTitle(s, st)}.`;
+      return `Deleted "${hit.name}" from ${nameOf(s, st)}.${scenariosNow(s)}`;
     } },
-  { name: 'move_slice', edits: true, description: 'Put a slice (S-number or title) right after another one in the order (an automation moves with its other half). To move it to another chapter use edit_slice {chapter}.',
+  { name: 'move_slice', edits: true, description: 'Put a slice (#ref, S-number or title) right after another one in the order (an automation moves with its other half). To move it to another chapter use edit_slice {chapter}.',
     inputSchema: { type: 'object', properties: { slice: S, after: S }, required: ['slice', 'after'] },
     run: ({ slice, after }) => {
       const s = findSlice(slice), a = findSlice(after), st = state();
@@ -1154,9 +1405,12 @@ const tools = [
   { name: 'outline_article', description: 'Outline an article (round one) as a new book: chapters are its sections, slices its points. Each point: claim (its name), thought (what the paragraph will say, as long as it needs), sources ([{ref, public}]: a private source is cited but never linked in the post; a point may have none). The author reads it in the outline or on the slice pages, comments, and approves the structure; then write_paragraphs. keep_model puts it in the library.',
     inputSchema: { type: 'object', properties: { title: S, standfirst: S, sections: { type: 'array', items: { type: 'object' } } }, required: ['title', 'sections'] },
     run: outlineArticleTool },
-  { name: 'write_paragraphs', edits: true, description: 'Round two of an article: the actual text of a point (slice: S-number or its claim), one or more paragraphs in order, signed ItsyBOT · <as>. Refused until the author has approved the structure. The author edits, comments and ticks Refined on the point.',
-    inputSchema: { type: 'object', properties: { slice: S, paragraphs: { type: 'array', items: S }, as: S }, required: ['slice', 'paragraphs'] },
+  { name: 'write_paragraphs', edits: true, description: 'Round two of an article: the actual text of a point (slice: S-number or its claim), one or more paragraphs in order, signed ItsyBOT · <as>. Refused until the author has approved the structure. The author edits, comments and ticks Refined on the point. Appends by default; replace: true takes the point\'s existing paragraphs out first and puts these in their place, in one action (one undo in the app reverts it). Refused, changing nothing, when any existing paragraph is hers (written by someone who is not an ItsyBOT), was edited by her, or the point is ☑ Refined: the refusal names the paragraph.',
+    inputSchema: { type: 'object', properties: { slice: S, paragraphs: { type: 'array', items: S }, as: S, replace: { type: 'boolean' } }, required: ['slice', 'paragraphs'] },
     run: writeParagraphsTool },
+  { name: 'remove_paragraph', edits: true, description: 'Take one of the agent\'s own paragraphs out of a point (slice: S-number or its claim): index (1 is the first paragraph of that point, in the order the outline lists them) or text (the start of it). One undo in the app reverts it. Refused, naming the paragraph, when it is hers (not written by an ItsyBOT), when she edited it, or when the point is ☑ Refined.',
+    inputSchema: { type: 'object', properties: { slice: S, index: { type: 'integer' }, text: S }, required: ['slice'] },
+    run: removeParagraphTool },
   { name: 'import_draft', description: 'Bring a Markdown draft in as a new literature book (a story, no board and no scenarios) and open it: each Markdown heading (## … ######) starts a chapter named by it (the text before the first heading is a chapter named as the book; a heading is never a paragraph), each paragraph (blank-line separated) a point named by its first few words, each sentence a line of it, verbatim and in order, signed as hers (author; default EVENTPAD_AUTHOR). Allowed before Approve structure: it is the author\'s own text. Refused when the draft has no text. A leading "# Title" is the title. keep_model puts it in the library; outline reads it back; export_draft takes the post out.',
     inputSchema: { type: 'object', properties: { markdown: S, title: S, author: S }, required: ['markdown'] },
     run: importDraftTool },
@@ -1196,8 +1450,10 @@ const tools = [
   { name: 'finish_building', description: 'The open plan you are building, back with its build: the newest edition of the app\'s build book (published by the deploy) is attached, the slices it sent to press that the build has go Done, and it is checked back in with a build summary for the person. Slices not Done yet keep their last reported step (report_progress) until the build has them. Post the build first (systemctl --user start eventpad-models.service): a build made before building started, or at the commit you started from, is refused. On a plan already checked in (open_model {edit:true} first), it attaches a newer build of its app if the library has one.',
     inputSchema: { type: 'object', properties: { as: S } },
     run: finishBuildingTool },
-  { name: 'retire_plan', description: 'Put away a plan that has shipped: every slice is looked up in the app\'s built book (matched as Compare matches: a change by its command, a view by its read model; differing details count), each not yet Done is marked built at that build\'s commit, and the plan is retired (PlanRetired, onto the Retired shelf, read only from then on). Refined is not needed (the build is the confirmation) and never set. The built book: against {a model id or name}, else the newest "<app> · built" book (this machine\'s store or the library) for the plan\'s app; one book only. Any slice the build lacks: refused, naming it and the "maybe renamed" suggestion, nothing changed. Already retired: nothing changed. A plan waiting at the press leaves the queue; one being built is refused. A ☁ plan is checked out to you for it (refused while another device holds it) and checked back in. Needs connect_library only for ☁ books.',
-    inputSchema: { type: 'object', properties: { model: S, against: S }, required: ['model'] },
+  { name: 'retire_plan', description: 'Put away a plan that has shipped: every slice is looked up in the app\'s built book (matched as Compare matches: a change by its command, a view by its read model; differing details count), each not yet Done is marked built at that build\'s commit, and the plan is retired (PlanRetired, onto the Retired shelf, read only from then on). Refined is not needed (the build is the confirmation) and never set. The built book: against {a model id or name}, else the newest "<app> · built" book (this machine\'s store or the library) for the plan\'s app; one book only. map: [{slice: ref, S-number or title of the plan slice, built: the name of the slice in the built book}] pairs a slice the build holds under another name: it counts as matched when that built slice exists (a name-matching aid, never an override; the reply says what it matched). Any slice the build still lacks: refused, naming it and the "maybe renamed" suggestion, nothing changed. Slices tested outside Given/When/Then (HTTP or store tests) stay unmatched: only the owner retires such a plan ("Retire anyway" in the app, on her word). evidence: [{slice, evidence: "PR #78, store tests"}] retires nothing: it is recorded on the plan and shown on her Retire anyway prompt beside each unmatched slice, and the reply says it is waiting for her. Already retired: nothing changed. A plan waiting at the press leaves the queue; one being built is refused. A ☁ plan is checked out to you for it (refused while another device holds it) and checked back in. Needs connect_library only for ☁ books.',
+    inputSchema: { type: 'object', properties: { model: S, against: S,
+      map: { type: 'array', description: 'Name pairs: a plan slice the build holds under another name', items: { type: 'object', properties: { slice: S, built: S }, required: ['slice', 'built'] } },
+      evidence: { type: 'array', description: 'Why unmatched slices are built anyway; recorded for the owner, never retires', items: { type: 'object', properties: { slice: S, evidence: S }, required: ['slice', 'evidence'] } } }, required: ['model'] },
     run: retirePlanTool },
   { name: 'report_progress', edits: true, description: 'While you build a plan you took with start_building: say where a slice (S-number or title) has got to, so the person sees it live on the slice and on the plan\'s spine, before any build book exists. step: started (you begin it), red (its spec fails for the right reason), green (its scenarios pass; tests {passing, total}), pr (a pull request is open; pr: its number, url or {number, url}) or stuck (say what is in the way in note). Report each slice at each step, as you go. Refused, each in one line: the plan is not checked out to you (start_building first); no such slice; stuck without a note; pr without a number or url; tests passing more than total; a step back after green (or pr): only stuck, or started (a new round), may. A Done slice shows no progress (Done wins). Signed with your name (as: the name of this session, as in start_building).',
     inputSchema: { type: 'object', properties: { slice: S, step: { type: 'string', enum: ['started', 'red', 'green', 'pr', 'stuck'] }, note: S, pr: { type: ['number', 'string', 'object'] }, tests: { type: 'object', properties: { passing: { type: 'number' }, total: { type: 'number' } } }, as: S }, required: ['slice', 'step'] },
@@ -1209,13 +1465,9 @@ const tools = [
     inputSchema: { type: 'object', properties: { path: S }, required: ['path'] }, run: importFile },
   { name: 'keep_model', description: 'Keep the open model in the library on the server (like Keep on server on the phone), checked in so the person can open it, and get its book link (?book=): how to hand over a plan, since Refined ticks and comments then reach the library. Needs connect_library.',
     inputSchema: { type: 'object', properties: {} }, run: keepModel },
-  { name: 'live_view', description: 'A page on this machine that shows the open model live as you build it (opens it in the browser unless open:false).',
-    inputSchema: { type: 'object', properties: { open: { type: 'boolean' } } },
-    run: ({ open = true }) => {
-      if (!liveUrl) throw new Error('The live view could not start (no free port 7979-7999)');
-      if (open) { try { (process.platform === 'darwin' ? spawn('open', [liveUrl], { detached: true, stdio: 'ignore' }) : process.platform === 'win32' ? spawn('cmd', ['/c', 'start', '', liveUrl], { detached: true, stdio: 'ignore' }) : spawn('xdg-open', [liveUrl], { detached: true, stdio: 'ignore' })).on('error', () => { /* just the link */ }).unref(); } catch (e) { /* just the link */ } }
-      return `Live view: ${liveUrl}`;
-    } },
+  { name: 'live_view', description: 'A page on this machine that shows the open model live as you build it (opens it in the browser unless open:false). view: "pad" opens it on the Pad, to watch a sketch (pad_add_notes) grow.',
+    inputSchema: { type: 'object', properties: { open: { type: 'boolean' }, view: { type: 'string', enum: ['pad'] } } },
+    run: ({ open = true, view }) => `Live view: ${openLive(view, open)}` },
   { name: 'share_link', description: 'For a book in the library: its book link (?book=), the book itself. Otherwise: upload a copy (as it stands, without history) and get a ?m= link, for someone outside the library; anything done in a copy stays on that device. To hand over a plan, use keep_model.',
     inputSchema: { type: 'object', properties: {} }, run: shareLink },
   { name: 'export_file', description: 'Save the open model as a file to import in Event Book (☰ → Import). Without history unless history:true.',
@@ -1224,7 +1476,10 @@ const tools = [
   { name: 'connect_library', description: 'Connect to the Event Book library on the server, as one of the devices on the account. First {email} (and {invite} the first time they join): a code goes to that email. Then {code} (the person reads it to you). The device token is kept in ~/.secrets/eventpad.env and never shown.',
     inputSchema: { type: 'object', properties: { email: S, code: S, invite: S, as: S } }, run: connectLibrary },
   { name: 'disconnect_library', description: 'Sign this machine out of the library (the device is removed on the server and its token from ~/.secrets/eventpad.env).',
-    inputSchema: { type: 'object', properties: {} }, run: disconnectLibrary }
+    inputSchema: { type: 'object', properties: {} }, run: disconnectLibrary },
+  { name: 'update_mcp', description: 'Update this MCP server: git fetch + fast-forward pull of the checkout it runs from. Refused (with the reason) when it is not a git checkout, has uncommitted changes or is not on its default branch. Reports old → new version and the new commits; then reconnect with /mcp → eventpad (a running server cannot reload itself).',
+    inputSchema: { type: 'object', properties: {} }, run: () => upd.updateMcp({ dir: checkoutDir, version: SERVER_VERSION }) },
+  ...padTools({ es, pr, state, fsrc, sliceRefs, notLiterature })
 ];
 
 // ---------- JSON-RPC over stdio ----------
@@ -1236,7 +1491,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.4.0' },
+      serverInfo: { name: 'eventpad', version: '0.5.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});
@@ -1250,10 +1505,14 @@ async function handle(msg) {
     const wrong = lib.checkArgs(tool, args);
     if (wrong) return reply(id, { content: [{ type: 'text', text: wrong }], isError: true });
     clearTimeout(idleTimer);   // busy: not idle while a tool runs
+    // The first reply of a session says when the checkout is behind origin (once, quietly)
+    const note = tool.name === 'update_mcp' ? '' : await upd.updateNote({ dir: checkoutDir, version: SERVER_VERSION });
     try {
-      const text = String(await (tool.edits ? writeBack(() => tool.run(args), { talk: !!tool.talk }) : tool.run(args)));
+      const before = tool.edits ? numberingBefore() : null;
+      let text = String(await (tool.edits ? writeBack(() => tool.run(args), { talk: !!tool.talk }) : tool.run(args)));
+      if (before) text += numberingNote(before);
       persist();
-      return reply(id, { content: [{ type: 'text', text: clean(text) }] });
+      return reply(id, { content: [{ type: 'text', text: clean(note ? `${text}\n${note}` : text) }] });
     } catch (e) {
       persist();
       return reply(id, { content: [{ type: 'text', text: clean(e.message) }], isError: true });

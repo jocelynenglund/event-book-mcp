@@ -17,12 +17,14 @@ import { openNewSliceSheet, onSheetAction as newSliceAction } from './sheets/new
 import { openChapterMenu, openChapterPicker, onSheetAction as chapterAction } from './sheets/chapters.js';
 import { onSheetAction as readSheetAction } from '../readOnly/sheet.js';
 import { openCellSheet, onSheetAction as cellAction } from './sheets/cell.js';
-import { openEventsSheet, onSheetAction as eventsAction } from './sheets/events.js';
+import { openEventsSheet, openPlacesSheet, onSheetAction as eventsAction } from './sheets/events.js';
 import { openScenariosSheet, onSheetAction as scenariosAction } from './sheets/scenarios.js';
 import { openModelNameSheet, openSliceInfo, openSliceMenu, onSheetAction as sliceMenuAction } from './sheets/sliceMenu.js';
 import { onSheetAction as processorAction } from './sheets/processor.js';
 import { openFindSheet, onSheetAction as findAction, onSheetInput as findInput } from './sheets/find.js';
 import { openReferencePicker } from '../references/sheet.js';
+import { onFieldTap, onCountTap, onSheetAction as fieldGapAction } from '../fieldSources/sheet.js';
+import { onSheetAction as fieldMapAction, onSheetInput as fieldMapInput } from '../fieldMapping/sheet.js';
 import { openPartMenu, onSheetAction as arrangeAction } from '../arrange/sheet.js';
 import { togglePartFolded } from '../arrange/partFolds.js';
 import { canArrangeCurrent } from '../../core/eventStore.js';
@@ -42,7 +44,8 @@ import { openProgressHistory } from '../buildProgress/sheet.js';
 
 function handleBoardClick(e) {
   const t = e.target.closest('[data-action]');
-  if (!t) return;
+  // A tap on a grip is only a grip: it opens what the grip sits on (a spine), but not the buttons a grip carries (a part tab's)
+  if (!t || t.contains(e.target.closest('.bd-grip'))) return;
   const { action, slice, el, to } = t.dataset;
   if (isReadOnly() && !(action === 'part-menu' && canArrangeCurrent()) && readOnlyTap(action, t)) return;
   if (action === 'new-slice') openNewSliceSheet(t.dataset.chapter || undefined);
@@ -74,10 +77,16 @@ function handleBoardClick(e) {
       render();
       return;
     }
+    // A processor's "reads <view slice>" tag goes to that slice
+    const goto = e.target.closest('[data-goto-slice]');
+    if (goto) { scrollToSlice(goto.dataset.gotoSlice); return; }
     // Tap reads (a field too); the ⋮ on the card is the editor
     openElementReadSheet(el, slice);
   }
+  else if (action === 'places') openPlacesSheet(el, slice);
   else if (action === 'element') openElementMenu(el, slice);
+  else if (action === 'field-gap') onFieldTap(el, slice, t.dataset.field);
+  else if (action === 'fix-list') onCountTap(t);
   else if (action === 'slice-menu') openSliceMenu(slice);
   else if (action === 'slice-page') showSlicePage(slice);
   else if (action === 'progress-history') openProgressHistory(slice);
@@ -98,11 +107,12 @@ function handleBoardClick(e) {
 
 // Not checked out here: a tap reads (a sticky's sheet, the slice page, the scenarios);
 // what would change the model does nothing. Folding, flows and ⓘ are left to the board.
-const readOnlyReads = new Set(['chapter-menu', 'fold', 'fold-part', 'show-flow', 'toggle-gwt', 'slice-info', 'slice-page', 'progress-history', 'comment', 'next-comment']);
+const readOnlyReads = new Set(['field-gap', 'fix-list', 'chapter-menu', 'fold', 'fold-part', 'show-flow', 'toggle-gwt', 'slice-info', 'slice-page', 'progress-history', 'comment', 'next-comment']);
 function readOnlyTap(action, t) {
   const { slice, el } = t.dataset;
   if (readOnlyReads.has(action)) return false;
   if (action === 'element' || action === 'element-read') openElementReadSheet(el, slice);
+  else if (action === 'places') openPlacesSheet(el, slice);
   else if (action === 'slice-menu') openSliceMenu(slice);   // only sharing
   else if (action === 'events') openEventsSheet(slice, { readOnly: true });
   else if (action === 'givens') openEventsSheet(slice, { readOnly: true, givens: true });
@@ -127,7 +137,7 @@ function revealComment(c) {
 }
 
 // Taps inside the board sheet: each sheet module answers its own
-const sheetActions = [readSheetAction, newSliceAction, chapterAction, arrangeAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction];
+const sheetActions = [readSheetAction, newSliceAction, chapterAction, arrangeAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction, fieldGapAction, fieldMapAction];
 
 function handleSheetClick(e) {
   const t = e.target.closest('[data-board-action]');
@@ -174,7 +184,7 @@ export function initBoard() {
     document.getElementById('board')?.scrollTo({ left: 0 });
   });
   document.getElementById('boardSheetContent').addEventListener('click', handleSheetClick);
-  document.getElementById('boardSheetContent').addEventListener('input', findInput);
+  document.getElementById('boardSheetContent').addEventListener('input', e => { findInput(e); fieldMapInput(e); });
   // An untitled model's title asks for a name; once it has one, renaming is in the
   // library (the shelf's ⋯ → Name & description). In the library it just says eventPAD.
   document.getElementById('modelTitle').addEventListener('click', () => {

@@ -15,6 +15,8 @@ document.addEventListener('input', e => {
 new MutationObserver(() => requestAnimationFrame(() => document.querySelectorAll('.sheet-overlay.active .ol-add-desc, .sheet-overlay.active .bd-slice-desc').forEach(growToFit)))
   .observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'], childList: true });
 
+import { holdsDraft } from './sheetDraft.js';
+
 export function showSheet(idOrContent) {
   // If it looks like HTML content, use dynamic sheet
   if (idOrContent.includes('<')) {
@@ -108,7 +110,7 @@ function keepFieldInView(e) {
 export function initSheets() {
   document.querySelectorAll('.sheet-overlay').forEach(overlay => {
     overlay.onclick = (e) => {
-      if (e.target === overlay) hideAllSheets();
+      if (e.target === overlay && !holdsDraft(overlay)) hideAllSheets();
     };
     enableSwipeToClose(overlay);
   });

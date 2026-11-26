@@ -1,7 +1,7 @@
 // ===========================================
 // SETTINGS - ☰ → Settings…: how this device shows a book. Kept on the device, not in a book.
 // Notes: Sketchy (stickies sit slightly askew, the default) or Neat (all straight, in line).
-// Open books in: the Board (the default) or the Outline: the plotter / pantser choice a new model asks
+// Open books in: the Board (the default), the Pad or the Outline: the plotter / pantser choice a new model asks
 //   (feed.js getStartIn); a story always opens on Read.
 // Fonts: a pack sets the titles', the text's and the labels' fonts together. Default (Fraunces titles, Atkinson
 //   Hyperlegible text, IBM Plex Mono labels), Formal (no serifs: IBM Plex Sans with Plex Mono), OpenDyslexic. A pack's
@@ -75,7 +75,7 @@ export function settingsHtml() {
     <div class="cm-parts">${chip(false, 'Sketchy', 'Stickies sit slightly askew, like paper')}${chip(true, 'Neat', 'Every sticky straight and in line, in one plain font')}</div>
     <p class="cm-note">${neat ? 'Neat: every sticky straight and in line, in one plain font, for a calmer board.' : 'Sketchy: stickies sit slightly askew, like paper on a wall, with serif titles and typewriter labels.'}</p>
     <div class="bd-sheet-label">Open books in</div>
-    <div class="cm-parts">${startChip('board', '🌀 Board', 'Straight onto the board')}${startChip('outline', '📋 Outline', 'The outline first')}</div>
+    <div class="cm-parts">${startChip('board', '🗂 Board', 'Straight onto the board')}${startChip('pad', '🌀 Pad', 'Sketch first, on the Pad')}${startChip('outline', '📋 Outline', 'The outline first')}</div>
     <p class="cm-note">A story always opens on Read.</p>
     <div class="bd-sheet-label">Fonts</div>
     <div class="cm-parts">${Object.keys(FONT_PACKS).map(fontChip).join('')}</div>

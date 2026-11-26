@@ -13,7 +13,7 @@ import { showToast } from '../../ui/toast.js';
 import { escapeHtml } from '../board/view.js';
 import { renderModelImage, ensureFonts } from '../shareImage/render.js';
 import { modelDetailShareShot } from '../shareImage/modelDetailShareShot.read.js';
-import { shareSourceEvents, shareSourceId, shareScopeNow } from '../shareImage/sheet.js';
+import { shareSourceEvents, shareSourceId, shareScopeNow, shareOpenOnPad } from '../shareImage/sheet.js';
 
 // The eventpad module is live on the shared host (event-store-api PR #201);
 // flip to false to hide Copy link if it ever has to come down
@@ -29,8 +29,9 @@ const API_BASE = LOCAL
 const IMPORTS_KEY = 'eventpad_shared_imports';
 const readImports = () => { try { return JSON.parse(localStorage.getItem(IMPORTS_KEY) || '{}'); } catch (e) { return {}; } };
 
-export function shareUrl(id) {
-  return `${location.origin}${location.pathname}?m=${encodeURIComponent(id)}`;
+// onPad: the link opens the Pad (view=pad), not the outline
+export function shareUrl(id, onPad = false) {
+  return `${location.origin}${location.pathname}?m=${encodeURIComponent(id)}${onPad ? '&view=pad' : ''}`;
 }
 
 // A share link holds up to 1 MB. A bigger model goes up gzipped, as one string in
@@ -77,7 +78,8 @@ export async function createShareLink(given = null, modelId = null) {
   const events = given || shareSourceEvents() || getEventStream();
   const from = modelId || shareSourceId() || getCurrentModelId();
   // The sheet's scope (the chapters picked); a shelf's book from the library goes whole
-  const book = shareLinkSnapshot(projectState(events), given ? null : shareScopeNow());
+  const onPad = !given && shareOpenOnPad();
+  const book = shareLinkSnapshot(projectState(events), given ? null : shareScopeNow(), { keepPad: onPad });
   const res = await fetch(`${API_BASE}/shares`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -92,7 +94,7 @@ export async function createShareLink(given = null, modelId = null) {
   const imports = readImports();
   imports[id] = from;
   localStorage.setItem(IMPORTS_KEY, JSON.stringify(imports));
-  return shareUrl(id);
+  return shareUrl(id, onPad);
 }
 
 // What to say when a link couldn't be made
@@ -153,15 +155,17 @@ export async function openSharedLinkFromUrl() {
   const params = new URLSearchParams(location.search);
   const id = params.get('m');
   if (!id) return;
-  // Drop the parameter so a reload doesn't ask again
+  // view=pad: the link lands on the Pad. Drop the parameters so a reload doesn't ask again
+  const onPad = params.get('view') === 'pad', land = () => (onPad ? window.EventPad.showPad() : window.EventPad.showOutline());
   params.delete('m');
+  params.delete('view');
   history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash);
   const opened = () => document.documentElement.classList.remove('opening-link');
 
   const known = readImports()[id];
   if (known && listModels().some(m => m.id === known)) {
     openModel(known);
-    window.EventPad.showOutline();
+    land();
     opened();
     showToast('Opened from your bookshelves');
     return;
@@ -189,7 +193,7 @@ export async function openSharedLinkFromUrl() {
     showToast("That shared model couldn't be found");
     return;
   }
-  pending = shared;
+  pending = { ...shared, onPad };
   opened();
 
   content.innerHTML = `
@@ -211,12 +215,13 @@ function addPending() {
   const modelId = createModel(pending.events || []);
   // A shared book opens as its outline (the board is a tap away), and starts there next time too
   setModelStartIn(modelId, 'outline');
+  const onPad = pending.onPad;
   const imports = readImports();
   imports[pending.id] = modelId;
   localStorage.setItem(IMPORTS_KEY, JSON.stringify(imports));
   pending = null;
   hideAllSheets();
-  window.EventPad.showOutline();
+  onPad ? window.EventPad.showPad() : window.EventPad.showOutline();
   showToast('Added to your bookshelves');
 }
 

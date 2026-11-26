@@ -270,10 +270,14 @@ export function loadEventStream() {
   return eventStream;
 }
 
+// Told when a book is opened (sync fetches what the library has now before she reads it)
+const openListeners = new Set();
+export function onOpenModel(fn) { openListeners.add(fn); }
 export function openModel(id) {
   if (!readIndex().some(m => m.id === id)) return false;
   localStorage.setItem(CURRENT_KEY, id);
   loadEventStream();
+  openListeners.forEach(fn => { try { fn(id); } catch (e) { /* a listener's problem */ } });
   return true;
 }
 
@@ -317,7 +321,7 @@ export function createModel(events = [], { id: givenId = null } = {}) {
   return id;
 }
 
-// How a model was started: 'outline' (a plotter's) or 'board' (a pantser's)
+// How a model was started: 'outline' (a plotter's), 'pad' (a pantser's, sketching first) or 'board' (older books)
 export function setModelStartIn(id, where) {
   const index = readIndex();
   const entry = index.find(m => m.id === id);
@@ -403,8 +407,10 @@ export function setEditGuard(guard, blocked) { editGuard = guard; editBlocked = 
 export const isFrozenCurrent = () => isFrozen(eventStream);
 // Arranging chapters and parts also goes onto a published book (it changes no model): it needs the book
 // checked out here, not that it be a draft
+// A build book is never checked out (a plan starts from it), so its guard (true) lets arranging through
 export function canArrangeCurrent() {
-  return typeGuard(currentModelId, EventTypes.ChaptersArranged) !== false && (!editGuard || editGuard(currentModelId));
+  const g = typeGuard(currentModelId, EventTypes.ChaptersArranged);
+  return g === true || (g !== false && (!editGuard || editGuard(currentModelId)));
 }
 export function canEditCurrent() {
   if (typeGuard(currentModelId, null) === false) return false;

@@ -8,6 +8,10 @@ import { showSheet } from '../../ui/sheets.js';
 import { showToast } from '../../ui/toast.js';
 import { renderModelImage, renderSlides, ensureFonts } from './render.js';
 import { renderOutlineImage } from './outlineImage.js';
+import { renderPadImage } from './padImage.js';
+import { padPictureShot } from './padPictureShot.read.js';
+import { padSelectionNow } from '../pad/view.js';
+import { getView } from '../../ui/feed.js';
 import { modelDetailShareShot } from './modelDetailShareShot.read.js';
 import { shareScopeChoices } from './shareScopeChoices.read.js';
 import { shareFileName } from './shareFileName.read.js';
@@ -19,6 +23,11 @@ const OPTS_KEY = 'eventpad_share_opts';
 let opts = { theme: 'light', showProps: true, foldChapters: true, showDescription: true, showScenarios: false, showValues: false, showSliceNotes: false, showUsage: false, slides: false, outline: false };
 // Picture (the board), Slides 4:5, or the Outline (a table of contents)
 try { opts = { ...opts, ...JSON.parse(localStorage.getItem(OPTS_KEY) || '{}') }; } catch (e) { /* storage blocked */ }
+// The Pad's are for this opening of the sheet, never kept: the picture of the Pad (what a Share from the Pad starts on), only what is selected,
+// the chapters frames were made into, and whether the link lands on the Pad
+const PAD_KEYS = ['pad', 'selectionOnly', 'showMade', 'openOnPad'];
+Object.assign(opts, { pad: false, selectionOnly: false, showMade: false, openOnPad: false });
+const saveOpts = () => { try { localStorage.setItem(OPTS_KEY, JSON.stringify(Object.fromEntries(Object.entries(opts).filter(([k]) => !PAD_KEYS.includes(k))))); } catch (err) { /* storage blocked */ } };
 
 // What's shared: the whole model (null) or one chapter. Picked fresh each time.
 let scope = null;
@@ -34,12 +43,14 @@ export function shareSourceEvents() { return sourceEvents(); }
 export function shareSourceId() { return sourceId; }
 // The scope picked now (null: the whole model; 'slice:<id>'; chapter ids joined by commas): what a link carries too
 export function shareScopeNow() { return scope; }
+// Does the link land on the Pad (so the Pad comes along, whatever the scope)
+export function shareOpenOnPad() { return !!opts.openOnPad; }
 let blobs = [];        // one picture, or one per slide
 let previewUrl = null;
 
 function fileName(index = null) {
   const { base } = shareFileName(sourceState(), scope);
-  return base + (index === null ? '' : `-${index + 1}`) + '.png';
+  return base + (opts.pad ? '-pad' : '') + (index === null ? '' : `-${index + 1}`) + '.png';
 }
 
 const toBlob = canvas => new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -53,7 +64,7 @@ function renderScope(state) {
   scope = choice.scope;
   document.getElementById('shareScope').innerHTML = choice.options.map(c =>
     `<option value="${escapeAttr(c.id)}" ${(scope || '') === c.id ? 'selected' : ''}>${escapeAttr(c.name)}</option>`).join('');
-  document.getElementById('shareScopeMount').innerHTML = shareScopeButton({ ...choice, open: !document.getElementById('shareScopePanel').hidden });
+  document.getElementById('shareScopeMount').innerHTML = shareScopeButton({ ...choice, showButton: choice.showButton && !opts.pad, open: !document.getElementById('shareScopePanel').hidden });
   renderScopeList();
 }
 
@@ -107,12 +118,18 @@ async function refreshPreview() {
   renderScope(state);
   // Everything the picture draws, from its one view
   const shot = modelDetailShareShot(state, { scope, options: opts, events: sourceEvents() || getEventStream() });
-  const controls = shareSheetControls(state, { scope, options: opts, events: sourceEvents() || getEventStream() });
+  // The Pad's selection is the open book's: a shelf's book is pictured whole
+  const selection = sourceId ? null : padSelectionNow();
+  const controls = shareSheetControls(state, { scope, options: opts, events: sourceEvents() || getEventStream(), selection });
+  const padPicture = controls.format.some(f => f.value === 'pad' && f.active);
   document.getElementById('shareFormat').innerHTML = controls.format.map(shareFormatButton).join('');
   document.getElementById('shareChips').innerHTML = controls.chips.map(shareOptionChip).join('');
   document.getElementById('shareMoreSummary').textContent = controls.summary;
 
-  const canvases = opts.outline
+  const padShot = padPicture && padPictureShot(state, { selection: opts.selectionOnly && controls.chips.some(c => c.opt === 'selectionOnly' && c.shown) ? selection : null, options: opts });
+  const canvases = padPicture
+    ? [renderPadImage({ shot: padShot, theme: opts.theme })]
+    : opts.outline
     ? [renderOutlineImage({ shot, theme: opts.theme })]
     : opts.slides
       ? renderSlides({ shot, theme: opts.theme })
@@ -141,7 +158,10 @@ async function refreshPreview() {
 // sliceId: start with just that slice (from the slice's menu). chapterId: start on that chapter (from its menu).
 export function openShareSheet(modelId = null, { sliceId = null, chapterId = null } = {}) {
   sourceId = typeof modelId === 'string' ? modelId : null;
-  const start = shareSheetStart(sourceState(), typeof sliceId === 'string' ? sliceId : null, typeof chapterId === 'string' ? chapterId : null);
+  // From the Pad: its picture (the selection, when there is one) and a link that opens on the Pad
+  const fromPad = !sourceId && getView() === 'pad', selection = fromPad ? padSelectionNow() : null;
+  Object.assign(opts, { pad: fromPad, selectionOnly: !!selection && selection.noteIds.length + selection.frameIds.length > 0, showMade: false, openOnPad: fromPad });
+  const start = shareSheetStart(sourceState(), typeof sliceId === 'string' ? sliceId : null, typeof chapterId === 'string' ? chapterId : null, { fromPad });
   if (start.empty) {
     showToast('Add a slice first');
     return;
@@ -200,14 +220,15 @@ export function initShareImage() {
       const { shareOpt, on, off } = opt.dataset;
       const value = String(opts[shareOpt]) === on ? off : on;
       opts[shareOpt] = value === 'true' ? true : value === 'false' ? false : value;
-      try { localStorage.setItem(OPTS_KEY, JSON.stringify(opts)); } catch (err) { /* storage blocked */ }
+      saveOpts();
       refreshPreview();
     }
     const set = e.target.closest('[data-share-set]');
     if (set) {
       opts.slides = set.dataset.value === 'slides';
       opts.outline = set.dataset.value === 'outline';
-      try { localStorage.setItem(OPTS_KEY, JSON.stringify(opts)); } catch (err) { /* storage blocked */ }
+      opts.pad = set.dataset.value === 'pad';
+      saveOpts();
       refreshPreview();
     }
     if (e.target.closest('#shareScopeBtn')) openScopePanel(document.getElementById('shareScopePanel').hidden);

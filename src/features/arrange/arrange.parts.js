@@ -1,29 +1,31 @@
 // ===========================================
 // ARRANGE - Parts of the screens that arrange chapters, each drawn from its own view alone
-// The bookend and the band on the Board's shelf, and the two sheets' sections (a chapter's arrange options, a part's
+// The tab and the sliver of a part on the Board's shelf, and the two sheets' sections (a chapter's arrange options, a part's
 // menu). Each takes the one view that feeds it and ui, the device's local state (the grid place it sits in, whether it
 // can be dragged); nothing here reads the book. A root carries data-component and data-key.
 // ===========================================
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const drag = (kind, ui) => ui.draggable ? ` data-drag="${kind}"` : '';
-
-// A part's bookend: taller and darker than a spine, the part's name running up it, "n ch · m slices" under it;
-// its ‹ folds the whole part into the bookend (› opens it again), a tap on the name opens the part's menu.
-// ui: col, draggable
-export function partBookend(part, ui = {}) {
+// A part's divider tab, sticking up over its chapters with a rule under it across the whole part: the ‹ that folds the
+// part to a sliver (› opens it again), its name (a tap opens the part's menu) and its counts. The whole tab is the
+// grip the part is dragged by. ui: col, span (the columns of the part), draggable
+export function partTab(part, ui = {}) {
+  const label = `
+      <button class="bd-part-tab-fold" data-action="fold-part" data-part="${part.partId}" aria-label="${part.folded ? 'Open' : 'Fold'} the part ${escapeHtml(part.name)}">${part.folded ? '›' : '‹'}</button>
+      <button class="bd-part-tab-name" data-action="part-menu" data-part="${part.partId}" title="${escapeHtml(part.name)}: rename or remove the part">${escapeHtml(part.name)}</button>
+      ${part.folded ? '' : `<span class="bd-part-tab-counts">${part.counts}</span>`}`;
   return `
-    <div class="bd-bookend ${part.folded ? 'folded' : ''}" data-component="Board part bookend" data-key="${part.partId}" data-part="${part.partId}"${drag('part', ui)} style="grid-column: ${ui.col}; grid-row: 1 / span 6">
-      <button class="bd-bookend-fold" data-action="fold-part" data-part="${part.partId}" aria-label="${part.folded ? 'Open' : 'Fold'} the part ${escapeHtml(part.name)}">${part.folded ? '›' : '‹'}</button>
-      <button class="bd-bookend-name" data-action="part-menu" data-part="${part.partId}" title="${escapeHtml(part.name)}: rename or remove the part">${escapeHtml(part.name)}</button>
-      <span class="bd-bookend-count">${part.counts}</span>
+    <div class="bd-part-tab ${part.folded ? 'folded' : ''}" data-component="Board part tab" data-key="${part.partId}" style="grid-column: ${ui.col} / span ${ui.span || 1}; grid-row: 1">
+      ${ui.draggable
+        ? `<div class="bd-part-tab-label bd-grip" data-drag="part" data-part="${part.partId}" title="Drag to move the part ${escapeHtml(part.name)}">${label}</div>`
+        : `<div class="bd-part-tab-label">${label}</div>`}
     </div>`;
 }
 
-// The part's name over its open chapters' headers, spanning their columns. ui: col, span
-export function partBand(part, ui = {}) {
-  return `<div class="bd-part-band" data-component="Board part band" data-key="${part.partId}" style="grid-column: ${ui.col} / span ${ui.span || 1}; grid-row: 1">${escapeHtml(part.name)}</div>`;
+// A folded part's chapters, squeezed into one thin sliver of a spine under its tab. ui: col
+export function partSliver(part, ui = {}) {
+  return `<div class="bd-part-sliver" data-component="Board part sliver" data-key="${part.partId}" style="grid-column: ${ui.col}; grid-row: 1 / span 6" role="img" aria-label="The part ${escapeHtml(part.name)}, folded"></div>`;
 }
 
 // A chapter's menu, the arranging part: earlier, later, the end of another part, a new part from here

@@ -11,6 +11,8 @@
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import { parsePropertyText } from '../../core/constants.js';
+import { setQueryFields } from '../viewQueries/command.js';
+import { isQueryField } from '../viewQueries/queryFields.js';
 import { addToSlice, removeFromSlice, describeSlice } from '../board/command.js';
 
 // Which stickies of a step carry its properties
@@ -25,7 +27,7 @@ export function findByName(type, name, state) {
 }
 
 // A view's fields are its read model's: the events feeding it keep their own
-function sliceCarriers(sliceId, state) {
+export function sliceCarriers(sliceId, state) {
   const slice = state.slices[sliceId];
   const own = slice?.type === 'SV' ? ['readModel'] : carriers;
   return (slice?.elements || []).map(id => state.elements[id]).filter(el => el && own.includes(el.type));
@@ -41,21 +43,23 @@ export function addOutlineProperties(sliceId, text) {
       elementId: el.id, propertyId: newPropertyId(i), name, propertyType: type, ...(items ? { items } : {})
     }));
     added += parsed.length;
+    setQueryFields(el.id, parsePropertyText(text, 'string', []).parsed);
   });
   return added;
 }
 
 // The step's properties as one list, the way the outline shows them:
-// text names bare, other types as name:type, lists as name[] or name[]{fields}
+// text names bare, other types as name:type, lists as name[] or name[]{fields}, a query parameter with a ? in front
 export function outlinePropertiesText(sliceId, state = projectState()) {
   const seen = new Map();
   sliceCarriers(sliceId, state).forEach(el => el.properties.forEach(p => {
-    if (!seen.has(p.name.toLowerCase())) seen.set(p.name.toLowerCase(), p);
+    if (!seen.has(p.name.toLowerCase())) seen.set(p.name.toLowerCase(), { p, query: isQueryField(el, p.name) });
+    else if (isQueryField(el, p.name)) seen.get(p.name.toLowerCase()).query = true;
   }));
-  return [...seen.values()].map(p =>
+  return [...seen.values()].map(({ p, query }) => (query ? '?' : '') + (
     p.type === 'array' ? `${p.name}[]${p.items?.length ? `{${p.items.join(', ')}}` : ''}`
       : !p.type || p.type === 'string' ? p.name
-      : `${p.name}:${p.type}`).join(', ');
+      : `${p.name}:${p.type}`)).join(', ');
 }
 
 // Every carrier ends up with exactly the listed names: missing ones added, unlisted
@@ -68,7 +72,8 @@ function syncProperties(sliceId, text) {
 export function setElementProperties(elementId, text) {
   const el = projectState().elements[elementId];
   if (!el) return 0;
-  const wanted = new Map(parsePropertyText(text, null, []).parsed.map(p => [p.name.toLowerCase(), p]));
+  const typed = parsePropertyText(text, null, []).parsed;
+  const wanted = new Map(typed.map(p => [p.name.toLowerCase(), p]));
   let changed = 0;
   el.properties.forEach(p => {
     const w = wanted.get(p.name.toLowerCase());
@@ -87,7 +92,7 @@ export function setElementProperties(elementId, text) {
     });
     changed++;
   });
-  return changed;
+  return changed + setQueryFields(el.id, typed, { clear: true });
 }
 
 // fields: [{ type, elementId (what's there now, or null), value (what's typed) }]

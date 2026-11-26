@@ -38,6 +38,25 @@ export function editParagraph({ paragraphId: id, text, state = projectState() } 
   return record(EventTypes.ParagraphEdited, { paragraphId: id, text: body });
 }
 
+// SC: Delete Paragraph — an agent takes back text it wrote itself. Only unedited agent text on a
+// point she hasn't ticked Refined: her own paragraphs, anything she edited, and a point she signed
+// off stay. (The app's own UI has no delete: she edits the text.)
+export const isAgentName = by => /^ItsyBOT\b/.test(String(by || ''));
+export function paragraphProtection(state, p) {
+  const quote = `"${p.text.length > 60 ? p.text.slice(0, 57) + '…' : p.text}"`;
+  if (!isAgentName(p.by)) return `${quote} was written by ${p.by || 'the author'}: only the author takes her own text out`;
+  if (p.edited) return `${quote} was edited by the author: only she takes it out`;
+  if (state.slices[p.sliceId]?.refined) return `${quote} is on a Refined point: the author has signed it off, so only she changes it`;
+  return null;
+}
+export function deleteParagraph({ paragraphId: id, state = projectState() } = {}) {
+  const p = state.paragraphs?.[id];
+  if (!p) return 'No such paragraph';
+  const why = paragraphProtection(state, p);
+  if (why) return why;
+  return record(EventTypes.ParagraphDeleted, { paragraphId: id, sliceId: p.sliceId });
+}
+
 // A point's paragraphs, in the order they were written
 export const paragraphsOf = (state, sliceId) => Object.values(state.paragraphs || {}).filter(p => p.sliceId === sliceId);
 

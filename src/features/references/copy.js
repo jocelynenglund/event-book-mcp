@@ -6,7 +6,8 @@
 // Cards that already exist in the target (same type and name) are reused.
 // ===========================================
 
-import { EventTypes } from '../../core/constants.js';
+import { EventTypes, fieldKey } from '../../core/constants.js';
+import { isQueryField } from '../viewQueries/queryFields.js';
 
 const fresh = prefix => prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 const keyOf = el => el.type + '|' + String(el.name).trim().toLowerCase();
@@ -46,14 +47,23 @@ export function chapterEvents(state, chapterId, { target = null, name = null } =
       if (el.published) add(EventTypes.ElementPublishedSet, { elementId: id, published: true, ...(el.to?.length ? { to: el.to } : {}) });
       if (el.todo) add(EventTypes.ElementTodoSet, { elementId: id, todo: true });
       if (el.list) add(EventTypes.ElementListSet, { elementId: id, list: true });
+      if (el.sketch) add(EventTypes.ScreenSketchSet, { elementId: id, text: el.sketch });
     }
     const have = new Set((same?.properties || []).map(p => p.name.toLowerCase()));
     (el.properties || []).filter(p => !have.has(p.name.toLowerCase())).forEach(p => {
       const propertyId = fresh('prop');
       add(EventTypes.PropertyAdded, { elementId: id, propertyId, name: p.name, propertyType: p.type || 'string', ...(p.items ? { items: p.items } : {}) });
       if (p.generated) add(EventTypes.PropertyGeneratedSet, { elementId: id, propertyId, generated: true });
+      if (el.setBySystem?.[fieldKey(p.name)]) add(EventTypes.FieldSetBySystem, { elementId: id, field: p.name, how: el.setBySystem[fieldKey(p.name)].how });
+      if (isQueryField(el, p.name)) add(EventTypes.FieldMarkedQuery, { elementId: id, field: p.name });
     });
   });
+
+  // Where a field comes from, when the sticky it comes from came along too
+  [...elementIds].map(id => state.elements[id]).filter(el => el?.mappings).forEach(el => Object.values(el.mappings).forEach(m => {
+    const to = elMap[el.id], from = elMap[m.from.elementId];
+    if (to && from && !target?.elements[to]?.mappings?.[fieldKey(m.field)]) add(EventTypes.FieldMapped, { elementId: to, field: m.field, from: { elementId: from, field: m.from.field } });
+  }));
 
   // The chapter and its flows
   const newChapterId = fresh('chapter');
@@ -102,6 +112,7 @@ export function chapterEvents(state, chapterId, { target = null, name = null } =
     add(EventTypes.ScenarioAdded, { sliceId: sliceMap[sc.sliceId], scenarioId, name: sc.name, scenarioType: sc.type });
     if (sc.given?.length) add(EventTypes.GivenSet, { scenarioId, events: mapValues(sc.given) });
     if (sc.when?.commandId && elMap[sc.when.commandId]) add(EventTypes.WhenSet, { scenarioId, commandId: elMap[sc.when.commandId], values: sc.when.values || {} });
+    if (sc.when?.query) add(EventTypes.ScenarioQuerySet, { scenarioId, text: sc.when.query });
     const th = sc.then;
     if (th?.type === 'event' && elMap[th.eventId]) add(EventTypes.ThenEventSet, { scenarioId, eventId: elMap[th.eventId], values: th.values || {} });
     else if (th?.type === 'readModel' && elMap[th.readModelId]) add(EventTypes.ThenReadModelSet, { scenarioId, readModelId: elMap[th.readModelId], values: th.values || {}, ...(th.rows ? { rows: th.rows } : {}) });

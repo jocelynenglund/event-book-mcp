@@ -24,6 +24,11 @@ import { propertyCopyTargets } from './propertyCopyTargets.read.js';
 import { propertyCopyPlan } from './propertyCopyPlan.read.js';
 import { propertyDownstreamTargets } from './propertyDownstreamTargets.read.js';
 import { propertiesSheetBody } from './properties.parts.js';
+import { markFieldSetBySystem, clearFieldSetBySystem } from '../fieldSources/command.js';
+import { markFieldQuery, clearFieldQuery } from '../viewQueries/command.js';
+import { clearFieldMapping } from '../fieldMapping/command.js';
+import { openFieldMapPicker } from '../fieldMapping/sheet.js';
+import { startTrace } from '../fieldTrace/traceState.js';
 
 let editingElementId = null;
 let editingPropertyId = null;
@@ -139,6 +144,43 @@ function updateProperty() {
   renderPropertySheet();
 }
 
+// Set by the system (or take it back): this field has no source in the model on purpose
+function setBySystem(clear) {
+  const form = propertyEditForm(load(), editingElementId, editingPropertyId);
+  if (!form) return;
+  const how = document.getElementById('prEditSystemHow')?.value || '';
+  const why = clear ? clearFieldSetBySystem({ elementId: editingElementId, field: form.name }) : markFieldSetBySystem({ elementId: editingElementId, field: form.name, how });
+  showToast(why || (clear ? `${form.name} needs a source again` : `${form.name}: set by the system`));
+  render();
+  renderPropertySheet();
+}
+
+// A query parameter (or not any more): the caller asks the view with this field
+function setQuery(clear) {
+  const form = propertyEditForm(load(), editingElementId, editingPropertyId);
+  if (!form) return;
+  const why = (clear ? clearFieldQuery : markFieldQuery)({ elementId: editingElementId, field: form.name });
+  showToast(why || (clear ? `${form.name} is an ordinary field again` : `${form.name} is a query parameter`));
+  render();
+  renderPropertySheet();
+}
+
+// Comes from… (pick the field it comes from), Unmap, and Trace (follow it through the book): on the field being edited
+function mapOrTrace(a) {
+  const form = propertyEditForm(load(), editingElementId, editingPropertyId);
+  if (!form) return;
+  const elementId = editingElementId;
+  if (a === 'unmap') {
+    const why = clearFieldMapping({ elementId, field: form.name });
+    showToast(why || `${form.name} comes from nowhere again`);
+    render();
+    renderPropertySheet();
+    return;
+  }
+  finish();
+  if (a === 'map') openFieldMapPicker(elementId, form.name); else startTrace(elementId, form.name);
+}
+
 export function deleteProperty() {
   if (!editingElementId || !editingPropertyId) return;
 
@@ -178,6 +220,11 @@ function handleSheetClick(e) {
     document.getElementById('prAddInput')?.focus();
   } else if (a === 'add') saveProperty();
   else if (a === 'update') updateProperty();
+  else if (a === 'system-set') setBySystem(false);
+  else if (a === 'system-clear') setBySystem(true);
+  else if (a === 'query-set') setQuery(false);
+  else if (a === 'query-clear') setQuery(true);
+  else if (a === 'map' || a === 'unmap' || a === 'trace') mapOrTrace(a);
   else if (a === 'delete') deleteProperty();
   else if (a === 'cancel') { editingPropertyId = null; renderPropertySheet(); }
   else if (a === 'suggest') addSuggested([{ name: t.dataset.name, type: t.dataset.type }]);

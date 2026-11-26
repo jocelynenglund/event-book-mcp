@@ -9,8 +9,10 @@
 // ===========================================
 
 import { getBoardGroups, getScenariosForSlice, givenEventsOf, sliceTitle, sliceRef } from '../../core/projections.js';
-import { elementLabel, propLabel } from '../../core/constants.js';
-import { laneOf, sliceActor, sliceProcessor, isTrigger } from '../board/command.js';
+import { elementLabel } from '../../core/constants.js';
+import { fieldLabel } from '../viewQueries/queryFields.js';
+import { laneOf, sliceActor, sliceProcessor } from '../board/command.js';
+import { isLabelledTrigger } from '../board/processorReads.js';
 import { fieldsFolded, foldedLabel } from '../board/foldedFields.js';
 import { latestUsage, sliceUsage } from '../usage/rules.js';
 import { sliceUsageText } from '../usage/view.js';
@@ -24,7 +26,7 @@ function cardOf(el, slice, state, { showProps, first, trigger }) {
   const base = { id: el.id, kind: el.type, label: elementLabel(el), name: el.name, external: !!el.external, table: !!el.table, published: el.type === 'event' && !!el.published && !el.external, to: el.type === 'event' && el.published && !el.external ? (el.to || []).join(', ') : '', todo };
   // A to-do list seen again: a slim reference, not a second full card
   if (todo && !first) return { ...base, slim: true, tags: [], fields: [], list: false, trigger: false };
-  const props = !showProps ? [] : el.properties?.length && fieldsFolded(el.id) ? [foldedLabel(el.properties.length)] : (el.properties || []).map(propLabel);
+  const props = !showProps ? [] : el.properties?.length && fieldsFolded(el.id) ? [foldedLabel(el.properties.length)] : (el.properties || []).map(p => fieldLabel(el, p));
   return { ...base, slim: false, list: el.type === 'readModel' && !!el.list && !todo, trigger: !!trigger, fields: props, tags: cardTags(el, slice, state) };
 }
 
@@ -89,7 +91,7 @@ function lanesOf(slice, state, { showProps, first, processor }) {
   // Another flow's outcome (e.g. Capture failed on the main line) stays out of the picture
   const els = slice.elements.map(id => state.elements[id]).filter(el => el && !(el.type === 'event' && otherFlowOutcome(el, slice, state)));
   return [0, 1, 2].map(l => els.filter(e => laneOf[e.type] === l).map(el =>
-    cardOf(el, slice, state, { showProps, first: first[el.id] === slice.id, trigger: el.type === 'event' && processor && isTrigger(el.id, processor.id, state) })));
+    cardOf(el, slice, state, { showProps, first: first[el.id] === slice.id, trigger: el.type === 'event' && processor && isLabelledTrigger(el.id, processor.id, state) })));
 }
 
 const outlineLane = { screen: 0, processor: 0, command: 1, readModel: 1, event: 2 };

@@ -17,7 +17,7 @@ export const elementEdits = new Set([T.PropertyAdded, 'PropertyUpdated', T.Prope
 
 export function isSliceEdit(event) {
   return sliceEdits.has(event.type) || scenarioEdits.has(event.type) || elementEdits.has(event.type) ||
-    event.type === T.ParagraphEdited || event.type === T.SuggestionsAccepted;
+    event.type === T.ParagraphEdited || event.type === T.ParagraphDeleted || event.type === T.SuggestionsAccepted;
 }
 
 // The slice ids an edit touches, evaluated against the state as it was before the event
@@ -27,7 +27,7 @@ export function editedSlices(event, state) {
   // A scenario moved changes the slice it left and the one it joined
   if (scenarioEdits.has(event.type)) return [state.scenarios[d.scenarioId]?.sliceId, d.sliceId];
   if (elementEdits.has(event.type)) return Object.values(state.slices).filter(s => s.elements.includes(d.elementId)).map(s => s.id);
-  if (event.type === T.ParagraphEdited) return [state.paragraphs?.[d.paragraphId]?.sliceId];
+  if (event.type === T.ParagraphEdited || event.type === T.ParagraphDeleted) return [state.paragraphs?.[d.paragraphId]?.sliceId];
   // Suggestions accepted: the paragraphs whose sentences changed
   if (event.type === T.SuggestionsAccepted) return (d.edits || []).map(x => state.sentences?.[x.sentenceId]?.sliceId);
   return [];

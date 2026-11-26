@@ -14,6 +14,7 @@ export function outlineAddHint(form, { when = '', using = '', external = false }
   if (form.kind !== 'AU') return HINTS[form.kind] || HINTS.SC;
   if (using && !form.known.readModel?.[using.trim().toLowerCase()]) return `Adds 2 slices: the view of ${using}, then what it does`;
   if (when && external) return `Adds 1 slice: it translates ${when} into a command of your own`;
+  if (using) return `Adds 1 slice: it reads ${using} and sends the command`;
   if (when) return `Adds 1 slice: it reacts to ${when} and sends the command`;
   return HINTS.AU;
 }

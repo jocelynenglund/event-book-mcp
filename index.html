@@ -33,7 +33,7 @@
       <div class="title-row"><button class="title-more" id="titleMore" aria-label="Name &amp; description" hidden>⋮</button><button class="model-title" id="modelTitle">Untitled model</button><button class="title-share" id="shareBtn" aria-label="Share" title="Share"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     </div>
     <div class="header-actions">
-      <div class="view-switch" id="detailsBtn" role="group" aria-label="View"><button data-view-switch="board" aria-pressed="true">Board</button><button data-view-switch="outline" aria-pressed="false">Outline</button></div>
+      <div class="view-switch" id="detailsBtn" role="group" aria-label="View"><button data-view-switch="board" aria-pressed="true">Board</button><button data-view-switch="outline" aria-pressed="false">Outline</button><button data-view-switch="pad" aria-pressed="false">Pad</button></div>
       <div class="burger-menu">
         <button class="header-btn burger-btn" onclick="window.EventPad.toggleBurger()">☰</button>
         <div class="burger-dropdown" id="burgerDropdown" style="display:none">
@@ -86,6 +86,9 @@
     <div class="details-view" id="detailsView"></div>
   </div>
 
+  <!-- Pad: a free canvas of plain sticky notes, framed into slices, then made a chapter -->
+  <div class="pad-view" id="padView" style="display:none;"></div>
+
   <!-- Board: slices left → right, three swimlanes -->
   <!-- One slice on its own page: stickies with their properties, then its scenarios -->
   <div class="slice-view" id="sliceView" style="display:none;"></div>
@@ -101,6 +104,9 @@
     <div class="bd-stats" id="boardStats"></div>
     <div class="board" id="board"></div>
   </div>
+
+  <!-- A traced property's path: pinned above the bottom bar of the board and the Outline -->
+  <div class="trace-strip" id="traceStrip" hidden></div>
 
   <div class="fab" id="fab" role="button" aria-label="Write: add a chapter, slice or sticky"><svg class="fab-pen" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0 0-3l-1-1a2.1 2.1 0 0 0-3 0L4 16v4z M14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="fab-x" aria-hidden="true">×</span></div>
   <div class="fab-menu" id="fabMenu">
@@ -119,25 +125,6 @@
     <div class="debug-logs" id="debugLogs"></div>
   </div>
 
-  <!-- Action Sheet -->
-  <div class="sheet-overlay" id="actionSheet">
-    <div class="sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title" id="actionSheetTitle">Connect Element</div>
-      <div class="sheet-options" id="actionOptions"></div>
-    </div>
-  </div>
-
-  <!-- Element Picker Sheet -->
-  <div class="sheet-overlay" id="pickerSheet">
-    <div class="sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title" id="pickerSheetTitle">Pick Command</div>
-      <div class="sheet-options" id="pickerOptions"></div>
-      <div style="text-align: center; padding: 12px; color: var(--text-muted); font-size: 13px;" id="pickerEmpty">No elements available</div>
-    </div>
-  </div>
-
   <!-- Element Menu Sheet -->
   <div class="sheet-overlay" id="elementMenuSheet">
     <div class="sheet">
@@ -152,29 +139,6 @@
     <div class="sheet">
       <div class="sheet-handle"></div>
       <div id="propertySheetContent"></div>
-    </div>
-  </div>
-
-  <!-- Multi-Select Picker Sheet -->
-  <div class="sheet-overlay" id="multiPickerSheet">
-    <div class="sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title" id="multiPickerSheetTitle">Select Events</div>
-      <div class="sheet-options" id="multiPickerOptions"></div>
-      <div style="text-align: center; padding: 12px; color: var(--text-muted); font-size: 13px;" id="multiPickerEmpty">No elements available</div>
-      <button class="sheet-btn" id="multiPickerConfirm" onclick="window.EventPad.confirmMultiPick()" style="margin-top: 16px;" disabled>Select (0)</button>
-    </div>
-  </div>
-
-  <!-- Name Slice Sheet -->
-  <div class="sheet-overlay" id="sliceNameSheet">
-    <div class="sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title">🎉 Pattern detected!</div>
-      <p style="color: var(--text-muted); margin-bottom: 16px; font-size: 14px;" id="slicePatternDesc"></p>
-      <input type="text" class="sheet-input" id="sliceNameInput" placeholder="e.g. Create Order">
-      <button class="sheet-btn" onclick="EventPad.dispatchNameSlice()">Save Slice</button>
-      <div style="text-align: center; padding: 12px; color: var(--text-muted); cursor: pointer;" onclick="EventPad.dismissSlicePrompt()">Skip for now</div>
     </div>
   </div>
 
@@ -201,6 +165,8 @@
         <div id="givenEventsList" class="checkbox-list"></div>
       </div>
       
+      <div class="scenario-section" id="querySection" style="display:none"></div>
+
       <div class="scenario-section" id="whenSection">
         <div class="section-label">WHEN</div>
         <select class="sheet-input" id="whenCommandSelect" style="padding: 12px;">

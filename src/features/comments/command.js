@@ -40,6 +40,9 @@ export function setNickname(name) {
   return null;
 }
 
+// Who wrote a comment and when: the device, the account when signed in
+const authored = nick => ({ nickname: nick, deviceId: commentDeviceId(), ...(signedIn()?.accountId ? { accountId: signedIn().accountId } : {}), at: new Date().toISOString() });
+
 const commentId = () => 'cm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
 
 // SC: Add Comment — a new thread: on a slice, one of its scenarios (or a Given/When/Then line),
@@ -56,8 +59,17 @@ export function addComment({ sliceId = null, scenarioId = null, part = null, tex
   if (part && !PARTS.includes(part)) return 'A comment is on the given, the when or the then';
   appendEvent(EventTypes.CommentAdded, {
     commentId: commentId(), ...(sliceId ? { sliceId } : {}), ...(scenarioId ? { scenarioId } : {}), ...(scenarioId && part ? { part } : {}),
-    text: body, nickname: nick, deviceId: commentDeviceId(), ...(signedIn()?.accountId ? { accountId: signedIn().accountId } : {}), at: new Date().toISOString()
+    text: body, ...authored(nick)
   });
+  return null;
+}
+
+// SC: Add Hotspot Comment — Make chapter turns a Pad hotspot into an open comment on its slice. Comments have no kind, so the
+// text starts "🔥 Hotspot: ". Written under the nickname when there is one, else as "Pad" (the Pad has no nickname sheet).
+export const HOTSPOT_PREFIX = '🔥 Hotspot: ';
+export function addHotspotComment(sliceId, text) {
+  if (!projectState().slices[sliceId]) return 'No such slice';
+  appendEvent(EventTypes.CommentAdded, { commentId: commentId(), sliceId, text: HOTSPOT_PREFIX + String(text).trim(), ...authored(nickname() || 'Pad') });
   return null;
 }
 
@@ -74,8 +86,7 @@ export function replyToThread({ threadId, text }) {
   if (!root || root.deleted) return 'No such thread';
   appendEvent(EventTypes.CommentAdded, {
     commentId: commentId(), threadId: root.id, ...(root.sliceId ? { sliceId: root.sliceId } : {}), ...(root.scenarioId ? { scenarioId: root.scenarioId } : {}),
-    ...(root.part ? { part: root.part } : {}), text: body, nickname: nick, deviceId: commentDeviceId(),
-    ...(signedIn()?.accountId ? { accountId: signedIn().accountId } : {}), at: new Date().toISOString(), ...(root.resolved ? { reopens: root.id } : {})
+    ...(root.part ? { part: root.part } : {}), text: body, ...authored(nick), ...(root.resolved ? { reopens: root.id } : {})
   });
   return null;
 }
