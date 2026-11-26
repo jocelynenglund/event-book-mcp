@@ -1216,9 +1216,9 @@ const tools = [
       scenarios.forEach(x => addScenario(s, x));
       return `Added ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} to ${nameOf(s)}.${gapNote(state(), [s.id])}${scenariosNow(s)}`;
     } },
-  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it, processor, view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). reads: "<view>" makes the slice\'s processor read an existing view (its title or S-number, or the read model\'s name; the one the "an automation reads a view" gap points at; fix_gaps also offers "Read <view>" for each view that draws the trigger event in), and says when its trigger event now reaches it through the view. stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays.',
+  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it (on a slice that already is an automation it sets or replaces its ⚡ on trigger and nothing else changes), processor (needed to make a slice of a person an automation), view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). reads: "<view>" makes the slice\'s processor read an existing view (its title or S-number, or the read model\'s name; the one the "an automation reads a view" gap points at; fix_gaps also offers "Read <view>" for each view that draws the trigger event in), and says when its trigger event now reaches it through the view. stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays.',
     inputSchema: { type: 'object', properties: { slice: S, name: S, description: S, fields: S, chapter: S, refined: { type: 'boolean' }, waived: { type: 'boolean' }, waivedReason: S, ready: { type: 'boolean', description: 'Older name for refined' }, delete: { type: 'boolean' },
-      automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when', 'processor'] }, person: { type: 'boolean' },
+      automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when'] }, person: { type: 'boolean' },
       stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' },
       reads: { ...S, description: 'An automation slice\'s processor reads this existing view: its title or S-number (or the read model\'s name)' },
       stopTrigger: { ...S, description: 'An automation slice\'s processor stops starting on this event (its name): the "⚡ on" link goes, the event stays' } }, required: ['slice'] },
@@ -1229,8 +1229,14 @@ const tools = [
       if (automation) {
         const odd = Object.keys(automation).filter(k => !['when', 'processor', 'view'].includes(k));
         if (odd.length) throw new Error(`automation takes when, processor and view; not ${odd.join(', ')}`);
-        const why = auto.runSliceFromAutomation({ sliceId: s.id, processor: automation.processor, whenEvent: automation.when, viewSliceId: automation.view ? findSlice(automation.view).id : null });
-        if (why) throw new Error(/already run by/.test(why) ? `${why}: to change what it reads use edit_slice {slice, stopReading: "<view>"} or {slice, reads: "<view>"}` : why);
+        const procNames = [s, state().slices[s.pairWith]].filter(Boolean).flatMap(x => x.elements).map(id => state().elements[id]).filter(e => e?.type === 'processor').map(e => e.name.trim().toLowerCase());
+        if ((s.actor === 'processor' || s.pairWith) && !automation.view && (!automation.processor || procNames.includes(String(automation.processor).trim().toLowerCase()))) {   // already an automation slice: its trigger is set (replaced); its processor and view stay
+          const why = auto.setAutomationTrigger({ sliceId: s.id, whenEvent: automation.when, mustExist: true });
+          if (why) throw new Error(why);
+        } else {
+          const why = auto.runSliceFromAutomation({ sliceId: s.id, processor: automation.processor, whenEvent: automation.when, viewSliceId: automation.view ? findSlice(automation.view).id : null });
+          if (why) throw new Error(/already run by/.test(why) ? `${why}: to change what it reads use edit_slice {slice, stopReading: "<view>"} or {slice, reads: "<view>"}` : why);
+        }
       }
       if (stopReading) {
         const st = state();
@@ -1571,7 +1577,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.13.1' },
+      serverInfo: { name: 'eventpad', version: '0.13.3' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

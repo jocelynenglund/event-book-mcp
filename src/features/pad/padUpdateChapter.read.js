@@ -35,6 +35,12 @@ export function padUpdateChapter(state, { frameId }) {
   const key = (noteId, role) => `${noteId}|${role}`;
 
   lines.filter(l => ROLE_WORD[l.role]).forEach(l => {
+    if (l.trigger) {   // an automation's trigger is the event it wakes on: never an outcome of the slice, set as the processor's trigger when it is not yet
+      const procs = [slice, state.slices[slice.pairWith]].filter(Boolean).flatMap(s => s.elements).filter(id => state.elements[id]?.type === 'processor');
+      const on = state.connections.some(c => c.relation === 'trigger' && procs.includes(c.to) && state.elements[c.from] && lower(state.elements[c.from].name) === lower(l.name));
+      if (!on) steps.push({ kind: 'trigger', role: 'event', name: l.name, ...(l.external ? { external: true } : {}) });
+      kept.add(key(l.noteId, l.role)); return;
+    }
     const was = made.stickies.find(s => s.noteId === l.noteId && s.role === l.role), el = was && state.elements[was.elementId];
     const type = stickyTypeOf(l.role), here = onSlice.some(e => e.type === type && lower(e.name) === lower(l.name));
     if (el && lower(el.name) === lower(l.name)) { kept.add(key(l.noteId, l.role)); return; }
@@ -77,7 +83,7 @@ export function padUpdateChapter(state, { frameId }) {
 
   const say = s => ({
     rename: `Rename ${ROLE_WORD[s.role]} ${s.from} → ${s.to}${s.shared ? ` (also in ${s.shared} other ${s.shared === 1 ? 'slice' : 'slices'})` : ''}`,
-    add: `Add ${ROLE_WORD[s.role]} ${s.name}`, scenario: `Add scenario ${s.name}${s.changed ? ' (its note changed)' : ''}${s.warnings?.length ? ` ⚠ ${s.warnings.join('; ')}` : ''}`, field: `Add field ${s.name}`, screen: `Add screen ${s.name}`, sketch: `Update the sketch of screen ${s.name}`, comment: `Add comment ${s.text}`, description: `Add to description ${s.text}`
+    add: `Add ${ROLE_WORD[s.role]} ${s.name}`, trigger: `Start the automation on event ${s.name}`, scenario: `Add scenario ${s.name}${s.changed ? ' (its note changed)' : ''}${s.warnings?.length ? ` ⚠ ${s.warnings.join('; ')}` : ''}`, field: `Add field ${s.name}`, screen: `Add screen ${s.name}`, sketch: `Update the sketch of screen ${s.name}`, comment: `Add comment ${s.text}`, description: `Add to description ${s.text}`
   })[s.kind];
   return {
     frameId, available: true, why: null, chapterName: chapter.name, sliceName: slice.name || fresh.name, sliceId: frame.sliceId,

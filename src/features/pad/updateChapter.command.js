@@ -10,8 +10,9 @@
 import * as es from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import * as c from '../board/command.js';
-import { addEventProperties } from '../outline/command.js';
-import { eventFieldsOf } from './makeChapter.command.js';
+import { addEventProperties, addElementProperties } from '../outline/command.js';
+import { setAutomationTrigger } from '../automate/command.js';
+import { eventFieldsOf, commandFieldsOf } from './makeChapter.command.js';
 import { addFields, addScenario, stickyNamed } from '../planFile/build.js';
 import { addHotspotComment } from '../comments/command.js';
 import { padMakeChapter } from './padMakeChapter.read.js';
@@ -31,12 +32,22 @@ export function updateChapter({ frameId }) {
   try {
     const sliceId = view.sliceId;
     view.steps.filter(s => s.kind === 'rename').forEach(s => es.appendEvent(es.EventTypes.ElementRenamed, { elementId: s.elementId, name: s.to }));
+    view.steps.filter(s => s.kind === 'trigger').forEach(s => {   // an automation's trigger: the event it wakes on, not an outcome
+      const why = setAutomationTrigger({ sliceId, whenEvent: s.name });
+      if (why) throw new Error(why);
+      const ev = Object.values(projectState().elements).find(e => e.type === 'event' && e.name.trim().toLowerCase() === s.name.trim().toLowerCase());
+      if (s.external && ev && !ev.external) es.appendEvent(es.EventTypes.ElementExternalSet, { elementId: ev.id, external: true });
+    });
     view.steps.filter(s => s.kind === 'add').forEach(s => {
       const elementId = c.addToSlice(sliceId, stickyTypeOf(s.role), stickyNamed(stickyTypeOf(s.role), s.name));
       if (s.storage && elementId) es.appendEvent(es.EventTypes.ElementStorageSet, { elementId, kind: s.storage.kind }); // feature: stored-elsewhere
       if (s.external && elementId) es.appendEvent(es.EventTypes.ElementExternalSet, { elementId, external: true });   // an event marked (external) is another system's
     });
-    if (view.steps.some(s => s.kind === 'add' || s.kind === 'field') && view.fields.length) addFields(sliceId, view.fields);
+    const now = padMakeChapter(projectState(), { frameIds: [frameId], off: frame.made.off }).slices[0], command = now.kind === 'automation' && now.lines.find(l => l.included && l.role === 'command');
+    if (view.steps.some(s => s.kind === 'add' || s.kind === 'field') && view.fields.length) {
+      if (command) addElementProperties(sliceId, 'command', [{ name: command.name, fields: commandFieldsOf(now) }]);   // an automation's command keeps its fields to itself
+      else addFields(sliceId, view.fields);
+    }
     const refused = placeScreens(sliceId, view.steps.filter(s => s.kind === 'screen' || s.kind === 'sketch'));
     if (refused) throw new Error(refused);
     const mapped = mapScreensOf([sliceId]);   // a new input is mapped to the command, one taken out unmapped
@@ -46,7 +57,7 @@ export function updateChapter({ frameId }) {
     const lines = view.steps.filter(s => s.kind === 'description').map(s => s.text);
     if (lines.length) c.describeSlice(sliceId, [projectState().slices[sliceId].description, ...lines].filter(Boolean).join('\n'));
     const after = projectState(), off = frame.made.off, slice = padMakeChapter(after, { frameIds: [frameId], off }).slices[0];
-    if (slice.kind !== 'automation') addEventProperties(sliceId, eventFieldsOf(slice));   // a view frame's events keep the fields their notes say
+    addEventProperties(sliceId, eventFieldsOf(slice));   // the events keep the fields their own notes say
     es.appendEvent(es.EventTypes.PadFrameConverted, { frameId, chapterId: frame.chapterId, sliceId, made: madeOf(after, after.pad.frames[frameId], slice, sliceId, off) });
     return { refused: null, changes: view.steps.length };
   } catch (e) { return refuse(e.message); }

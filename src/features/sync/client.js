@@ -530,6 +530,8 @@ function checkInOnClose() {
 // nothing at all is asked while this device holds it or the book isn't kept.
 const POLL_MS = () => { try { return Number(localStorage.getItem('eventpad_poll_ms')) || 30_000; } catch (e) { return 30_000; } };
 let lastPoll = 0;
+let pollOverride = () => null;   // feature: live-books
+export function setPollOverride(fn) { pollOverride = fn || (() => null); }   // feature: live-books
 const PROBE_MS = () => { try { return Number(localStorage.getItem('eventpad_probe_ms')) || 60_000; } catch (e) { return 60_000; } };
 // Held by nobody here, the open book is asked about every 60 s (eventpad_probe_ms): someone may have checked it out since it was
 // opened, and a holder is otherwise learned only on a library-wide sync. One sync of this book (the holder and the events after
@@ -539,6 +541,7 @@ function pollOpenBook() {
   if (!account() || !isKept(id) || document.visibilityState !== 'visible' || document.body.classList.contains('library-mode')) return;
   const holder = holderOf(id);
   if (holder?.you) return;
+  if (pollOverride() && Date.now() - lastPoll < pollOverride()) return;   // feature: live-books: slowed while a live connection tells of changes
   if (Date.now() - lastPoll < (holder ? POLL_MS() : PROBE_MS())) return;
   if (syncBackoff() > 0 || isBuildShelf(id)) return;   // waiting out a 429; a build is never checked out
   lastPoll = Date.now();

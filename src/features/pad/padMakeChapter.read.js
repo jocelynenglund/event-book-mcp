@@ -42,7 +42,8 @@ function sliceOf(pad, frame, names, off, known) {
   const first = kind => notes.find(n => n.parsed.kind === kind && !n.parsed.example) || notes.find(n => n.parsed.kind === kind);
   const main = notes.find(n => n.parsed.kind === 'automation') || first('command') || first('readModel');
   // An automation's trigger: the event it wakes on, an external (yellow) one or one placed left of the automation note; the first is it, any other event is an outcome
-  const trigger = main?.parsed.kind === 'automation' ? notes.filter(n => n.parsed.kind === 'event').sort((a, b) => a.note.x - b.note.x).find(n => n.parsed.external || n.note.x < main.note.x) : null;
+  const events = main?.parsed.kind === 'automation' ? notes.filter(n => n.parsed.kind === 'event').sort((a, b) => a.note.x - b.note.x) : [];
+  const trigger = events.find(n => n.parsed.external) || events.find(n => n.note.x < main.note.x) || null;
   let auto = main?.parsed.kind === 'automation' ? previewAutomation(main.note.text, known, { triggered: !!trigger }) : null;
   // The command an automation sends may sit in its frame: it is part of the slice (its fields and the frame's events are the slice's), not left out
   const own = auto ? ownCommand(main.note.text, notes.filter(n => n.parsed.kind === 'command').map(n => ({ name: n.parsed.name, note: n.note }))) : null;

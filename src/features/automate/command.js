@@ -30,6 +30,27 @@ function elementNamed(type, name, state) {
   return id;
 }
 
+// The event a trigger names, by text: the exact name (any case, spaces squeezed) first, else the one event whose name differs only by a
+// trailing "(external)" marker. -> { id } | { none: true } | { many: [names] }
+const squeeze = n => String(n ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+const unmarked = n => squeeze(n).replace(/\s*\(\s*external\s*\)$/, '');
+export function eventForTrigger(name, state) {
+  const events = Object.values(state.elements).filter(e => e.type === 'event');
+  const exact = events.filter(e => squeeze(e.name) === squeeze(name));
+  const hits = exact.length ? exact : events.filter(e => unmarked(e.name) === unmarked(name));
+  if (hits.length === 1) return { id: hits[0].id };
+  return hits.length ? { many: hits.map(e => e.name.trim()) } : { none: true };
+}
+const words = n => new Set(unmarked(n).split(' ').filter(Boolean));
+// The book's event names, nearest to `name` first (shared words, then containing it), a short list
+export function nearestEvents(name, state, limit = 6) {
+  const want = words(name), key = unmarked(name);
+  const score = n => [...words(n)].filter(w => want.has(w)).length + (unmarked(n).includes(key) || key.includes(unmarked(n)) ? 5 : 0);
+  const names = [...new Set(Object.values(state.elements).filter(e => e.type === 'event').map(e => e.name.trim()))];
+  return names.sort((a, b) => score(b) - score(a) || a.localeCompare(b)).slice(0, limit);
+}
+const manyWhy = names => `More than one event is called that: ${names.map(n => `“${n}”`).join(', ')}. Say which, with its full name.`;
+
 export function runSliceFromAutomation({ sliceId, processor, whenEvent, viewSliceId = null }) {
   let state = projectState();
   const slice = state.slices[sliceId];
@@ -39,6 +60,8 @@ export function runSliceFromAutomation({ sliceId, processor, whenEvent, viewSlic
   if (automated(slice)) return `${title} is already run by ${runBy(slice, state) || 'a processor'}`;
   if (!whenEvent?.trim()) return 'Say which event starts it';
   if (!processor?.trim()) return 'Name the processor that runs it';
+  const which = eventForTrigger(whenEvent, state);
+  if (which.many) return manyWhy(which.many);
   const view = viewSliceId ? state.slices[viewSliceId] : null;
   if (viewSliceId && (!view || view.type !== 'SV')) return 'Its first half has to be a view slice';
   if (view?.pairWith) return `${sliceTitle(view, state)} already starts another automation`;
@@ -55,11 +78,35 @@ export function runSliceFromAutomation({ sliceId, processor, whenEvent, viewSlic
 
   state = projectState();
   const procId = elementNamed('processor', processor, state);
-  const eventId = elementNamed('event', whenEvent, projectState());
+  const wanted = eventForTrigger(whenEvent, projectState());
+  const eventId = wanted.id ?? elementNamed('event', whenEvent, projectState());
   const inView = projectState().slices[viewId].elements;
   if (!inView.includes(eventId)) addToSlice(viewId, 'event', { elementId: eventId });
   if (!inView.includes(procId)) addToSlice(viewId, 'processor', { elementId: procId });
   setTrigger(eventId, procId, true);
+  return null;
+}
+
+// SC: Set Automation Trigger — an automation slice starts on this event instead (the one it had stops: the event stays in the book). An event
+// the slice drew as an outcome comes off the slice (a trigger is not its result). Returns why not, or null.
+export function setAutomationTrigger({ sliceId, whenEvent, mustExist = false }) {
+  const state = projectState(), slice = state.slices[sliceId];
+  if (!slice) return 'No such slice';
+  if (!automated(slice)) return `${sliceTitle(slice, state)} is not run by an automation`;
+  if (!whenEvent?.trim()) return 'Say which event starts it';
+  const halves = [slice, state.slices[slice.pairWith]].filter(Boolean);
+  const procs = halves.flatMap(s => s.elements).filter(e => state.elements[e]?.type === 'processor');
+  if (!procs.length) return `${sliceTitle(slice, state)} has no processor`;
+  const which = eventForTrigger(whenEvent, state);
+  if (which.many) return manyWhy(which.many);
+  if (which.none && mustExist) {   // an agent typing a name must name an event the book has: nothing is made
+    const near = nearestEvents(whenEvent, state);
+    return `No event called “${whenEvent.trim()}” — events in this book: ${near.length ? near.join(', ') : 'none yet'}`;
+  }
+  const eventId = which.id ?? elementNamed('event', whenEvent, state);
+  halves.filter(s => s.type === 'SC' && s.elements.includes(eventId)).forEach(s => removeFromSlice(s.id, eventId));
+  state.connections.filter(l => l.relation === 'trigger' && procs.includes(l.to) && l.from !== eventId).forEach(l => setTrigger(l.from, l.to, false));
+  procs.forEach(p => setTrigger(eventId, p, true));
   return null;
 }
 
