@@ -6,11 +6,11 @@ import { projectState } from '../../../core/projections.js';
 import { hideAllSheets } from '../../../ui/sheets.js';
 import { normaliseTags } from '../../../core/tags.js';
 import { showToast } from '../../../ui/toast.js';
-import { render, getStartIn, setStartIn, showOutline, showBoard, showSlicePage, getView } from '../../../ui/feed.js';
+import { render, getNewModelStartIn, setStartIn, showOutline, showPad, showBoard, showSlicePage, getView } from '../../../ui/feed.js';
 import { setModelStartIn, getCurrentModelId, openModel, isFrozenCurrent } from '../../../core/eventStore.js';
 import { toastWithUndo } from '../../undo/command.js';
 import { secondTap } from '../../../ui/secondTap.js';
-import { nameSlice, describeSlice, deleteSlice, moveSlice, nameModel, describeModel, writePreface, tagBook, unlinkProcessor } from '../command.js';
+import { setReads, nameSlice, describeSlice, deleteSlice, moveSlice, nameModel, describeModel, writePreface, tagBook, unlinkProcessor } from '../command.js';
 import { escapeHtml } from '../view.js';
 import { onEnter, openBoardSheet } from './shared.js';
 import { openShareSheet } from '../../shareImage/sheet.js';
@@ -19,8 +19,8 @@ import { isReadOnly } from '../../readOnly/sheet.js';
 import { waiveScenarios, liftScenarioWaiver } from '../../scenarioWaiver/command.js';
 import { nickname } from '../../comments/command.js';
 import { runSliceFromAutomation, runSliceByPerson } from '../../automate/command.js';
-import { sliceMenuView, automateView, waiveView, sliceInfoView, reorderView, modelNameView } from './read.js';
-import { sliceMenuScenario, reorderRow } from './parts.js';
+import { sliceMenuView, sliceMenuReads, automateView, waiveView, sliceInfoView, reorderView, modelNameView } from './read.js';
+import { sliceMenuScenario, sliceMenuRead, reorderRow } from './parts.js';
 import { readOnlySliceMenu } from '../../readOnly/readOnlySliceMenu.read.js';
 import { readOnlySliceMenuBox } from '../../readOnly/readOnly.parts.js';
 
@@ -104,6 +104,7 @@ export function openSliceMenu(sliceId) {
           <div class="sheet-option-desc">Not run by a processor any more; its view slice stays</div>
         </div>
       </div>`}
+      ${viewOf(sliceMenuReads, sliceId).reads.map(sliceMenuRead).join('')}
       <div class="sheet-option" data-board-action="slice-comment">
         <div class="sheet-option-icon" style="background: var(--surface-hover);">💬</div>
         <div class="sheet-option-text">
@@ -253,13 +254,13 @@ export function openReorderSheet() {
 // ---------- Model title ----------
 
 // isNew: a new model also asks how you like to start — 📋 plotter (the outline)
-// or 🌀 pantser (straight on the board); the pick is remembered on this device
+// or 🌀 pantser (sketch on the Pad); the pick is remembered on this device
 // returnTo: the model to open again after saving (naming one from the library)
 let nameReturnTo = null;
 export function openModelNameSheet({ isNew = false, returnTo = null } = {}) {
   nameReturnTo = returnTo;
   const v = viewOf(modelNameView);
-  const start = getStartIn();
+  const start = getNewModelStartIn();   // Pantser (the Pad) unless Plotter was the last pick
   const startChip = (where, label, note) => `
       <button class="bd-start ${start === where ? 'active' : ''}" data-board-action="start-in" data-start="${where}">
         <b>${label}</b><span>${note}</span>
@@ -270,7 +271,7 @@ export function openModelNameSheet({ isNew = false, returnTo = null } = {}) {
     <div class="bd-sheet-label">How do you start?</div>
     <div class="bd-start-row">
       ${startChip('outline', '📋 Plotter', 'Outline the journey first')}
-      ${startChip('board', '🌀 Pantser', 'Straight onto the board')}
+      ${startChip('pad', '🌀 Pantser', 'Sketch on the Pad first')}
     </div>` : ''}
     <div class="bd-sheet-label">Name</div>
     <input type="text" class="sheet-input" id="bdModelName" value="${escapeHtml(v.name)}" placeholder="e.g. Coffee shop orders">
@@ -318,7 +319,7 @@ export function onSheetAction(a, t) {
     setStartIn(t.dataset.start);
     setModelStartIn(getCurrentModelId(), t.dataset.start);
     document.querySelectorAll('.bd-start').forEach(b => b.classList.toggle('active', b === t));
-    t.dataset.start === 'outline' ? showOutline() : showBoard();
+    t.dataset.start === 'outline' ? showOutline() : t.dataset.start === 'pad' ? showPad() : showBoard();
   }
   else if (a === 'rename-slice') submitRenameSlice();
   else if (a === 'waive-ask') openWaiveSheet(menuSliceId);
@@ -329,6 +330,12 @@ export function onSheetAction(a, t) {
     hideAllSheets();
     render();
     if (why) showToast(why); else toastWithUndo('A person does it now');
+  }
+  else if (a === 'stop-reading') {
+    setReads(t.dataset.processor, t.dataset.readmodel, false);
+    hideAllSheets();
+    render();
+    toastWithUndo('No longer reads it');
   }
   else if (a === 'waive') submitWaive();
   else if (a === 'waive-lift') {

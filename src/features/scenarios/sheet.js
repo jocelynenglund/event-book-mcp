@@ -16,6 +16,7 @@ import {
   deleteScenario as deleteScenarioCmd,
   setGiven,
   setWhen,
+  setQuery,
   setThenEvent,
   setThenRejection,
   setThenNothing,
@@ -25,11 +26,12 @@ import {
 } from './command.js';
 import { scenarioEditorChoices } from './scenarioEditorChoices.read.js';
 import { scenarioGivenPool } from './scenarioGivenPool.read.js';
+import { scenarioQueryChoices } from './scenarioQueryChoices.read.js';
 import { scenarioGivenRows } from './scenarioGivenRows.read.js';
 import { scenarioGivenEntries } from './scenarioGivenEntries.read.js';
 import { scenarioElementFields } from './scenarioElementFields.read.js';
 import { scenarioThenRows } from './scenarioThenRows.read.js';
-import { valueItemRow, valueInputs, givenSection, whenCommandChoice, thenOutcomeChoice, thenReadModelChoice, thenRowList } from './scenarioEditor.parts.js';
+import { valueItemRow, valueInputs, givenSection, whenCommandChoice, thenOutcomeChoice, thenReadModelChoice, thenRowList, scenarioQueryChoice } from './scenarioEditor.parts.js';
 
 // ===========================================
 // STATE
@@ -199,6 +201,12 @@ export function openEditScenarioSheet(scenario, slice) {
     whenSection.style.display = 'none';
   }
 
+  // QUERY - what the caller asks a view with, one line of free text (SV only)
+  const queryChoices = scenarioQueryChoices(book, slice.id, scenario);
+  const querySection = document.getElementById('querySection');
+  querySection.style.display = queryChoices ? 'block' : 'none';
+  querySection.innerHTML = queryChoices ? scenarioQueryChoice(queryChoices) : '';
+
   // THEN - different for SC vs SV
   const thenOptions = document.getElementById('thenOptions');
   if (choices.type === 'SC') {
@@ -211,6 +219,14 @@ export function openEditScenarioSheet(scenario, slice) {
   }
 
   showSheet('editScenarioSheet');
+}
+
+// ---------- A view scenario's query ----------
+
+// ✕: the query is cleared
+export function queryClear() {
+  const input = document.getElementById('queryTextInput');
+  if (input) { input.value = ''; input.focus(); }
 }
 
 // Toggle Given event selection and show/hide properties
@@ -342,6 +358,12 @@ export function saveScenario() {
       const values = getPropertyValues('when', commandSelect.value);
       setWhen(editingScenarioId, commandSelect.value, values);
     }
+  }
+
+  // Save the query (SV only): a draft with none has nothing to say; an existing one is cleared by saving none
+  if (editingSliceType !== 'SC') {
+    const text = document.getElementById('queryTextInput')?.value.trim() || '';
+    if (text !== (editingScenario?.when?.query || '')) setQuery(editingScenarioId, text);
   }
 
   // Save Then

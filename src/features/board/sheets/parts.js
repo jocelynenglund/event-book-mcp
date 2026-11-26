@@ -15,6 +15,18 @@ export function sliceMenuScenario(sc) {
         </div>`;
 }
 
+// One view a slice's automation reads, in its menu: tap to stop reading it
+export function sliceMenuRead(r) {
+  return `
+        <div class="sheet-option" data-component="Slice menu read" data-key="${r.processorId}:${r.readModelId}" data-board-action="stop-reading" data-processor="${r.processorId}" data-readmodel="${r.readModelId}">
+          <div class="sheet-option-icon" style="background: var(--surface-hover);">✕</div>
+          <div class="sheet-option-text">
+            <div class="sheet-option-title">Stop reading ${escapeHtml(r.title)}</div>
+            <div class="sheet-option-desc">Takes the link away; the view stays</div>
+          </div>
+        </div>`;
+}
+
 // One chapter a slice can go to (chapterId null: no chapter), the current one ticked
 export function chapterOption(opt, sliceId) {
   return `

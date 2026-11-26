@@ -11,6 +11,7 @@ import { renderEventLog } from '../features/eventLog/view.js';
 import { renderBoard } from '../features/board/view.js';
 import { renderDetails } from '../features/details/view.js';
 import { renderOutline } from '../features/outline/view.js';
+import { renderPad } from '../features/pad/view.js';
 import { renderRead } from '../features/literature/view.js';
 import { isLiterature, bookScreens } from '../features/literature/rules.js';
 import { renderLibrary } from '../features/library/view.js';
@@ -19,6 +20,7 @@ import { renderChapterPage } from '../features/literature/votesView.js';
 import { renderCompare, setCompare } from '../features/compare/view.js';
 import { renderPreface } from '../features/preface/view.js';
 import { prefaceOf, prefaceSeen } from '../features/preface/rules.js';
+import { hideTraceStrip } from '../features/fieldTrace/strip.js';
 
 // 'board' (swimlane timeline, the editor), 'details' (the overview: an outline of
 // chapters and slices, or elements with their properties) or 'library'
@@ -30,6 +32,7 @@ let chapterPageId = null;   // a literature chapter on its own page (votesView.j
 let viewBeforeSlice = 'board';
 
 export function getView() { return view; }
+export const getOverviewTab = () => overviewTab;
 // Where a slice page was opened from (its ‹ goes back there): 'board', 'details', …
 export function sliceOpenedFrom() { return viewBeforeSlice; }
 
@@ -47,14 +50,27 @@ export function showBoard() {
   document.getElementById('board')?.scrollTo({ left: 0 });
 }
 
-// Plotter or pantser (borrowed from writing): start a model in the outline, or
-// straight on the board. Per device; a new model asks, opening one follows it.
+// Plotter or pantser (borrowed from writing): start a model in the outline ('outline'),
+// sketching on the Pad ('pad', the pantser's pick) or straight on the board ('board': the
+// default, and what older devices stored). Per device; a new model asks, opening one follows it.
 const START_KEY = 'eventpad_start_in';
 export function getStartIn() {
-  try { return localStorage.getItem(START_KEY) === 'outline' ? 'outline' : 'board'; } catch (e) { return 'board'; }
+  try { const v = localStorage.getItem(START_KEY); return v === 'outline' || v === 'pad' ? v : 'board'; } catch (e) { return 'board'; }
+}
+// Where a NEW model starts when you don't pick: Pantser (the Pad) unless you last chose Plotter.
+// Opening existing books keeps getStartIn (a never-chosen device opens the board).
+export function getNewModelStartIn() {
+  return getStartIn() === 'outline' ? 'outline' : 'pad';
 }
 export function setStartIn(where) {
   try { localStorage.setItem(START_KEY, where); } catch (e) { /* private mode: just this time */ }
+}
+
+// The Pad: a free canvas of plain sticky notes in the book (features/pad)
+export function showPad() {
+  view = 'pad';
+  window.scrollTo(0, 0);
+  render();
 }
 
 export function showOutline() {
@@ -73,13 +89,15 @@ export function showPreface() {
 }
 
 // Open the model where you like to start: its preface first, the first time on this device
-export function showStart() {
+export function showStart(where) {
   if (prefaceOf(projectState(), prefaceSeen(getCurrentModelId())).shown === 'first time') return showPreface();
-  startReading();
+  startReading(where);
 }
-export function startReading() {
+// where: only a new model passes it (its own default); otherwise the device's "Open books in"
+export function startReading(where = getStartIn()) {
   // A literature book opens on Read, which takes the board's place
-  getStartIn() === 'outline' && !isLiterature(projectState()) ? showOutline() : showBoard();
+  if (isLiterature(projectState())) return showBoard();
+  where === 'outline' ? showOutline() : where === 'pad' ? showPad() : showBoard();
 }
 
 export function setOverviewTab(tab) {
@@ -199,9 +217,11 @@ export function render() {
   const isSlice = view === 'slice';
   const isCompare = view === 'compare';
   const isPreface = view === 'preface';
+  const isPad = view === 'pad' && !lit;
   document.body.classList.add('board-mode');
+  document.body.classList.toggle('pad-mode', isPad);
   // In a book (board, outline, a slice): it's the one most recently opened
-  if (isBoard || isDetails || isSlice || isPreface) markOpened(getCurrentModelId());
+  if (isBoard || isDetails || isSlice || isPreface || isPad) markOpened(getCurrentModelId());
   document.body.classList.toggle('slice-mode', isSlice);
   document.body.classList.toggle('library-mode', isLibrary);
   document.getElementById('libraryView').style.display = isLibrary ? '' : 'none';
@@ -224,6 +244,7 @@ export function render() {
   title.classList.toggle('brand', isLibrary);
   document.getElementById('modelTitle').classList.toggle('named', isLibrary || !!state.modelName);
   document.getElementById('boardView').style.display = isBoard && !lit ? '' : 'none';
+  document.getElementById('padView').style.display = isPad ? '' : 'none';
   document.getElementById('readView').style.display = isBoard && lit ? '' : 'none';
   document.getElementById('overviewView').style.display = isDetails ? '' : 'none';
   // Literature has no Details (the stickies' fields): the outline is all there is
@@ -232,19 +253,23 @@ export function render() {
   document.getElementById('outlineView').style.display = tab === 'outline' ? '' : 'none';
   document.getElementById('detailsView').style.display = tab === 'details' ? '' : 'none';
   document.querySelectorAll('.ov-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.getElementById('fab').style.display = isDetails || lit || isLibrary || isSlice || isCompare || isPreface ? 'none' : '';
+  document.getElementById('fab').style.display = isDetails || isPad || lit || isLibrary || isSlice || isCompare || isPreface ? 'none' : '';
   if (!isBoard) document.getElementById('fabMenu')?.classList.remove('open');
   // Board | Outline in the header: the one you're on is lit (Details counts as the outline side).
   // A literature book says Read | Outline.
   const [firstView] = bookScreens(state).views;
   document.querySelectorAll('[data-view-switch]').forEach(b => {
     if (b.dataset.viewSwitch === 'board') b.textContent = firstView;
-    const on = b.dataset.viewSwitch === 'board' ? isBoard : isDetails;
+    b.hidden = b.dataset.viewSwitch === 'pad' && lit;   // a story has no sketching canvas
+    const on = b.dataset.viewSwitch === 'board' ? isBoard : b.dataset.viewSwitch === 'pad' ? isPad : isDetails && !isPad;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
   });
+  // The trace strip belongs to the board and the Outline: they draw it (or leave it hidden)
+  hideTraceStrip();
   if (isBoard) lit ? renderRead() : renderBoard();
   if (isDetails) tab === 'outline' ? renderOutline() : renderDetails();
+  if (isPad) renderPad(state);
   if (isLibrary) renderLibrary();
   if (isSlice) chapterPageId ? renderChapterPage(chapterPageId) : renderSlicePage(slicePageId);
   if (isCompare) renderCompare();

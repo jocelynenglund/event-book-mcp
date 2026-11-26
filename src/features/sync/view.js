@@ -3,9 +3,9 @@
 // ===========================================
 
 import { account, kept, isKept, shelfStatus, startSignIn, verifySignIn, signOut, listDevices, revokeDevice, createInvite,
-  serverLibrary, keepOnServer, download, onSyncChange, syncAll, serverIds,
-  holderOf, agentDeviceName, checkOut, checkIn, takeOver, onEditBlocked, isBuildShelf } from './client.js';
-import { getCurrentModelId, isFrozenCurrent, canEditCurrent, openModel } from '../../core/eventStore.js';
+  serverLibrary, keepOnServer, download, onSyncChange, onPulled, syncAll, serverIds,
+  holderOf, agentDeviceName, checkOut, checkIn, takeOver, onEditBlocked, isBuildShelf, syncModel, saveFacts } from './client.js';
+import { getCurrentModelId, isFrozenCurrent, canEditCurrent, canArrangeCurrent, openModel } from '../../core/eventStore.js';
 import { sectionHead, sectionBody } from '../library/folds.js';
 import { openBoardSheet } from '../board/sheets/shared.js';
 import { hideAllSheets } from '../../ui/sheets.js';
@@ -17,7 +17,9 @@ import { isAgent } from '../library/sections.js';
 import { itsybitMark } from '../../ui/itsybitMark.js';
 import { byName } from '../../ui/byName.js';
 import { librarySignIn } from './librarySignIn.read.js';
-import { libraryAccountBar } from './sync.parts.js';
+import { libraryAccountBar, saveChipButton } from './sync.parts.js';
+import { saveChip } from './saveChip.read.js';
+import { reviewOf } from '../review/client.js';
 
 const APP_URL = 'https://eventbook.itsybit.se/';
 
@@ -165,6 +167,34 @@ export function updateCheckoutBanner() {
   setReadOnly(!h?.you || isFrozenCurrent(), action, h && !h.you && isAgent(h) ? agentName(h) : null);
 }
 
+// The ☁ chip beside Share in an open book's top bar (Board, Outline, Pad): ☁ Save to library for a book only on this device,
+// then ✓ Saved / Saving… / ⚠ Not saved. Drawn from Save Chip; redrawn when a screen is and when the sync's status changes.
+export function updateSaveChip() {
+  const id = getCurrentModelId();
+  const inBook = !document.body.classList.contains('library-mode');
+  const v = saveChip(inBook ? { ...saveFacts(id), reviewing: !!reviewOf(id) } : { signedIn: false });
+  const el = document.getElementById('sySave');
+  const html = saveChipButton(v);
+  if (!html) { el?.remove(); return; }
+  if (el && el.dataset.state === v.state && el.title === v.title && el.dataset.syncAction === `chip-${v.action}`) return;   // as drawn
+  const at = document.getElementById('shareBtn');
+  if (!at) return;
+  el?.remove();
+  at.insertAdjacentHTML('beforebegin', html);
+}
+
+// A tap: keep a book only here in the library, or send a kept one now (at most one tap in 2 s; a running sync is shared)
+let lastChipTap = 0;
+async function onChipTap(a) {
+  if (Date.now() - lastChipTap < 2000) return;
+  lastChipTap = Date.now();
+  const id = getCurrentModelId();
+  try {
+    if (a === 'chip-keep') await keepOnServer(id);
+    else await syncModel(id, { force: true });
+  } catch (e) { showToast(e.message || 'Could not save it: try again'); }
+}
+
 // An agent has it checked out: a banner under the header says so, with Take back
 function agentBanner(h, modelId) {
   let el = document.getElementById('syAgentBanner');
@@ -263,7 +293,8 @@ async function openInvite() {
 async function handle(t) {
   const a = t.dataset.syncAction;
   try {
-    if (a === 'signin') openSignIn();
+    if (a === 'chip-keep' || a === 'chip-save') onChipTap(a);
+    else if (a === 'signin') openSignIn();
     else if (a === 'account') openAccount();
     else if (a === 'send') {
       const email = document.getElementById('syEmail').value.trim();
@@ -289,7 +320,7 @@ async function handle(t) {
     else if (a === 'share-invite') navigator.share({ title: 'Event Book invite', url: document.getElementById('syInviteLink').value }).catch(() => {});
     else if (a === 'sync') {
       t.classList.add('spinning');
-      await syncAll();
+      await syncAll({ force: true });
       showToast('In step with your library');
       if (document.body.classList.contains('library-mode')) window.EventPad.showLibrary();
     }
@@ -349,8 +380,15 @@ export function initSyncView() {
   // redraws the bookshelves; otherwise the badges update in place
   const sectionsKey = () => account() ? JSON.stringify(Object.entries(kept()).map(([id, k]) => [id, k.holder ? (k.holder.you ? 'you' : `${k.holder.deviceKind || ''}:${k.holder.deviceName}`) : null])) : '';
   let lastSections = sectionsKey();
+  // The board's grips are drawn only where chapters can be arranged: checking a book out (or in) redraws it
+  // (unknown until the first change, and per open book: the start-up sync used to settle it, now a quiet start-up doesn't)
+  let lastArrangeable = null, lastBook = null;
   onSyncChange(() => {
     updateCheckoutBanner();
+    updateSaveChip();
+    const arrangeable = canArrangeCurrent(), book = getCurrentModelId();
+    if ((arrangeable !== lastArrangeable || book !== lastBook) && !document.body.classList.contains('library-mode')) import('../../ui/feed.js').then(m => m.render());
+    lastArrangeable = arrangeable; lastBook = book;
     const now = sectionsKey();
     const moved = now !== lastSections;
     lastSections = now;
@@ -361,6 +399,8 @@ export function initSyncView() {
       if (bar) bar.outerHTML = accountBar();
     }
   });
+  // Events came down for the open book (another device wrote while it was open here): draw it again
+  onPulled(id => { if (id === getCurrentModelId() && !document.body.classList.contains('library-mode')) import('../../ui/feed.js').then(m => m.render()); });
   // An invite link: open sign-in with the code filled in
   if (params.get('invite')) {
     inviteFromLink = params.get('invite');

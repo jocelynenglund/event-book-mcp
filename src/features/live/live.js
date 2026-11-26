@@ -7,7 +7,7 @@
 
 import { createModel, replaceModelEvents, listModels, openModel, getCurrentModelId } from '../../core/eventStore.js';
 import { projectState, getOrderedSlices } from '../../core/projections.js';
-import { render, showSliceOnBoard, getView } from '../../ui/feed.js';
+import { render, showSliceOnBoard, getView, showPad } from '../../ui/feed.js';
 import { isChapterFolded, toggleChapterFolded } from '../board/view.js';
 
 const LIVE_KEY = 'eventpad_live_model';
@@ -40,7 +40,9 @@ export function initLive() {
     const slices = getOrderedSlices(projectState());
     const fresh = slices.filter(s => !seen.has(s.id));
     slices.forEach(s => seen.add(s.id));
-    render();
+    // ?live&view=pad: the agent is sketching, so the page opens on the Pad (once; the person can go anywhere after)
+    if (first && new URLSearchParams(location.search).get('view') === 'pad') showPad();
+    else render();
     // Follow the newest slice (opening its chapter if it's folded)
     const newest = fresh[fresh.length - 1];
     if (!first && newest && getView() === 'board') {

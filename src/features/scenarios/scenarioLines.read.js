@@ -12,6 +12,14 @@ import { idsHidden, aliaser, shownEntries } from './ids.js';
 export const filled = v => v !== '' && v !== null && v !== undefined
   && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
 
+// A view's example rows as a table: columns (the keys of every row, in the order they come) and a row per entry, each cell { text, alias }
+// or null where the row has no such field. No rows, or no value in any: columns [] and rows [] (drawn "(empty)").
+function tableOf(rows, shownOf) {
+  const shown = rows.map(shownOf);
+  const columns = [...new Set(shown.flatMap(r => r.map(c => c.key)))];
+  return { columns, rows: columns.length ? shown.map(r => columns.map(k => r.find(c => c.key === k) || null)) : [] };
+}
+
 // values: false, names only
 export function scenarioLines(book, scn, { values = true } = {}) {
   const alias = aliaser(), hide = idsHidden();
@@ -28,14 +36,16 @@ export function scenarioLines(book, scn, { values = true } = {}) {
   (scn.given || []).forEach((g, i) => lines.push({ kw: i === 0 ? 'Given' : 'And', body: { ref: ref(g.elementId, g.values) } }));
   if (!scn.given?.length) lines.push({ kw: 'Given', body: { none: 'nothing happened yet' } });
   if (scn.when?.commandId) lines.push({ kw: 'When', body: { ref: ref(scn.when.commandId, scn.when.values) } });
+  if (scn.when?.query) lines.push({ kw: 'Q', body: { query: scn.when.query } });
 
   const then = scn.then;
   let body = { none: 'not set' };
   if (then?.type === 'event') body = { ref: ref(then.eventId, then.values) };
   else if (then?.type === 'readModel' && then.rows?.length && !values) body = { ref: ref(then.readModelId), rowCount: then.rows.length };
-  else if (then?.type === 'readModel' && then.rows?.length) {
-    const rm = ref(then.readModelId);
-    body = { ref: rm, rows: then.rows.map(r => valuesOf(r, book.elements[then.readModelId])) };
+  else if (then?.type === 'readModel' && Array.isArray(then.rows)) {
+    const table = tableOf(then.rows, r => shownEntries(Object.entries(r || {}).filter(([, v]) => filled(v)), book.elements[then.readModelId], alias, hide)
+      .map(([key, v, isAlias]) => ({ key, text: typeof v === 'string' ? v : JSON.stringify(v), alias: isAlias })));
+    body = { ref: ref(then.readModelId), table };
   }
   else if (then?.type === 'readModel') body = { ref: ref(then.readModelId, then.values) };
   else if (then?.type === 'rejection') body = { rejected: then.reason || '' };

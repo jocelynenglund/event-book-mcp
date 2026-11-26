@@ -2,12 +2,13 @@
 // OUTLINE - Chapter heading (SV: Outline Chapter Heading)
 // What a chapter's header draws: its name, whether it can step earlier or later, whether it is folded, the
 // count under the name (how far its slices are, what a build book holds, or what a search matched), and
-// the bands a folded chapter shows for its slices. chapter: one of the Outline Layout's chapters.
+// the bands a folded chapter shows for its slices, and how many fields in its slices have no source. chapter: one of the Outline Layout's chapters.
 // built: a build book. searching: the search box has words.
 // ===========================================
 
 import { getScenariosForSlice, refinedLabel } from '../../core/projections.js';
 import { sliceActor } from '../board/command.js';
+import { gapCount, tidyCount } from '../fieldSources/rules.js';
 
 // The chapter's count line: how far its slices are (a plan), or what it holds (a build book)
 function metaOf(inChapter, state, built) {
@@ -26,6 +27,8 @@ export function outlineChapterHeading(state, chapter, { built = false, searching
     shown: slices.length,
     // Under the name: the whole chapter's count, or (searching) what matched
     count: inChapter.length && !searching ? metaOf(inChapter, state, built) : { slices: slices.length },
+    noSource: gapCount(state, inChapter.map(s => s.id)),
+    tidy: tidyCount(state, inChapter.map(s => s.id)),
     bands: slices.map(s => sliceActor(s, state) === 'processor' ? 'AU' : s.type)
   };
 }

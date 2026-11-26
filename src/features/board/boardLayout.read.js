@@ -31,7 +31,7 @@ export function withFlows(groups, state, flowOf) {
   });
 }
 
-// folded(id): is this chapter folded (a device setting). partFolded(id): is this part folded into its bookend (the same).
+// folded(id): is this chapter folded (a device setting). partFolded(id): is this part folded to its sliver (the same).
 // flowOf(id, state): the flow shown in a chapter, or null. arrangeable: chapters and parts can be dragged here.
 export function boardLayout(state, { folded = () => false, partFolded = () => false, flowOf = () => null, arrangeable = false } = {}) {
   filterFor(state);
@@ -44,7 +44,7 @@ export function boardLayout(state, { folded = () => false, partFolded = () => fa
   const sliceCount = groups.reduce((n, g) => n + g.slices.length, 0);
   const hasComments = Object.values(state.comments || {}).some(c => !c.deleted);
 
-  // Each chapter's part, and the one whose bookend it follows; a folded part hides its chapters (a stage filter opens them)
+  // Each chapter's part, and the one it starts; a folded part hides its chapters (a stage filter opens them)
   const partOf = new Map(chapterParts(state).flatMap(g => g.chapterIds.map((id, i) => [id, { partId: g.partId, startsPart: i === 0 ? g.partId : null }])));
   const chapters = groups.map(({ chapter, slices }) => {
     const { partId = null, startsPart = null } = partOf.get(chapter?.id) || {};

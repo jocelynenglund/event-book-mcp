@@ -10,6 +10,9 @@ import { renderGwt } from '../scenarios/view.js';
 import { buildChip } from './buildChip.js';
 import { sliceProgressChip } from '../buildProgress/progress.parts.js';
 import { isNeat } from '../../ui/settings.js';
+import { fieldGapMark, noSourceMark } from '../fieldSources/fieldGaps.parts.js';
+import { fieldMappingMark } from '../fieldMapping/fieldMapping.parts.js';
+import { screenWire } from '../pad/screenWire.parts.js';
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -34,6 +37,9 @@ const stackNames = names => names.length > LONG_STACK
 const partLabel = { given: 'Given', when: 'When', then: 'Then' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+// One field on a sticky: ⚙ when generated, a dashed underline and a ⚠ when it has no source, "← Sticky.field" when it comes from another's
+const boardProp = p => `<span data-prop="${p.id}"${p.generated ? ' class="bd-prop-generated" title="Generated"' : ''}${p.gap ? ' data-gap="true"' : ''}>${p.generated ? '⚙' : ''}<span${p.gap ? ' class="fg-name"' : ''}>${escapeHtml(p.label)}</span>${p.gap ? fieldGapMark(p.gap) : ''}${p.from ? fieldMappingMark(p.from) : ''}</span>`;
+
 // One sticky
 export function boardCard(card, ui = {}) {
   const mark = `data-component="Board card" data-key="${card.elementId}"`;
@@ -46,16 +52,20 @@ export function boardCard(card, ui = {}) {
   const props = card.foldedProps
     ? `<div class="bd-props bd-props-folded">${card.foldedProps}</div>`
     : card.props.length
-    ? `<div class="bd-props">${card.props.map(p => `<span data-prop="${p.id}"${p.generated ? ' class="bd-prop-generated" title="Generated"' : ''}>${p.generated ? '⚙' : ''}${escapeHtml(p.label)}</span>`).join('')}</div>`
+    ? `<div class="bd-props">${card.props.map(boardProp).join('')}</div>`
     : '';
   // A to-do list's updates (tap a tag to flip + ⇄ ✓); a processor's inputs from elsewhere
   const updates = card.tags.length ? `<div class="bd-todo-tags">${card.tags.map(tag =>
-    `<span class="bd-todo-tag" data-role="${tag.kind}"${tag.flip ? ` data-flip="${tag.flip}"` : ''}>${escapeHtml(tag.text)}</span>`).join('')}</div>${card.todo ? '<div class="bd-todo-hint">＋ adds · ✓ ticks off · tap a tag to switch</div>' : ''}` : '';
+    `<span class="bd-todo-tag" data-role="${tag.kind}"${tag.flip ? ` data-flip="${tag.flip}"` : ''}${tag.goto ? ` data-goto-slice="${tag.goto}" role="link" tabindex="0"` : ''}>${escapeHtml(tag.text)}</span>`).join('')}</div>${card.todo ? '<div class="bd-todo-hint">＋ adds · ✓ ticks off · tap a tag to switch</div>' : ''}` : '';
+  // While a field is traced (card.trace: the step numbers, or false off the path): a number badge, the rest dimmed
+  const step = Array.isArray(card.trace) ? `<span class="tr-badge" title="Step ${card.trace.join(', ')} of the trace">${card.trace.join(',')}</span>` : '';
+  const traced = card.trace === null || card.trace === undefined ? '' : ` data-trace="${card.trace ? 'on' : 'off'}"`;
   return `
-    <button class="bd-card" ${mark} style="--tilt: ${noteTilt(card.tiltKey)}deg" data-type="${card.type}"${card.attrs}${card.otherFlow ? ' data-other-flow="true"' : ''}${card.trigger ? ' data-trigger="true"' : ''}${card.todo ? ' data-todo="true"' : ''}${card.list ? ' data-list="true"' : ''} data-action="element-read" data-el="${card.elementId}" data-slice="${card.sliceId}">
-      <span class="bd-card-kind">${card.trigger ? '⚡ Trigger · ' : ''}${card.todo ? '☑ To-do list' : card.label}${card.outcome ? ` · ↳ ${escapeHtml(card.outcome)}` : ''}</span>
-      <span class="bd-card-title"><span class="bd-card-more" role="button" aria-label="Edit ${escapeHtml(card.name)}" data-action="element" data-el="${card.elementId}" data-slice="${card.sliceId}">⋮</span><span class="bd-card-name">${escapeHtml(card.name)}</span></span>
+    <button class="bd-card" ${mark} style="--tilt: ${noteTilt(card.tiltKey)}deg" data-type="${card.type}"${card.attrs}${traced}${card.otherFlow ? ' data-other-flow="true"' : ''}${card.trigger ? ' data-trigger="true"' : ''}${card.todo ? ' data-todo="true"' : ''}${card.list ? ' data-list="true"' : ''} data-action="element-read" data-el="${card.elementId}" data-slice="${card.sliceId}">
+      ${step}<span class="bd-card-kind">${card.trigger ? '⚡ Trigger · ' : ''}${card.todo ? '☑ To-do list' : card.label}${card.outcome ? ` · ↳ ${escapeHtml(card.outcome)}` : ''}</span>
+      <span class="bd-card-title"><span class="bd-card-more" role="button" aria-label="Edit ${escapeHtml(card.name)}" data-action="element" data-el="${card.elementId}" data-slice="${card.sliceId}">⋮</span><span class="bd-card-name">${escapeHtml(card.name)}</span>${card.places ? `<span class="bd-card-places" role="button" data-action="places" data-el="${card.elementId}" data-slice="${card.sliceId}" aria-label="In ${card.places} slices: show where" title="In ${card.places} slices">🔗 ${card.places}</span>` : ''}</span>
       ${card.to ? `<span class="bd-card-to">→ ${escapeHtml(card.to)}</span>` : ''}
+      ${card.screen ? screenWire(card.screen) : ''}
       ${props}
       ${updates}
     </button>`;
@@ -147,6 +157,10 @@ export function boardComments(col, ui = {}) {
   return `<div class="bd-cell lane-cm" data-component="Board comments" data-key="${col.sliceId}" ${at(ui.col, 7)}>${threads}</div>`;
 }
 
+// The grip a chapter is dragged by: the two ruled lines at a spine's foot, a ⠿ at the left of an open header. Only it
+// starts a drag (features/arrange/drag.js); a tap on it does nothing
+const chapterGrip = (chapter, cls, mark = '') => `<span class="bd-grip ${cls}" data-drag="chapter" data-key="${chapter.id}" role="img" aria-label="Drag to move ${escapeHtml(chapter.name)}" title="Drag to move">${mark}</span>`;
+
 // A chapter's header over its columns. ui: col, bookmarked, draggable (it can be dragged along the shelf)
 export function boardChapterHead(chapter, ui = {}) {
   const chips = chapter.flows.length ? `
@@ -155,12 +169,13 @@ export function boardChapterHead(chapter, ui = {}) {
         ${chapter.flows.map(f => `<button class="bd-flow ${chapter.shownFlow === f.id ? 'active' : ''}" data-action="show-flow" data-chapter="${chapter.id}" data-flow="${f.id}">↳ ${escapeHtml(f.name)}</button>`).join('')}
       </div>` : '';
   return `
-    <div class="bd-chapter ${chapter.flows.length ? 'has-flows' : ''}" data-component="Board chapter header" data-key="${chapter.id}"${ui.draggable ? ' data-drag="chapter"' : ''} ${at(ui.col, 1, Math.max(chapter.slices, 1))}>
-      <button class="bd-chapter-fold" aria-label="Fold ${escapeHtml(chapter.name)}" data-action="fold" data-chapter="${chapter.id}">‹</button>
+    <div class="bd-chapter ${chapter.flows.length ? 'has-flows' : ''}" data-component="Board chapter header" data-key="${chapter.id}" ${at(ui.col, 1, Math.max(chapter.slices, 1))}>
+      ${ui.draggable ? chapterGrip(chapter, 'bd-grip-head', '⠿') : ''}<button class="bd-chapter-fold" aria-label="Fold ${escapeHtml(chapter.name)}" data-action="fold" data-chapter="${chapter.id}">‹</button>
       <button class="bd-chapter-label" data-action="chapter-menu" data-chapter="${chapter.id}" title="${escapeHtml(chapter.name)}">
         <span class="ch-more" aria-hidden="true">⋮</span>
         <span class="bd-chapter-namebox" data-full="${escapeHtml(chapter.name)}"><span class="bd-chapter-name">${ui.bookmarked ? '<span class="ch-mark" aria-label="Bookmarked">🔖</span> ' : ''}${escapeHtml(chapter.name)}</span></span>
         <span class="bd-chapter-count">${plural(chapter.slices, 'slice', 'slices')}</span>
+        ${noSourceMark(chapter.noSource, { tidy: chapter.tidy, chapter: chapter.id })}
       </button>
       <button class="bd-chapter-add" aria-label="Add a slice to ${escapeHtml(chapter.name)}" data-action="new-slice" data-chapter="${chapter.id}">＋</button>${chips}
     </div>`;
@@ -181,13 +196,14 @@ const spineFontSize = name => Math.round(Math.max(13, Math.min(20, 20 * 16 / Mat
 export function boardSpine(chapter, ui = {}) {
   const bands = chapter.bands.map(kind => `<span class="bd-spine-band" data-slice-type="${kind}"></span>`).join('');
   return `
-    <button class="bd-spine" data-component="Board spine" data-key="${chapter.id}"${ui.draggable ? ' data-drag="chapter"' : ''} style="grid-column: ${ui.col}; grid-row: 1 / span 6" data-action="fold" data-chapter="${chapter.id}" aria-label="Open ${escapeHtml(chapter.name)}">
+    <button class="bd-spine" data-component="Board spine" data-key="${chapter.id}" style="grid-column: ${ui.col}; grid-row: 1 / span 6" data-action="fold" data-chapter="${chapter.id}" aria-label="Open ${escapeHtml(chapter.name)}">
       <span class="bd-spine-name" style="font-size: ${spineFontSize(chapter.name)}px">${escapeHtml(chapter.name)}</span>
       ${chapter.meter}
       <span class="bd-spine-bands">${bands}</span>
       <span class="bd-spine-count">${chapter.slices}</span>
       <span class="bd-spine-wrap" aria-hidden="true"></span>
       <span class="bd-spine-ribbon" aria-hidden="true">${escapeHtml(chapter.name)}<i>${plural(chapter.slices, 'slice', 'slices')}</i></span>
+      ${ui.draggable ? chapterGrip(chapter, 'bd-grip-foot') : ''}
     </button>`;
 }
 

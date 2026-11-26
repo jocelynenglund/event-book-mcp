@@ -4,6 +4,7 @@
 // UI / automation · commands & views · events
 // ===========================================
 
+import { updateSaveChip } from '../sync/view.js';
 import { statusChips } from '../filter/status.js';
 import { projectState } from '../../core/projections.js';
 import { boardLayout, withFlows, firstAppearances } from './boardLayout.read.js';
@@ -16,10 +17,11 @@ import { boardSpineBands } from './boardSpineBands.read.js';
 import { boardScenariosLabel } from './boardScenariosLabel.read.js';
 import { boardCommentsLabel } from './boardCommentsLabel.read.js';
 import { boardCounts } from './boardCounts.read.js';
-import { boardPartBookend } from '../arrange/boardPartBookend.read.js';
-import { boardPartBand } from '../arrange/boardPartBand.read.js';
+import { boardPartTab } from '../arrange/boardPartTab.read.js';
+import { boardPartSliver } from '../arrange/boardPartSliver.read.js';
+import { fitTabTrack } from '../arrange/partTracks.js';
 import { arrangeSlots } from '../arrange/arrangeSlots.read.js';
-import { partBookend, partBand } from '../arrange/arrange.parts.js';
+import { partTab, partSliver } from '../arrange/arrange.parts.js';
 import { isPartFolded } from '../arrange/partFolds.js';
 import { armDrag } from '../arrange/drag.js';
 import { dropChapter, dropPart } from '../arrange/command.js';
@@ -29,6 +31,8 @@ import { toastWithUndo } from '../undo/command.js';
 import { boardSliceHeader, boardLane, boardScenarios, boardComments, boardChapterHead, boardEmptyChapter, boardSpine, boardLaneLabels, boardScenariosToggle, boardCommentsToggle, boardStats, noteTilt } from './board.parts.js';
 import { getEventStream, historyOf } from '../../core/eventStore.js';
 import { usageButton } from '../usage/view.js';
+import { activeFieldTrace } from '../fieldTrace/traceState.js';
+import { drawTraceStrip } from '../fieldTrace/strip.js';
 
 // Re-exported for the poster and the other screens
 export { sliceTypeLabels, noteTilt };
@@ -201,7 +205,11 @@ function aimRibbon(e) {
   spine.classList.toggle('ribbon-left', ribbon.scrollWidth + 4 > room);
 }
 
+// The gap before each part, a folded part's sliver, and what the tab's column loses to its margins (CSS .bd-part-tab)
+const PART_GAP = '26px', SLIVER_W = '25px', TAB_MARGINS = 18;
+
 export function renderBoard() {
+  updateSaveChip();   // the ☁ chip in the top bar: Save to library, Saved, Saving…, Not saved
   const board = document.getElementById('board');
   if (!board) return;
   if (!board.dataset.pinned) {
@@ -213,6 +221,10 @@ export function renderBoard() {
   // One replay of the book per draw: the layout and each part's own view read from it
   const state = projectState();
   const layout = boardLayout(state, { folded: isChapterFolded, partFolded: isPartFolded, flowOf: shownFlowOf, arrangeable: canArrangeCurrent() });
+  // A field being traced: its stickies are numbered, the rest dimmed, and the strip lists the path
+  layout.trace = activeFieldTrace(state);
+  board.classList.toggle('tracing', !!layout.trace);
+  drawTraceStrip(layout.trace);
   board.classList.toggle('has-chapters', layout.hasChapters);
   board.classList.toggle('has-parts', layout.hasParts);
   board.classList.toggle('gwt-open', gwtOpen);
@@ -223,19 +235,29 @@ export function renderBoard() {
   // Column widths: lane labels, then a slice width per column or a narrow spine
   const widths = ['26px'];
   let col = 2;
-  // The part band runs over the open chapters of one part that sit side by side
-  let band = null;
-  const endBand = () => { if (band) html += partBand(boardPartBand(state, band.partId), band); band = null; };
+  // A part's tab runs over all its columns, and is never wider than the part: empty shelf after its last chapter makes room
+  let open = null;
+  const endPart = () => {
+    if (!open) return;
+    fitTabTrack(widths, open.from, open.tab.minWidth + TAB_MARGINS);
+    col = widths.length + 1;
+    html += partTab(open.tab, { col: open.col, span: widths.length - open.from, draggable });
+    open = null;
+  };
   const draggable = layout.arrangeable;
   layout.chapters.forEach(chapter => {
     if (chapter.startsPart) {
-      endBand();
-      html += partBookend(boardPartBookend(state, chapter.startsPart, { folded: isPartFolded }), { col: col++, draggable });
-      widths.push('38px');
+      endPart();
+      widths.push(PART_GAP);
+      col++;
+      open = { tab: boardPartTab(state, chapter.startsPart, { folded: isPartFolded }), col, from: widths.length };
+      if (chapter.hiddenByPart) {
+        html += partSliver(boardPartSliver(state, chapter.startsPart), { col: col++ });
+        widths.push(SLIVER_W);
+      }
     }
     if (chapter.hiddenByPart) return;
     if (chapter.folded) {
-      endBand();
       const spine = boardSpineBands(state, chapter);
       html += boardSpine(spine, { col: col++, draggable });
       // A spine's own width, wider when its name needs a second line. Not max-content: Safari
@@ -246,8 +268,6 @@ export function renderBoard() {
     }
     const span = Math.max(chapter.columns.length, 1);
     widths.push(...Array(span).fill('var(--col-w)'));
-    if (chapter.partId && band?.partId === chapter.partId) band.span += span;
-    else { endBand(); if (chapter.partId) band = { partId: chapter.partId, col, span }; }
     if (!chapter.loose) html += boardChapterHead(boardChapterHeading(state, chapter, shownFlowOf), { col, bookmarked: isChapterBookmarked(chapter.id), draggable });
     if (chapter.empty) {
       html += boardEmptyChapter(boardChapterToAddTo(state, chapter), { col });
@@ -262,7 +282,7 @@ export function renderBoard() {
       col++;
     });
   });
-  endBand();
+  endPart();
 
   // New slices and chapters come from the floating + button; an empty board points at it
   if (layout.emptyHint !== null) {

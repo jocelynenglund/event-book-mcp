@@ -9,7 +9,8 @@
 // ===========================================
 
 import { getOrderedSlices, getScenariosForSlice, sliceTitle, sliceFlow, sliceRef } from '../../core/projections.js';
-import { elementLabel, propLabel } from '../../core/constants.js';
+import { elementLabel } from '../../core/constants.js';
+import { fieldLabel } from '../viewQueries/queryFields.js';
 import { filled } from '../scenarios/view.js';
 import { paragraphsOf } from '../article/command.js';
 import { aliaser, shownEntries, scenarioHasIds } from '../scenarios/ids.js';
@@ -20,6 +21,9 @@ import { specTrailOf } from '../specs/specTrail.read.js';
 import { laneOf, sliceActor } from '../board/command.js';
 import { isLiterature } from '../literature/rules.js';
 import { conversationOf } from '../comments/sliceConversation.read.js';
+import { stickyFieldGaps } from '../fieldSources/stickyFieldGaps.read.js';
+import { stickyFieldMappings, mappedFrom } from '../fieldMapping/stickyFieldMappings.read.js';
+import { screenInSlice } from '../pad/screenInSlice.read.js';
 
 // A change reads top-down (screen → command → event); a view the other way (events → read model → screen)
 function inFlowOrder(slice, state) {
@@ -83,21 +87,29 @@ function scenarioOf(scn, state, hideIds) {
   if (t?.type === 'event') then = { kind: 'event', ref: refOf(state.elements[t.eventId], t.values, alias, hideIds) };
   else if (t?.type === 'rejection') then = { kind: 'rejection', reason: t.reason || '' };
   else if (t?.type === 'readModel') {
-    const rows = t.rows?.length ? rowsOf(t.rows) : null;
+    const rows = Array.isArray(t.rows) ? rowsOf(t.rows) : null;
     then = { kind: 'readModel', ref: refOf(state.elements[t.readModelId], rows ? null : t.values, alias, hideIds), rows };
   }
   // (the then's ids get their aliases before the when's, as the page always numbered them)
   const when = scn.when?.commandId ? refOf(state.elements[scn.when.commandId], scn.when.values, alias, hideIds) : null;
   let source = null;
   if (scn.source?.file) source = { label: sourceLabel(scn.source), url: sourceUrl(state, scn.source.file, scn.source.line) };
-  return { id: scn.id, name: scn.name, mustHave: !!scn.mustHave, pending: scn.pending || null, source, given, when, then };
+  const query = scn.when?.query || null;
+  return { id: scn.id, name: scn.name, mustHave: !!scn.mustHave, pending: scn.pending || null, source, given, query, when, then };
 }
 
-function stickyOf(el, sliceId, usageState) {
+function stickyOf(el, sliceId, usageState, gaps, mappings) {
+  const checked = gaps.find(g => g.elementId === el.id)?.fields || [];
+  const wire = screenInSlice(usageState, sliceId, el.id);   // a screen made from a Pad sketch draws it, seen from this slice
   return {
+    ...(wire ? { screen: wire } : {}),
     id: el.id, sliceId, type: el.type, external: !!el.external, table: !!el.table, published: publishedOf(el), to: toOf(el), kind: elementLabel(el), name: el.name,
     used: eventUsageOf(el, usageState),
-    fields: (el.properties || []).map(p => ({ label: propLabel(p), type: p.type || 'string' }))
+    // A field with no source wears a ⚠ (Sticky Field Gaps): its why and fix, and where it sits
+    fields: (el.properties || []).map(p => {
+      const g = checked.find(f => f.name === p.name && f.gap);
+      return { label: fieldLabel(el, p), type: p.type || 'string', from: mappedFrom(mappings, el.id, p.name), gap: g ? { elementId: el.id, sliceId, name: g.name, why: g.why, fix: g.fix, ...(g.tidy ? { tidy: true } : {}) } : null };
+    })
   };
 }
 
@@ -130,6 +142,7 @@ export function slicePageScreen(state, sliceId, opts = {}) {
   // Must haves (acceptance criteria) first, then the nice to haves
   const scns = [...getScenariosForSlice(sliceId, state)].sort((a, b) => !!b.mustHave - !!a.mustHave);
   const stickies = inFlowOrder(slice, state);
+  const gaps = stickyFieldGaps(state, sliceId), mappings = stickyFieldMappings(state, sliceId);
   const head = {
     sliceId, type: slice.type, actor, title,
     kicker: { ref: sliceRef(state, sliceId), type: sliceTypeLabels[slice.type] || slice.type, chapter: chapter?.name || null, flow: flow?.name || null },
@@ -151,7 +164,7 @@ export function slicePageScreen(state, sliceId, opts = {}) {
     head,
     turnChapter: turnChapterOf(state, slice, from),
     paragraphs: paragraphsFor(slice, state, stickies.length),
-    stickies: stickies.map(el => stickyOf(el, sliceId, state)),
+    stickies: stickies.map(el => stickyOf(el, sliceId, state, gaps, mappings)),
     scenarios: { sliceId, type: slice.type, items: scns.map(s => scenarioOf(s, state, hideIds)) },
     conversation: conversationOf(slice, state, { me, nick })
   };

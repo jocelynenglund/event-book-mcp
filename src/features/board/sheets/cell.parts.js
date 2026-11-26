@@ -20,7 +20,8 @@ export function cellNameForm(choices) {
       <input type="text" class="sheet-input" id="bdCellName" placeholder="${escapeHtml(choices.placeholder)}" autocomplete="off">
       <button class="sheet-btn" id="bdCellGo" data-board-action="create-in-cell">Add</button>
     </div>
-    <div class="bd-cell-hint" id="bdCellHint">${escapeHtml(choices.hint)}</div>`;
+    <div class="bd-cell-hint" id="bdCellHint">${escapeHtml(choices.hint)}</div>
+    ${choices.elementType === 'event' ? `<button class="sheet-btn secondary bd-several-open" data-board-action="event-several" data-slice="${choices.sliceId}">＋ Several…</button>` : ''}`;
 }
 
 // One existing sticky to reuse

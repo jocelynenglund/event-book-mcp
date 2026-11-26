@@ -1,0 +1,58 @@
+// ===========================================
+// PAD - Frames (SV: Pad Frames)
+// The dashed frames (sketched slices): where each is, its name (its own, else its command's or view's note title, greyed: `nameIsDefault`,
+// else Untitled), which notes are inside it (by position) and, once Make chapter has built it into the board, the chapter it went to
+// (null when it was not, or that chapter is gone) as a short chip: "→ <chapter name, cut short>". A made frame says whether the
+// sketch changed since (`changed`: a note edited, recoloured, added or taken out; never for one made before that was recorded) and
+// whether Update chapter can carry it over (`canUpdate`). A frame is one slice, so one command, one view or one automation: a frame holding more than one
+// of them (two commands, a command and a view, an automation and a command) says so in `warning`. selectedIds and editing ({ id, value }: the name typed so far) are this device's.
+// ===========================================
+
+import { notesInFrame, KIND_OF } from './sketch.js';
+import { titleAndBody } from './padNotes.read.js';
+import { ownCommand } from './padAutomation.rules.js';
+import { changedSince } from './padMade.rules.js';
+
+const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const CHIP_MAX = 24;
+
+// "2 commands: one slice per frame — move one out" (null when the frame holds at most one command, view or automation); a mix with an automation says
+// "1 automation and 1 command: 2 slice kinds in one frame — move one out"
+function warningOf(all) {
+  // the command an automation sends may sit in its frame: it is part of the automation's slice
+  const autos = all.filter(n => KIND_OF[n.colour] === 'automation'), cmds = all.filter(n => KIND_OF[n.colour] === 'command');
+  const own = autos.length === 1 ? ownCommand(autos[0].text, cmds.map(n => ({ name: titleAndBody(n.text).title, note: n }))) : null;
+  const notes = own ? all.filter(n => n !== own.note) : all;
+  const kinds = notes.map(n => KIND_OF[n.colour]), of = kind => kinds.filter(k => k === kind).length;
+  const found = [[of('automation'), 'automation', 'automations'], [of('command'), 'command', 'commands'], [of('readModel'), 'view', 'views']].filter(([n]) => n);
+  if (found.reduce((sum, [n]) => sum + n, 0) < 2) return null;
+  const said = found.map(([n, one, many]) => count(n, one, many)).join(' and ');
+  return `${said}: ${of('automation') && found.length > 1 ? `${found.length} slice kinds in one frame` : 'one slice per frame'} — move one out`;
+}
+
+// The title of its command's note, else its view's, else its automation's ('' when it has none)
+const defaultName = notes => {
+  const of = kind => notes.find(n => KIND_OF[n.colour] === kind && titleAndBody(n.text).title);
+  const note = of('command') || of('readModel') || of('automation');
+  return note ? titleAndBody(note.text).title : '';
+};
+
+export function padFrames(state, { editable = true, selectedIds = [], editing = null } = {}) {
+  const pad = state.pad || { notes: {}, frames: {} };
+  return {
+    editable,
+    frames: Object.values(pad.frames).map(f => {
+      const inside = notesInFrame(pad, f), own = editing?.id === f.id && editing.value != null ? editing.value : f.name;
+      const fallback = defaultName(inside), chapter = f.chapterId && state.chapters[f.chapterId] ? { chapterId: f.chapterId, name: state.chapters[f.chapterId].name } : null;
+      const changed = !!chapter && changedSince(pad, f);
+      const label = chapter && (chapter.name.length > CHIP_MAX ? `${chapter.name.slice(0, 22).trimEnd()}…` : chapter.name);
+      return {
+        frameId: f.id, x: f.x, y: f.y, w: f.w, h: f.h, name: own, shownName: own.trim() || fallback || 'Untitled', nameIsDefault: !own.trim(),
+        noteIds: inside.map(n => n.id), noteCount: inside.length, warning: warningOf(inside),
+        selected: selectedIds.includes(f.id), editing: editing?.id === f.id, editable, chapter,
+        made: !!chapter, changed, canUpdate: editable && changed && !!state.slices[f.sliceId],
+        chip: chapter ? { label: `→ ${label}`, title: `In chapter ${chapter.name}`, changedText: changed ? 'changed since' : null } : null
+      };
+    })
+  };
+}

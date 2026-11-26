@@ -13,6 +13,7 @@ import { idsHidden, setIdsHidden } from '../scenarios/ids.js';
 import { escapeHtml } from '../board/view.js';
 import { openElementMenu } from '../elementMenu/sheet.js';
 import { openSliceMenu } from '../board/sheets/sliceMenu.js';
+import { onFieldTap } from '../fieldSources/sheet.js';
 import { openShareSheet } from '../shareImage/sheet.js';
 import { isReadOnly } from '../readOnly/sheet.js';
 import { pointPageHtml } from '../literature/view.js';
@@ -105,6 +106,7 @@ export function initSlicePage({ showSlicePage, showSliceOnBoard, sliceOpenedFrom
     if (a === 'go' && id) turnPage(t.getAttribute('aria-label') === 'Next slice' ? 'next' : 'prev');
     else if (a === 'open' && id) showSlicePage(id);
     else if (a === 'element') openElementMenu(t.dataset.el, id);
+    else if (a === 'field-gap') onFieldTap(t.dataset.el, id, t.dataset.field);
     else if (a === 'scenario') window.EventPad.editScenario(t.dataset.scenario);
     else if (a === 'add-scenario') window.EventPad.addScenario(id, t.dataset.sliceType);
     else if (a === 'menu') openSliceMenu(id);

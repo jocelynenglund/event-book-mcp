@@ -14,7 +14,7 @@ import { createShareLink, linkError } from '../shareLink/link.js';
 import { copyText } from '../../ui/clipboard.js';
 import { formatBytes } from '../../ui/bytes.js';
 import { listModels, readModelEvents, modelSize, historyOf, getCurrentModelId, openModel, createModel, duplicateModel, deleteModel, setModelStartIn, openedAt } from '../../core/eventStore.js';
-import { getStartIn } from '../../ui/feed.js';
+import { getNewModelStartIn } from '../../ui/feed.js';
 import { bookState } from '../../core/projections.js';
 import { showSheet, hideAllSheets } from '../../ui/sheets.js';
 import { showToast } from '../../ui/toast.js';
@@ -78,7 +78,7 @@ function bookMeta(model, state, events) {
     history.snapshot
       ? `📸 snapshot${history.changes ? ` + ${count(history.changes)} ${history.changes === 1 ? 'change' : 'changes'}` : ''}`
       : `🕘 history · ${count(history.changes)} ${history.changes === 1 ? 'event' : 'events'}`,
-    model.startIn === 'outline' ? '📋 plotted' : model.startIn === 'board' ? '🌀 pantsed' : ''
+    model.startIn === 'outline' ? '📋 plotted' : model.startIn === 'board' || model.startIn === 'pad' ? '🌀 pantsed' : ''
   ].filter(Boolean).join(' · ');
 }
 
@@ -599,9 +599,10 @@ function handleClick(e) {
   else if (a === 'new') openNewBookSheet();
   else if (a === 'new-fact' || a === 'new-literature') {
     hideAllSheets();
-    setModelStartIn(createModel(), getStartIn());
+    const where = getNewModelStartIn();   // Pantser (the Pad) unless Plotter was the last pick
+    setModelStartIn(createModel(), where);
     chooseBookKind({ kind: a === 'new-fact' ? 'fact' : 'literature' });
-    window.EventPad.showStart();
+    window.EventPad.showStart(where);
     openModelNameSheet({ isNew: true });
   }
   else if (a === 'menu') openShelfMenu(id);

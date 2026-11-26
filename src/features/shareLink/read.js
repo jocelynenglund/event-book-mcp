@@ -10,9 +10,10 @@ import { scopeOf } from '../shareImage/scope.js';
 
 const inferred = id => id.startsWith('au_inferred_'); // inferred again on load: never frozen in
 
-// source: a projected state, or the book's events. scope: see scopeOf.
+// source: a projected state, or the book's events. scope: see scopeOf. keepPad: the link opens on the Pad, so the sketch comes along
+// even when the scope is some slices.
 // -> { name, description, state } where state is what a ModelSnapshot keeps
-export function shareLinkSnapshot(source, scope = null) {
+export function shareLinkSnapshot(source, scope = null, { keepPad = false } = {}) {
   const book = Array.isArray(source) ? projectState(source) : source;
   const wanted = scopeOf(scope);
   const whole = !wanted.chapters && !wanted.slices;
@@ -22,7 +23,8 @@ export function shareLinkSnapshot(source, scope = null) {
     elements: book.elements, connections: book.connections, scenarios: book.scenarios, slices,
     sliceOrder: book.sliceOrder.filter(id => id in slices), chapters: book.chapters, chapterOrder: book.chapterOrder, parts: book.parts, arranged: book.arranged,
     flows: book.flows, modelName: book.modelName, modelDescription: book.modelDescription, preface: book.preface,
-    tags: book.tags, updateRoles: book.updateRoles, modelSource: book.modelSource, sliceDecisions: book.sliceDecisions, follow: book.follow
+    tags: book.tags, updateRoles: book.updateRoles, modelSource: book.modelSource, sliceDecisions: book.sliceDecisions, follow: book.follow,
+    pad: book.pad   // the sketch comes along: a shared book shows it
   };
   if (!whole) {
     const scenarios = Object.fromEntries(Object.entries(book.scenarios).filter(([, s]) => s.sliceId in slices));
@@ -43,7 +45,8 @@ export function shareLinkSnapshot(source, scope = null) {
       flows: Object.fromEntries(Object.entries(book.flows || {}).filter(([, f]) => chapterIds.has(f.chapterId))),
       updateRoles: Object.fromEntries(Object.entries(book.updateRoles || {}).filter(([k]) => k.split('>').every(id => used.has(id)))),
       sliceDecisions: (book.sliceDecisions || []).filter(d => d.sliceId in slices),
-      preface: null, follow: null
+      preface: null, follow: null,
+      pad: keepPad ? book.pad : { notes: {}, frames: {} }   // a scoped share is some slices, not the sketch round them (unless the link opens on the Pad)
     });
   }
   return { name: book.modelName, description: book.modelDescription, state: kept };

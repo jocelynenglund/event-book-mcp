@@ -13,3 +13,13 @@ export function addProperty(elementId, name, propertyType = 'string', items = nu
   appendEvent(EventTypes.PropertyAdded, { elementId, propertyId, name, propertyType, ...(items ? { items } : {}) });
   return propertyId;
 }
+
+// SC: Remove Property — a field taken off a sticky
+export function removeProperty(elementId, propertyId) {
+  return appendEvent(EventTypes.PropertyRemoved, { elementId, propertyId });
+}
+
+// SC: Update Property — a field renamed, retyped, or given (or rid of) its item fields
+export function updateProperty(elementId, propertyId, { name, propertyType = 'string', items = null }) {
+  return appendEvent('PropertyUpdated', { elementId, propertyId, name, propertyType, items: items && items.length ? items : null });
+}

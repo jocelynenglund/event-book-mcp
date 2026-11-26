@@ -34,7 +34,7 @@ export function placePart(state, partId, slot) {
 const sameLayout = (a, b) => a.order.join() === b.order.join() && a.parts.map(p => p.firstChapter).join() === b.parts.map(p => p.firstChapter).join();
 const layoutNow = state => ({ order: state.chapterOrder, parts: partsOf(state) });
 
-// One place earlier (-1) or later (+1) among the chapters and the bookends; null at the ends
+// One place earlier (-1) or later (+1) among the chapters and the part tabs; null at the ends
 export function stepChapter(state, chapterId, by) {
   const slots = chapterSlots(state, chapterId);
   const now = slots.findIndex(s => sameLayout(placeChapter(state, chapterId, s), layoutNow(state)));

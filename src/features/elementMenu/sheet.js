@@ -14,7 +14,6 @@ import { secondTap } from '../../ui/secondTap.js';
 import { openPropertySheet } from '../properties/sheet.js';
 import { openThread } from '../comments/sheet.js';
 import { deleteElement } from '../deleteElement/command.js';
-import { showActions } from '../connect/actionSheet.js';
 import { removeFromSlice, setPublished, setTrigger, setTodo, setElementFlow } from '../board/command.js';
 import { isReadOnly, openElementReadSheet } from '../readOnly/sheet.js';
 import { elementMenuState } from './elementMenuState.read.js';
@@ -23,7 +22,11 @@ import { elementMenuReaders } from './elementMenuReaders.read.js';
 import { elementMenuFlowChoices } from './elementMenuFlowChoices.read.js';
 import { elementMenuConsumers } from './elementMenuConsumers.read.js';
 import { elementMenuTrigger } from './elementMenuTrigger.read.js';
-import { elementMenuTitle, elementMenuBody } from './elementMenu.parts.js';
+import { elementMenuHome } from './elementMenuHome.read.js';
+import { elementMenuProducer } from './elementMenuProducer.read.js';
+import { elementMenuTitle, elementMenuBody, readersSection } from './elementMenu.parts.js';
+import { openBoardSheet } from '../board/sheets/shared.js';
+import { openScreenText } from '../pad/screenText.sheet.js';
 
 let currentElementId = null;
 let currentSliceId = null;
@@ -57,7 +60,6 @@ export function openElementMenu(elementId, sliceId = null) {
 
   options.innerHTML = elementMenuBody({
     flows: elementMenuFlowChoices(book, elementId, currentSliceId),   // an outcome event can belong to a flow
-    readers: elementMenuReaders(book, elementId),                     // an event: the read models it updates
     options: elementMenuOptions(book, elementId, currentSliceId),
     consumers: elementMenuConsumers(book, elementId)                  // an integration event: who it goes to
   });
@@ -103,14 +105,42 @@ export function menuProperties() {
   }
 }
 
-export function menuConnect() {
+// A screen: its text, like the Pad's screen note (the editor reads the book through `load`, as the menu does)
+export function menuScreenText() {
   hideAllSheets();
-  if (currentElementId) {
-    // Small delay to let sheet close
-    setTimeout(() => {
-      showActions(currentElementId);
-    }, 100);
-  }
+  if (currentElementId) setTimeout(() => openScreenText(currentElementId, load), 150);
+}
+
+// A read model's or a command's slice: its events drawer (the events it reads, or produces)
+export function menuSliceEvents() {
+  hideAllSheets();
+  const home = currentElementId && elementMenuHome(load(), currentElementId, currentSliceId);
+  if (home) setTimeout(() => window.EventPad.openEventsSheet(home.sliceId), 150);
+}
+
+// Its slice's screen slot: name or reuse a screen, or go to the one it has
+export function menuSliceScreen() {
+  hideAllSheets();
+  const home = currentElementId && elementMenuHome(load(), currentElementId, currentSliceId);
+  if (!home) return;
+  if (!home.screen) setTimeout(() => window.EventPad.openCellSheet(home.sliceId, 'screen'), 150);
+  else setTimeout(() => { if (!showElementOnBoard(home.screen.id, home.sliceId)) showToast('Not on the board yet'); }, 150);
+}
+
+// An event: the read models that read it, each with its slice (tap to go)
+export function menuReaders() {
+  const readers = currentElementId && elementMenuReaders(load(), currentElementId);
+  if (!readers) return;
+  hideAllSheets();
+  setTimeout(() => openBoardSheet(readersSection(readers)), 150);
+}
+
+// An event: go to the command that produces it, or say nothing does yet
+export function menuProducer() {
+  const producer = currentElementId && elementMenuProducer(load(), currentElementId);
+  if (!producer) { hideAllSheets(); showToast('Nothing produces it yet'); return; }
+  hideAllSheets();
+  setTimeout(() => { if (!showElementOnBoard(producer.commandId, producer.sliceId)) showToast('Not on the board yet'); }, 150);
 }
 
 export function menuDelete(button) {

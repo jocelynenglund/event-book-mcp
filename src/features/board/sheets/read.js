@@ -12,12 +12,16 @@ import { isAutomated, freeViewSlices } from '../../automate/command.js';
 import { isTrigger, readsModel } from '../command.js';
 import { sliceTypeLabels } from '../boardSliceHeaderFields.read.js';
 import { searchKey } from './shared.js';
+import { processorReads } from '../processorReads.js';
 
 const elementsOf = (book, type) => Object.values(book.elements).filter(e => e.type === type).sort(byName);
 // A sticky as a picker's chip shows it
 const chipOf = (e, linked) => ({ id: e.id, type: e.type, name: e.name, attrs: externalAttr(e), todo: !!e.todo, linked, key: searchKey(e.name) });
 
 // ---------- A slice's menu ----------
+
+// The slice and, when it is half of an automation, its other half
+const slicePartners = (slice, book) => [slice, slice.pairWith && book.slices[slice.pairWith]].filter(Boolean);
 
 // What the ⋮ on a slice offers; null when the slice is gone
 export function sliceMenuView(book, sliceId) {
@@ -38,6 +42,16 @@ export function sliceMenuView(book, sliceId) {
     hasChapter, chapterName: hasChapter ? (book.chapters[slice.chapterId]?.name || '') : 'none',
     flowName: hasChapter ? (sliceFlow(slice, book)?.name || 'Main line') : null
   };
+}
+
+// The views a slice's automation reads, each with the processor that reads it (Stop reading ‹view› in its menu)
+export function sliceMenuReads(book, sliceId) {
+  const slice = book.slices[sliceId];
+  if (!slice || sliceId.startsWith('au_inferred_')) return { sliceId, reads: [] };
+  return { sliceId, reads: slicePartners(slice, book).flatMap(s => s.elements.filter(id => book.elements[id]?.type === 'processor'))
+    .flatMap(processorId => processorReads(book, processorId).map(r => ({ processorId, readModelId: r.readModelId, title: r.title || r.name })))
+    .filter((r, i, all) => all.findIndex(x => x.readModelId === r.readModelId && x.processorId === r.processorId) === i)
+    .filter(r => !(slice.type === 'SV' && slice.elements.includes(r.readModelId))) };
 }
 
 // Run it from an automation: the events and processors to pick from, the views that could be its first half

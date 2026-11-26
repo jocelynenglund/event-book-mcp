@@ -11,6 +11,11 @@ import * as pr from '../../core/projections.js';
 import * as c from '../board/command.js';
 import * as sc from '../scenarios/command.js';
 import * as ol from '../outline/command.js';
+import { parseFieldList } from '../fieldMapping/fieldText.js';
+import { mapField } from '../fieldMapping/command.js';
+import { propOf } from '../fieldMapping/mappings.js';
+import { parseRows } from '../viewQueries/query.js';
+import { fieldKey, parsePropertyText } from '../../core/constants.js';
 
 export const PLAN_FORMAT = 'eventbook-plan/1';
 
@@ -21,6 +26,7 @@ const as = (type, name) => {
   const same = ol.findByName(type, name, state());
   return same ? { elementId: same.id } : { name: name.trim() };
 };
+export { as as stickyNamed };
 const list = v => (Array.isArray(v) ? v : v ? [v] : []);
 const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -93,10 +99,76 @@ export function checkStepMarks(step) {
   } catch (e) { return e.message; }
 }
 
+// ---------- Fields that come from another sticky's: "orderRef ← Order Placed.orderId" ----------
+
+// The stickies of the book called this (any kind, any case)
+const stickiesNamed = (name, st = state()) => Object.values(st.elements).filter(e => e.name.trim().toLowerCase() === String(name).trim().toLowerCase());
+
+// The sticky a mapping names: the one called that which carries the field. Throws one line when there isn't exactly one.
+function sourceOf(sticky, field, st = state()) {
+  const named = stickiesOrThrow(sticky, st);
+  const carrying = named.filter(e => propOf(e, field));
+  if (!carrying.length) throw new Error(`${named[0].name} has no field ${field}`);
+  if (carrying.length > 1) throw new Error(`${carrying.length} stickies are called "${sticky}" and carry ${field} (${carrying.map(e => e.type).join(', ')}): rename one`);
+  return carrying[0];
+}
+// The event a whole-event mapping names: the one called that. Throws one line when there isn't exactly one event of that name.
+function eventOf(sticky, st = state()) {
+  const named = stickiesOrThrow(sticky, st).filter(e => e.type === 'event');
+  if (!named.length) throw new Error(`"${sticky}" is not an event: a whole source is an event`);
+  if (named.length > 1) throw new Error(`${named.length} events are called "${sticky}": rename one`);
+  return named[0];
+}
+function stickiesOrThrow(sticky, st) {
+  const named = stickiesNamed(sticky, st);
+  if (!named.length) throw new Error(`No sticky "${sticky}" (a field can come from the field of a sticky that is already in the book)`);
+  return named;
+}
+
+// The stickies a step makes, and which of them carry its fields (a change: its command and events; a view: its read model)
+const eventNames = v => list(v).map(e => (typeof e === 'string' ? e : e?.name)).filter(n => typeof n === 'string' && n.trim());
+function stepStickies(step) {
+  const kind = String(step.kind || '').toLowerCase();
+  const events = eventNames(step.events || step.event || step.result);
+  if (kind === 'see') return { names: [...events, step.readModel, step.screen], carriers: [step.readModel] };
+  if (kind === 'auto') return { names: [step.processor, step.command, step.using, ...eventNames(step.when), ...events], carriers: [step.command, ...events] };
+  return { names: [step.screen, step.command, ...events], carriers: [step.command, ...events] };
+}
+
+// What is wrong with a step's fields that come from another's, before anything is added: the source sticky or field
+// isn't in the book (a sticky this very step makes is checked once it is there); null when fine
+function checkFieldMappings(step) {
+  const { mappings, error } = parseFieldList(step.fields);
+  if (error) return error;
+  const own = new Set(stepStickies(step).names.filter(Boolean).map(n => n.trim().toLowerCase()));
+  for (const m of mappings) {
+    if (!stickiesNamed(m.sticky).length && own.has(m.sticky.toLowerCase())) continue;
+    try { if (m.from === null) eventOf(m.sticky); else sourceOf(m.sticky, m.from); } catch (e) { return e.message; }
+  }
+  return null;
+}
+
+// A step's (or slice's) fields: the names go on its stickies, and each "field ← Sticky.field" maps the field on every sticky of
+// the slice that carries it (but the source itself). Throws the first mapping that can't be made.
+export function addFields(sliceId, fields) {
+  const { text, mappings, error } = parseFieldList(fields);
+  if (error) throw new Error(error);
+  ol.addOutlineProperties(sliceId, text);
+  mappings.forEach(m => {
+    const source = m.from === null ? eventOf(m.sticky) : sourceOf(m.sticky, m.from);
+    ol.sliceCarriers(sliceId, state()).filter(el => el.id !== source.id && propOf(el, m.field)).forEach(el => {
+      const why = mapField({ elementId: el.id, field: m.field, from: { elementId: source.id, field: m.from } });
+      if (why && !/^already comes from/.test(why)) throw new Error(why);
+    });
+  });
+}
+
 export function addStep(step, chId) {
   const kind = String(step.kind || '').toLowerCase();
   const marks = checkStepMarks(step);
   if (marks) throw new Error(marks);
+  const mapping = checkFieldMappings(step);
+  if (mapping) throw new Error(mapping);
   let sliceId;
   if (kind === 'do') {
     if (!step.command) throw new Error('A Do step needs a command');
@@ -114,14 +186,15 @@ export function addStep(step, chId) {
   } else if (kind === 'auto') {
     sliceId = addAutomation(step, chId);
   } else throw new Error(`Step kind "${step.kind}": use do, see or auto`);
-  if (step.fields) ol.addOutlineProperties(sliceId, list(step.fields).join(', '));
+  if (step.fields) addFields(sliceId, step.fields);
   if (step.description) c.describeSlice(sliceId, step.description);
   return sliceId;
 }
 
-// When [event] using [read model] ⚙ [processor] does [command] → [result] (the outline's Auto)
+// When [event] using [read model] ⚙ [processor] does [command] → [result] (the outline's Auto). A translator (the Pad's automation note
+// that turns what it reads into an event of its own) has no command: its result events are all it makes.
 function addAutomation(step, chId) {
-  if (!step.processor || !step.command) throw new Error('An Auto step needs a processor and a command');
+  if (!step.processor || !(step.command || eventNames(step.events || step.result).length)) throw new Error('An Auto step needs a processor and a command (or the events it translates into)');
   const st = state();
   const [when] = eventSpecs(step.when, { external: step.external });
   let triggerId = when ? ol.findByName('event', when.name, st)?.id : null;
@@ -145,7 +218,7 @@ function addAutomation(step, chId) {
     c.linkReads(procId, known.id);
     if (step.todo && !known.todo) c.setTodo(known.id, true);
   }
-  c.addToSlice(sliceId, 'command', as('command', step.command));
+  if (step.command) c.addToSlice(sliceId, 'command', as('command', step.command));
   addEvents(sliceId, eventSpecs(step.events || step.result));
   if (triggerId) c.setTrigger(triggerId, procId, true);
   return sliceId;
@@ -169,9 +242,14 @@ export function checkScenario(x) {
   if (x.given !== undefined && !Array.isArray(x.given)) throw new Error(`${x.name}: given is a list of {event, values}`);
   (x.given || []).forEach(g => { if (!g?.event) throw new Error(`${x.name}: each given needs an event`); });
   if (x.when !== undefined) {
-    if (typeof x.when !== 'object' || Array.isArray(x.when)) throw new Error(`${x.name}: when is {values, command?}`);
-    const bad = Object.keys(x.when).filter(k => !['values', 'command'].includes(k));
-    if (bad.length) throw new Error(`${x.name}: when is {values, command?}; put ${bad.join(', ')} inside values`);
+    if (typeof x.when !== 'object' || Array.isArray(x.when)) throw new Error(`${x.name}: when is {values, command?} (a view: {query})`);
+    const bad = Object.keys(x.when).filter(k => !['values', 'command', 'query'].includes(k));
+    if (bad.length) throw new Error(`${x.name}: when is {values, command?}; put ${bad.join(', ')} inside values (a view's when is {query})`);
+    if (x.when.query !== undefined && (typeof x.when.query !== 'string' || /[\r\n]/.test(x.when.query.trim()))) throw new Error(`${x.name}: a query is one line of text, such as "name starts with a"`);
+  }
+  if (x.then?.rows !== undefined) {
+    const r = typeof x.then.rows === 'string' ? parseRows(x.then.rows) : Array.isArray(x.then.rows) ? {} : { error: 'rows is a list of rows, or text with a row per line ("- name: anna, place: 1")' };
+    if (r.error) throw new Error(`${x.name}: ${r.error}`);
   }
   if (x.then !== undefined && (typeof x.then !== 'object' || Array.isArray(x.then))) throw new Error(`${x.name}: then is one {event, values}, {rejected}, {nothing} or {readModel?, values | rows}`);
   const tk = Object.keys(x.then || {}).filter(k => !['event', 'values', 'rejected', 'nothing', 'readModel', 'rows'].includes(k));
@@ -184,12 +262,18 @@ export function checkScenario(x) {
   }
 }
 
+// The rows of a view's Then: a list of {field: value}, or text with a row per line ("- name: anna, place: 1")
+const rowsOf = rows => (typeof rows === 'string' ? parseRows(rows).rows : rows || null);
+
 export function addScenario(slice, x) {
   const st = state();
+  const query = (x.when?.query || '').trim();
+  if (query && slice.type !== 'SV') throw new Error(`${x.name}: a query asks a view (a See slice); ${pr.sliceTitle(slice, st)} is not one`);
   const own = type => slice.elements.map(id => st.elements[id]).filter(e => e?.type === type);
   const id = sc.addScenario(slice.id, x.name, slice.type === 'SV' ? 'SV' : 'SC');
   if (x.mustHave) sc.setMustHave(id, true);
   if (x.given?.length) sc.setGiven(id, x.given.map(g => ({ elementId: elementByName('event', g.event), values: g.values || {} })));
+  if (query) sc.setQuery(id, query);
   if (slice.type !== 'SV') {
     const cmd = x.when?.command ? ol.findByName('command', x.when.command, st) : own('command')[0];
     if (cmd) sc.setWhen(id, cmd.id, x.when?.values || {});
@@ -200,7 +284,7 @@ export function addScenario(slice, x) {
   else if (t.event) sc.setThenEvent(id, elementByName('event', t.event), t.values || {});
   else if (t.readModel || slice.type === 'SV') {
     const rm = t.readModel ? elementByName('readModel', t.readModel) : own('readModel')[0]?.id;
-    if (rm) sc.setThenReadModel(id, rm, t.values || {}, t.rows || null);
+    if (rm) sc.setThenReadModel(id, rm, t.values || {}, rowsOf(t.rows));
   }
   return id;
 }
@@ -217,6 +301,29 @@ const stepKeys = ['kind', 'name', 'description', 'screen', 'command', 'event', '
 const planKeys = ['format', '$schema', 'name', 'description', 'chapters'];
 const chapterKeys = ['name', 'steps'];
 
+// A step's "field ← Sticky.field" against what the steps before it (and it) make: known maps each sticky's name (lower case) to
+// its field names. It takes this step's stickies and fields in, then says what is wrong with its mappings; null when fine.
+function checkStepFieldMappings(step, known) {
+  // The events the steps so far make or react to (a whole source has to be one of them)
+  const events = known.events ||= new Set();
+  const own = [...eventNames(step.events || step.event || step.result), ...eventNames(step.when)].map(n => n.trim().toLowerCase());
+  own.forEach(n => events.add(n));
+  if (step.fields === undefined) { stepStickies(step).names.filter(Boolean).forEach(n => known.has(n.trim().toLowerCase()) || known.set(n.trim().toLowerCase(), new Set())); return null; }
+  const { text, mappings, error } = parseFieldList(step.fields);
+  if (error) return error;
+  const { names, carriers } = stepStickies(step);
+  names.filter(Boolean).forEach(n => known.has(n.trim().toLowerCase()) || known.set(n.trim().toLowerCase(), new Set()));
+  const fields = parsePropertyText(text, 'string').parsed.map(p => fieldKey(p.name));
+  carriers.filter(Boolean).forEach(n => fields.forEach(f => known.get(n.trim().toLowerCase()).add(f)));
+  for (const m of mappings) {
+    const have = known.get(m.sticky.toLowerCase());
+    if (!have) return `no sticky "${m.sticky}" in an earlier step to take ${m.field} from`;
+    if (m.from === null) { if (!events.has(m.sticky.toLowerCase())) return `"${m.sticky}" is not an earlier event: a whole source is an event`; continue; }
+    if (!have.has(fieldKey(m.from))) return `${m.sticky} has no field ${m.from}`;
+  }
+  return null;
+}
+
 // Is this plan file buildable? The first thing wrong, as one line naming the chapter and step; null when fine.
 export function checkPlan(plan) {
   if (!isObj(plan) || plan.format !== PLAN_FORMAT) return `Not an Event Book plan: "format" must be "${PLAN_FORMAT}"`;
@@ -224,6 +331,7 @@ export function checkPlan(plan) {
   if (odd.length) return `A plan takes ${planKeys.filter(k => k !== '$schema').join(', ')}; not ${odd.join(', ')}`;
   if (typeof plan.name !== 'string' || !plan.name.trim()) return 'The plan needs a "name"';
   if (!Array.isArray(plan.chapters) || !plan.chapters.length) return 'The plan needs "chapters": a list with at least one chapter';
+  const known = new Map();   // the stickies the steps so far make → the fields they carry
   for (const [ci, ch] of plan.chapters.entries()) {
     if (!isObj(ch)) return `Chapter ${ci + 1} is not an object`;
     if (typeof ch.name !== 'string' || !ch.name.trim()) return `Chapter ${ci + 1} needs a "name"`;
@@ -243,6 +351,8 @@ export function checkPlan(plan) {
       if (kind === 'auto' && (!step.processor || !step.command)) return `${at}: an auto step needs a processor and a command`;
       const marks = checkStepMarks(step);
       if (marks) return `${at}: ${marks}`;
+      const mapping = checkStepFieldMappings(step, known);
+      if (mapping) return `${at}: ${mapping}`;
       if (step.scenarios !== undefined && !Array.isArray(step.scenarios)) return `${at}: scenarios is a list`;
       for (const [xi, x] of (step.scenarios || []).entries()) {
         try { checkScenario(x); } catch (e) { return `${at}, scenario ${xi + 1}: ${e.message}`; }

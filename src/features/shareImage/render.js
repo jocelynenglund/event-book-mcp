@@ -34,8 +34,8 @@ export const notes = {
   external:  { fill: '#fde58a', text: '#3d3005' },
   // A legacy table read as events: a shadowy orange
   table:     { fill: '#c99a6c', text: '#2a1606' },
-  // One of our events published to other systems: event orange, a dark right edge and a ↗ tab (legend only)
-  published: { fill: '#ffc58a', text: '#4a2306' }
+  // One of our events published to other systems: yellow like an external one, with a dark right edge and a ↗ tab
+  published: { fill: '#fde58a', text: '#3d3005' }
 };
 
 export const themes = {
@@ -155,7 +155,7 @@ function arrow(ctx, x, y1, y2, color) {
 
 // A scenario line's swatch, in its sticky's colour; a legacy table gets a dashed edge, an integration event a dark right edge
 export function drawSwatch(ctx, x, y, size, line) {
-  const n = line.table ? notes.table : line.external ? notes.external : notes[line.type] || notes.screen;
+  const n = line.table ? notes.table : line.external ? notes.external : line.published ? notes.published : notes[line.type] || notes.screen;
   ctx.save();
   roundRect(ctx, x, y, size, size, 2);
   ctx.fillStyle = n.fill; ctx.fill();
@@ -191,7 +191,7 @@ export function measureCard(ctx, card) {
 }
 
 function drawCard(ctx, card, m, x, y, tilt, t) {
-  const n = (card.kind === 'event' && card.table ? notes.table : card.kind === 'event' && card.external ? notes.external : notes[card.kind]) || notes.screen;
+  const n = (card.kind === 'event' && card.table ? notes.table : card.kind === 'event' && card.external ? notes.external : card.kind === 'event' && card.published ? notes.published : notes[card.kind]) || notes.screen;
 
   // A to-do list seen again: a slim dashed reference, not a second full card
   if (m.slim) {

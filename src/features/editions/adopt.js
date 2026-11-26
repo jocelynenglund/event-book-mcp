@@ -8,6 +8,8 @@
 
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
+import { fieldKey } from '../../core/constants.js';
+import { isQueryField } from '../viewQueries/queryFields.js';
 
 const T = EventTypes;
 const fresh = prefix => prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
@@ -42,14 +44,23 @@ export function adoptBuiltContent(planSliceId, builtState, builtSliceId) {
       if (el.published) appendEvent(T.ElementPublishedSet, { elementId: id, published: true, ...(el.to?.length ? { to: el.to } : {}) });
       if (el.todo) appendEvent(T.ElementTodoSet, { elementId: id, todo: true });
       if (el.list) appendEvent(T.ElementListSet, { elementId: id, list: true });
+      if (el.sketch) appendEvent(T.ScreenSketchSet, { elementId: id, text: el.sketch });
     }
     const have = new Set((same?.properties || []).map(p => p.name.toLowerCase()));
     (el.properties || []).filter(p => !have.has(p.name.toLowerCase())).forEach(p => {
       const propertyId = fresh('prop');
       appendEvent(T.PropertyAdded, { elementId: id, propertyId, name: p.name, propertyType: p.type || 'string', ...(p.items ? { items: p.items } : {}) });
       if (p.generated) appendEvent(T.PropertyGeneratedSet, { elementId: id, propertyId, generated: true });
+      if (el.setBySystem?.[fieldKey(p.name)]) appendEvent(T.FieldSetBySystem, { elementId: id, field: p.name, how: el.setBySystem[fieldKey(p.name)].how });
+      if (isQueryField(el, p.name)) appendEvent(T.FieldMarkedQuery, { elementId: id, field: p.name });
     });
   });
+
+  // Where a field comes from, when the sticky it comes from came along too
+  [...ids].map(id => builtState.elements[id]).filter(el => el?.mappings).forEach(el => Object.values(el.mappings).forEach(m => {
+    const to = map[el.id], from = map[m.from.elementId];
+    if (to && from && !plan.elements[to]?.mappings?.[fieldKey(m.field)]) appendEvent(T.FieldMapped, { elementId: to, field: m.field, from: { elementId: from, field: m.from.field } });
+  }));
 
   // The planned slice's own scenarios and stickies go; the built slice's come in
   Object.values(plan.scenarios).filter(sc => sc.sliceId === planSliceId)
@@ -73,6 +84,7 @@ export function adoptBuiltContent(planSliceId, builtState, builtSliceId) {
     if (sc.mustHave) appendEvent(T.ScenarioMustHaveSet, { scenarioId, mustHave: true });
     if (sc.given?.length) appendEvent(T.GivenSet, { scenarioId, events: mapValues(sc.given) });
     if (sc.when?.commandId && map[sc.when.commandId]) appendEvent(T.WhenSet, { scenarioId, commandId: map[sc.when.commandId], values: sc.when.values || {} });
+    if (sc.when?.query) appendEvent(T.ScenarioQuerySet, { scenarioId, text: sc.when.query });
     const th = sc.then;
     if (th?.type === 'event' && map[th.eventId]) appendEvent(T.ThenEventSet, { scenarioId, eventId: map[th.eventId], values: th.values || {} });
     else if (th?.type === 'readModel' && map[th.readModelId]) appendEvent(T.ThenReadModelSet, { scenarioId, readModelId: map[th.readModelId], values: th.values || {}, ...(th.rows ? { rows: th.rows } : {}) });

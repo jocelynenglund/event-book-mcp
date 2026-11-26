@@ -2,8 +2,8 @@
 // ARRANGE - Arrange Slots (SV: Arrange Slots)
 // Where a chapter, or a whole part, can be put down on the shelf, left to right. A slot is
 // { before: the chapter it lands before (null: the end), startsPart: the part it would become the first chapter of,
-//   beforePart: the part whose bookend it lands before }. A chapter that starts a part with others after it leaves the
-// part to them; one that is alone in its part takes the part along (its bookend is no slot).
+//   beforePart: the part whose tab it lands before }. A chapter that starts a part with others after it leaves the
+// part to them; one that is alone in its part takes the part along (its tab is no slot).
 // ===========================================
 
 const none = { startsPart: null, beforePart: null };

@@ -121,7 +121,7 @@ function handle(e) {
   if (a === 'open') return showSlicePage(id);
   if (a === 'comment') return openThread(id, t.dataset.sentence || null);
   if (a === 'next-comment') return openCommentsList(revealInBook);
-  if (a === 'send-now') return syncModel(getCurrentModelId()).then(() => showToast('Sent'), e => showToast(`Not sent: ${e.message}`)).finally(render);
+  if (a === 'send-now') return syncModel(getCurrentModelId(), { force: true }).then(() => showToast('Sent'), e => showToast(`Not sent: ${e.message}`)).finally(render);
   if (isReadOnly()) return;
   if (a === 'up' || a === 'down') step(id, a === 'up' ? -1 : 1, state, name);
   else if (a === 'park') {

@@ -40,7 +40,7 @@ export function outlineLayout(state, { query = '', folded = () => false } = {}) 
     const slices = found.filter(shows);
     if (filtering && !slices.length) return [];
     shown += slices.length;
-    // How far the chapter can step earlier or later among the chapters and the part bookends
+    // How far the chapter can step earlier or later among the chapters and the part tabs
     const steps = chapter && chapterArrangeOptions(state, chapter.id);
     const partId = partOf.get(chapter?.id) ?? null;
     const partHeading = partId && partId !== lastPart ? partId : null;

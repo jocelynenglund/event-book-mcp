@@ -1,6 +1,6 @@
 // ===========================================
 // SCENARIOS - Parts of the scenario editor (Given / When / Then), each drawn from its view object alone
-// (Scenario Given Rows, Scenario Given Pool, Scenario Editor Choices, Scenario Element Fields, Scenario Then Rows).
+// (Scenario Given Rows, Scenario Given Pool, Scenario Editor Choices, Scenario Query Choices, Scenario Element Fields, Scenario Then Rows).
 // A root carries data-component and data-key.
 // ===========================================
 
@@ -199,6 +199,20 @@ export function thenReadModelChoice(then) {
       <div class="property-inputs ${then.inputs ? '' : 'hidden'}" id="then-rm-props">
         ${then.inputs ? valueInputs(then.inputs) : ''}
       </div>
+      </div>
+    `;
+}
+
+// Query, for a view (optional): what the caller asks it with, one line of free text, and ✕ to clear it
+// (query: Scenario Query Choices: { text })
+export function scenarioQueryChoice(query) {
+  return `
+      <div data-component="Scenario query choice" data-key="query">
+        <div class="section-label">QUERY <span class="property-hint">optional: what the caller asks the view with</span></div>
+        <div class="query-row">
+          <input type="text" class="sheet-input query-text" id="queryTextInput" aria-label="Query" placeholder="e.g. name starts with a" value="${escapeHtml(query.text)}" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button class="given-entry-btn" onclick="window.EventPad.queryClear()" aria-label="Clear the query">✕</button>
+        </div>
       </div>
     `;
 }

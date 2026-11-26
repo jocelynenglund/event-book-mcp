@@ -2,12 +2,12 @@
 // ARRANGE - Commands
 // SC: Arrange Chapters — the whole order (and where each part starts) in one event. Dragging, a step earlier or later
 //     and a move into a part are all this command with a different order. SC: Start Part, Rename Part, Remove Part.
-// Each returns null when it recorded its event (or there was nothing to change), else why it was refused.
+// SC: Add Chapter To Part (the Outline's ＋ Chapter in Arrange mode). Each returns null when it recorded its event (or there was nothing to change), else why it was refused.
 // ===========================================
 
-import { appendEvent, getEventStream } from '../../core/eventStore.js';
+import { appendEvent, getEventStream, canEditCurrent } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
-import { newId } from '../board/command.js';
+import { newId, createChapter } from '../board/command.js';
 import { nickname } from '../comments/command.js';
 import { arrangeChapters as decideArrange, startPart as decideStart, renamePart as decideRename, removePart as decideRemove } from './arrange.rules.js';
 import { placeChapter, placePart, stepChapter as stepPlan, moveIntoPart } from './arrangePlace.rules.js';
@@ -31,6 +31,14 @@ export const dropPart = (partId, slot) => arrangePlan(placePart(projectState(), 
 // One place earlier (-1) or later (1): the chapter's ⋮ and the Outline's ↑↓
 export const stepChapter = (chapterId, by) => arrangePlan(stepPlan(projectState(), chapterId, by));
 export const moveChapterIntoPart = (chapterId, partId) => arrangePlan(moveIntoPart(projectState(), chapterId, partId));
+
+// A new chapter at the end of a part (partId null: of the chapters before the first part). The chapter and its place are
+// one action: one undo takes both back
+export function addChapterToPart(name, partId = null) {
+  if (!String(name || '').trim()) return 'Give the chapter a name';
+  if (!canEditCurrent()) return READ_ONLY;
+  return moveChapterIntoPart(createChapter(name.trim()), partId);
+}
 
 export const startPart = (firstChapter, name) => record(decideStart(getEventStream(), { partId: newId('part'), name, firstChapter }));
 export const renamePart = (partId, name) => record(decideRename(getEventStream(), { partId, name }));
