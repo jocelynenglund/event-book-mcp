@@ -11,6 +11,12 @@ import { refinedPill } from './refinedPill.js';
 import { sliceProgressChip } from '../buildProgress/progress.parts.js';
 import { propLabel } from '../../core/constants.js';
 import { noSourceMark } from '../fieldSources/fieldGaps.parts.js';
+import { alternateEndingNote } from '../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
+
+// What other features add to a row (row.extras: [{ kind, view }], from outlineSliceRow.read.js), each drawn from its own view
+const rowExtras = {
+  alternateNote: alternateEndingNote, // feature: clone-slice
+};
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -171,6 +177,7 @@ export function outlineRow(row, ui = {}) {
       <div class="ol-main" role="button" tabindex="0" data-outline-action="${ui.selecting ? 'toggle' : 'expand'}" data-slice="${row.sliceId}"${ui.selecting ? '' : ` aria-expanded="${!!ui.open}"`}>
         <span class="ol-name">${ui.selecting ? '' : `<button class="ol-kebab" aria-label="Edit ${escapeHtml(row.title)}" data-outline-action="edit" data-slice="${row.sliceId}">⋮</button>`}<span class="ol-name-text">${row.refined ? '<span class="ol-refined-badge" aria-label="Refined"></span> ' : ''}${escapeHtml(row.title)}</span>${row.ref ? `<span class="ol-ref" title="Its number for an agent">${row.ref}</span>` : ''}</span>
         <span class="ol-kind">${row.kind}</span>
+        ${(row.extras || []).map(x => rowExtras[x.kind]?.(x.view) || '').join('')}
         ${ui.verifying && row.sliceVerdict ? sliceVerdictBadge(row.sliceVerdict) : ''}
         ${row.usage}
         <span class="ol-summary">${chainText(row)}</span>

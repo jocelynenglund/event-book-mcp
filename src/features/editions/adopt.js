@@ -60,8 +60,11 @@ export function adoptBuiltContent(planSliceId, builtState, builtSliceId) {
 
   // Where a field comes from, when the sticky it comes from came along too
   [...ids].map(id => builtState.elements[id]).filter(el => el?.mappings).forEach(el => Object.values(el.mappings).forEach(m => {
-    const to = map[el.id], from = map[m.from.elementId];
-    if (to && from && !plan.elements[to]?.mappings?.[fieldKey(m.field)]) appendEvent(T.FieldMapped, { elementId: to, field: m.field, from: { elementId: from, field: m.from.field } });
+    const to = map[el.id];
+    if (to && !plan.elements[to]?.mappings?.[fieldKey(m.field)]) m.sources.forEach(src => {
+      const from = map[src.elementId];
+      if (from) appendEvent(T.FieldSourceAdded, { elementId: to, field: m.field, from: { elementId: from, field: src.field } });
+    });
   }));
 
   // The planned slice's own scenarios and stickies go; the built slice's come in

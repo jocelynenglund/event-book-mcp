@@ -21,6 +21,8 @@ export const EventTypes = {
   FieldSetBySystemCleared: 'FieldSetBySystemCleared', // taken back: it needs a source again { elementId, field }
   FieldMapped: 'FieldMapped',                   // a field comes from another sticky's field ("orderRef ← Order Placed.orderId"): it has a source { elementId, field, from: { elementId, field } }
   FieldMappingCleared: 'FieldMappingCleared',   // unmapped: it comes from nowhere again { elementId, field }
+  FieldSourceAdded: 'FieldSourceAdded',         // one more source of a field (a field can come from several) { elementId, field, from: { elementId, field | null (the whole event) } }
+  FieldSourceRemoved: 'FieldSourceRemoved',     // exactly that source taken away { elementId, field, from }
   FieldMarkedQuery: 'FieldMarkedQuery',         // a read model's field is a query parameter: the caller asks with it, so it needs no event source { elementId, field }
   FieldQueryCleared: 'FieldQueryCleared',       // no longer a query parameter { elementId, field }
 

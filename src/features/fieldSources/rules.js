@@ -134,10 +134,11 @@ function check(state, slice, out) {
   // by name or mapped ("products[].sku ← Sku Chosen.skuRef"); one that does neither is a gap on the list
   els.filter(el => out.checked[slice.id]?.[el.id]).forEach(el => fieldsOf(el).filter(p => p.items?.length).forEach(p => {
     const m = mappingOf(state, el, p.name);
-    if (!m?.from.whole) return;
-    const event = state.elements[m.from.elementId];
-    const lost = p.items.filter(i => !mappingOf(state, el, itemField(p, i)) && !carries(event, i));
-    if (lost.length) gap(el, p.name, `${lost.join(', ')} ${lost.length > 1 ? 'are' : 'is'} not on ${event.name}`, `map ${lost.join(', ')} from a field, or add ${lost.length > 1 ? 'them' : 'it'} to ${event.name}`, out.checked[slice.id][el.id]);
+    const events = (m?.sources || []).filter(s => s.whole).map(s => state.elements[s.elementId]);
+    if (!events.length) return;
+    const lost = p.items.filter(i => !mappingOf(state, el, itemField(p, i)) && !events.some(event => carries(event, i)));
+    const names = events.map(e => e.name).join(' or ');
+    if (lost.length) gap(el, p.name, `${lost.join(', ')} ${lost.length > 1 ? 'are' : 'is'} not on ${names}`, `map ${lost.join(', ')} from a field, or add ${lost.length > 1 ? 'them' : 'it'} to ${events[0].name}`, out.checked[slice.id][el.id]);
   }));
 
   // Fields written as prose: one sticky to tidy, whatever it is and however many pieces

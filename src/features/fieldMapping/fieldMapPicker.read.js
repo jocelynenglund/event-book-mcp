@@ -1,12 +1,15 @@
 // ===========================================
 // FIELD MAPPING - Field Map Picker (SV)
-// The fields one field could come from (Comes from…): the fields of the other stickies on the board, narrowed by what
-// is typed (their sticky, field or slice name). Events come first as a whole ("ProductConfigured — whole event": the field
-// comes from the entire event; field null, whole true), the one named like the field on top; then the fields: same-name
-// fields on top, then the stickies before it on the timeline (the nearest first), then the ones after it. A field that would make a loop (it already comes from this one) is not
+// The sheet "Where does ‹Sticky›.‹field› come from?": what the field comes from now (any number of sources) and the stickies it
+// could come from, one card each, grouped by sticky (a whole event, and its fields). Narrowed by what is typed (sticky, field
+// or slice name). Cards: the stickies drawn into this slice first (in the order data flows), then the ones with a field
+// named like this one (same), then the rest by name. A field that would make a loop (it already comes from this one) is not
 // offered; a field written as prose isn't a name. readOnly: a book that can't be changed here can look but not map.
-// { elementId, field, sticky, from (what it comes from now, or null), query, canMap, more, itemFields: { offered, checked },
-//   options: [{ key, elementId, sticky, kind, slice, field (null for a whole event), whole, same }] }
+// { elementId, field, sticky, query, canMap, more,
+//   sources: [{ key, elementId, sticky, field (null for a whole event), whole, text }],
+//   cards: [{ elementId, sticky, kind, slice, here, same (it has a field named like this one),
+//             whole: { key, selected } | null (events only), fields: [{ key, name, selected, same }] }],
+//   itemFields: { offered, checked } }
 // itemFields: a list field can also be given the event's fields as item fields (offered); checked unless it has item fields
 // already (itemsChecked: what the person has ticked, kept when the sheet draws again).
 // ===========================================
@@ -14,47 +17,47 @@
 import { projectState, sliceTitle } from '../../core/projections.js';
 import { fieldKey } from '../../core/constants.js';
 import { isPlainName } from '../fieldSources/tidy.js';
-import { isList, isWholeSource, mappingOf, propOf, reaches, timeline } from './mappings.js';
+import { isList, isWholeSource, propOf, reaches, sourcesOf, timeline } from './mappings.js';
 
-const LIMIT = 40;
+const LIMIT = 30;
 const squash = s => String(s ?? '').toLowerCase().replace(/[\s_\-.]+/g, '');
-// The words of a name (ProductConfigured → product, configured), in the singular, to tell an event named like a field
-const words = name => new Set(String(name).replace(/\[\s*\]|\?/g, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2).map(w => w.replace(/(ies)$/, 'y').replace(/(?<!s)s$/, '')));
 
 export function fieldMapPicker(state, elementId, field, { query = '', readOnly = false, itemsChecked = null } = {}) {
   const el = state.elements[elementId];
   const prop = propOf(el, field);
   if (!prop) return null;
   const places = timeline(state);
-  const here = places.find(p => p.element.id === elementId)?.at ?? Infinity;
   const q = squash(query);
-  const rows = places.filter(p => p.element.id !== elementId).flatMap(p => (p.element.properties || [])
-    .filter(f => isPlainName(f.name) && !reaches(state, { elementId: p.element.id, field: f.name }, elementId, prop.name))
-    .map(f => ({ p, f })))
-    .map(({ p, f }) => ({
-      key: `${p.element.id}|${fieldKey(f.name)}`, elementId: p.element.id, sticky: p.element.name, kind: p.element.type, field: f.name,
-      slice: sliceTitle(state.slices[p.sliceId], state), same: fieldKey(f.name) === fieldKey(prop.name), at: p.at
-    }))
-    .filter(o => !q || squash(`${o.sticky} ${o.field} ${o.slice}`).includes(q));
-  // Events as a whole: the one named like the field first (same words), then earlier before later, the nearest first
-  const mine = words(prop.name);
-  const events = places.filter(p => p.element.id !== elementId && isWholeSource(p.element)
-    && !(p.element.properties || []).some(f => reaches(state, { elementId: p.element.id, field: f.name }, elementId, prop.name)))
-    .map(p => ({ key: `${p.element.id}|`, elementId: p.element.id, sticky: p.element.name, kind: p.element.type, field: null, whole: true,
-      slice: sliceTitle(state.slices[p.sliceId], state), same: squash(p.element.name) === squash(prop.name), at: p.at,
-      likely: [...words(p.element.name)].some(w => mine.has(w)) }))
-    .filter(o => !q || squash(`${o.sticky} whole event ${o.slice}`).includes(q))
-    .map((o, i) => ({ o, i })).sort((a, b) => (b.o.same - a.o.same) || (b.o.likely - a.o.likely) || (a.o.at < here ? 0 : 1) - (b.o.at < here ? 0 : 1) || (a.o.at < here ? b.o.at - a.o.at : a.o.at - b.o.at) || a.i - b.i)
-    .map(({ o }) => o);
-  // Same name first; earlier before later; the nearest first
-  const rank = o => (o.same ? 0 : 2) + (o.at < here ? 0 : 1);
-  const near = (a, b) => (a.at < here ? b.at - a.at : a.at - b.at);
-  const sorted = rows.map((o, i) => ({ o, i })).sort((a, b) => rank(a.o) - rank(b.o) || near(a.o, b.o) || a.i - b.i).map(({ o }) => o);
+  const mine = sourcesOf(state, el, prop.name);
+  const chosen = new Set(mine.map(s => `${s.elementId}|${s.field == null ? '' : fieldKey(s.field)}`));
+  const hereIds = new Set(Object.values(state.slices).filter(s => s.elements.includes(elementId)).flatMap(s => s.elements));
+  const same = name => fieldKey(name) === fieldKey(prop.name);
+
+  const cards = places.filter(p => p.element.id !== elementId).map(p => {
+    const e = p.element, slice = sliceTitle(state.slices[p.sliceId], state);
+    const loops = f => reaches(state, { elementId: e.id, field: f }, elementId, prop.name);
+    const fields = (e.properties || []).filter(f => isPlainName(f.name) && (chosen.has(`${e.id}|${fieldKey(f.name)}`) || !loops(f.name)))
+      .map(f => ({ key: `${e.id}|${fieldKey(f.name)}`, name: f.name, selected: chosen.has(`${e.id}|${fieldKey(f.name)}`), same: same(f.name) }))
+      .sort((a, b) => b.same - a.same);
+    const wholeOk = isWholeSource(e) && (chosen.has(`${e.id}|`) || !(e.properties || []).some(f => loops(f.name)));
+    return { at: p.at, elementId: e.id, sticky: e.name, kind: e.type, slice, here: hereIds.has(e.id), same: fields.some(f => f.same),
+      whole: wholeOk ? { key: `${e.id}|`, selected: chosen.has(`${e.id}|`) } : null, fields };
+  }).filter(c => c.whole || c.fields.length)
+    // Typing keeps the cards whose sticky or slice matches (all their fields) and the fields that match
+    .map(c => {
+      if (!q) return c;
+      const own = squash(`${c.sticky} ${c.slice}`).includes(q) || (c.whole && squash('whole event').includes(q));
+      const fields = own ? c.fields : c.fields.filter(f => squash(f.name).includes(q));
+      return own || fields.length ? { ...c, fields } : null;
+    }).filter(Boolean)
+    .sort((a, b) => (b.here - a.here) || (a.here ? a.at - b.at : (b.same - a.same) || a.sticky.localeCompare(b.sticky) || a.at - b.at));
+
   return {
-    elementId, field: prop.name, sticky: el.name, from: mappingOf(state, el, prop.name)?.from || null, query, canMap: !readOnly,
+    elementId, field: prop.name, sticky: el.name, query, canMap: !readOnly,
+    sources: mine.map(s => ({ key: `${s.elementId}|${s.field == null ? '' : fieldKey(s.field)}`, elementId: s.elementId, sticky: s.sticky, field: s.field, whole: !!s.whole, text: s.whole ? `${s.sticky} · whole event` : s.text })),
     itemFields: { offered: isList(prop), checked: isList(prop) && (itemsChecked ?? !(prop.items || []).length) },
-    more: Math.max(0, events.length + sorted.length - LIMIT),
-    options: [...events, ...sorted.map(o => ({ ...o, whole: false }))].slice(0, LIMIT).map(({ at, likely, ...o }) => o)
+    more: Math.max(0, cards.length - LIMIT),
+    cards: cards.slice(0, LIMIT).map(({ at, ...c }) => c)
   };
 }
 

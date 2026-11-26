@@ -23,11 +23,18 @@ import { sliceMenuView, sliceMenuReads, sliceMenuTriggers, automateView, waiveVi
 import { sliceMenuScenario, sliceMenuRead, sliceMenuTrigger, reorderRow } from './parts.js';
 import { readOnlySliceMenu } from '../../readOnly/readOnlySliceMenu.read.js';
 import { readOnlySliceMenuBox } from '../../readOnly/readOnly.parts.js';
+import { cloneSliceOption } from '../../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
+import { cloneSliceMenuOption } from '../../cloneSlice/cloneSliceMenuOption.read.js'; // feature: clone-slice
 
 // The book, through one sheet's view: the sheets read nothing of it but what their view holds
 const viewOf = (view, ...args) => view(projectState(), ...args);
 
 // ---------- Slice menu ----------
+
+// What other features add to a slice's menu: (sliceId) → HTML, each drawn from its own view
+const menuExtras = [
+  sliceId => cloneSliceOption(viewOf(cloneSliceMenuOption, sliceId)), // feature: clone-slice
+];
 
 let menuSliceId = null;
 
@@ -120,6 +127,7 @@ export function openSliceMenu(sliceId) {
           <div class="sheet-option-desc">A picture of just this slice, scenarios too if you like</div>
         </div>
       </div>
+      ${menuExtras.map(extra => extra(sliceId)).join('')}
       <div class="sheet-option" data-board-action="chapter" data-slice="${sliceId}">
         <div class="sheet-option-icon" style="background: var(--surface-hover);">§</div>
         <div class="sheet-option-text">

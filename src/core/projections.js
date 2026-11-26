@@ -9,6 +9,7 @@ import { outlineGoalsProject } from '../features/outlineGoals/projection.js'; //
 import { editionOf } from '../features/editions/rules.js';
 import { padFold } from '../features/pad/sketch.js';
 import { projectPages } from '../features/pages/pages.projection.js'; // feature: pages
+import { projectCloneSlice } from '../features/cloneSlice/cloneSlice.projection.js'; // feature: clone-slice
 import { chapterMoved, chaptersArranged, partStarted, partRenamed, partRemoved, chapterRemoved, layoutByName, layoutOnSnapshot } from '../features/arrange/arrangement.js';
 
 // Element ordering hierarchy (top to bottom)
@@ -246,16 +247,37 @@ export function projectState(eventStream = getEventStream()) {
         break;
 
       // A field that comes from another sticky's field (keyed by its name, matched loosely): { field, from: { elementId, field } }
+      // Several can be sources: sources lists them (the first is also `from`). A legacy FieldMapped is one source that a later
+      // FieldMapped (or a Cleared) replaces; FieldSourceAdded / FieldSourceRemoved add and take away exactly one each.
       case EventTypes.FieldMapped:
-        if (state.elements[event.data.elementId]) (state.elements[event.data.elementId].mappings ||= {})[fieldKey(event.data.field)] = { field: event.data.field, from: { elementId: event.data.from.elementId, field: event.data.from.field } };
-        break;
-
-      case EventTypes.FieldMappingCleared:
-        if (state.elements[event.data.elementId]?.mappings) {
-          delete state.elements[event.data.elementId].mappings[fieldKey(event.data.field)];
-          if (!Object.keys(state.elements[event.data.elementId].mappings).length) delete state.elements[event.data.elementId].mappings;
+      case EventTypes.FieldSourceAdded:
+      case EventTypes.FieldSourceRemoved:
+      case EventTypes.FieldMappingCleared: {
+        const el = state.elements[event.data.elementId], key = fieldKey(event.data.field);
+        if (!el) break;
+        const m = (el.mappings ||= {})[key] ||= Object.defineProperty({ field: event.data.field, from: null, sources: [] }, 'legacy', { value: null, writable: true, enumerable: false });
+        const src = event.data.from && { elementId: event.data.from.elementId, field: event.data.from.field ?? null };
+        const same = (a, b) => a.elementId === b.elementId && fieldKey(a.field ?? '') === fieldKey(b.field ?? '');
+        if (event.type === EventTypes.FieldMapped) {
+          m.sources = m.sources.filter(x => x !== m.legacy);
+          m.legacy = src;
+          m.field = event.data.field;
+          m.sources.unshift(src);
+        } else if (event.type === EventTypes.FieldMappingCleared) {
+          m.sources = m.sources.filter(x => x !== m.legacy);
+          m.legacy = null;
+        } else if (event.type === EventTypes.FieldSourceAdded) {
+          if (!m.sources.some(x => same(x, src))) m.sources.push(src);
+        } else {
+          m.sources = m.sources.filter(x => !same(x, src));
+        }
+        m.from = m.sources[0] || null;
+        if (!m.sources.length) {
+          delete el.mappings[key];
+          if (!Object.keys(el.mappings).length) delete el.mappings;
         }
         break;
+      }
 
       // A read model's field the caller asks with (keyed by its name, matched loosely): { field }
       case EventTypes.FieldMarkedQuery:
@@ -780,6 +802,7 @@ export function projectState(eventStream = getEventStream()) {
         break;
     }
     projectPages(state, event); // feature: pages
+    projectCloneSlice(state, event); // feature: clone-slice
   }
 
   // A sticky whose slices were all deleted stays in the book but sits in no slice: its links are not drawn,

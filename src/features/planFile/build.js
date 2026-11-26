@@ -12,7 +12,7 @@ import * as c from '../board/command.js';
 import * as sc from '../scenarios/command.js';
 import * as ol from '../outline/command.js';
 import { parseFieldList } from '../fieldMapping/fieldText.js';
-import { mapField } from '../fieldMapping/command.js';
+import { addFieldSource } from '../fieldMapping/command.js';
 import { propOf } from '../fieldMapping/mappings.js';
 import { parseRows } from '../viewQueries/query.js';
 import { fieldKey, parsePropertyText } from '../../core/constants.js';
@@ -157,7 +157,7 @@ export function addFields(sliceId, fields) {
   mappings.forEach(m => {
     const source = m.from === null ? eventOf(m.sticky) : sourceOf(m.sticky, m.from);
     ol.sliceCarriers(sliceId, state()).filter(el => el.id !== source.id && propOf(el, m.field)).forEach(el => {
-      const why = mapField({ elementId: el.id, field: m.field, from: { elementId: source.id, field: m.from } });
+      const why = addFieldSource({ elementId: el.id, field: m.field, from: { elementId: source.id, field: m.from } });
       if (why && !/^already comes from/.test(why)) throw new Error(why);
     });
   });

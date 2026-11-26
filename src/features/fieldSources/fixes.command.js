@@ -22,7 +22,7 @@ import { addToSlice, addProcessorReadModel } from '../board/command.js';
 import { processorTriggers } from '../board/processorReads.js';
 import { addProperty, removeProperty, updateProperty } from '../properties/command.js';
 import { markFieldSetBySystem } from './command.js';
-import { mapField, mapFromWholeEvent, clearFieldMapping } from '../fieldMapping/command.js';
+import { mapField, mapFromWholeEvent, clearFieldMapping, addFieldSource, removeFieldSource } from '../fieldMapping/command.js';
 import { tidyOf } from './tidy.js';
 import { setScreenSketch } from '../pad/screenSketch.command.js';
 import { relabelButton } from '../pad/padScreen.rules.js';
@@ -72,6 +72,19 @@ const plans = {
     // "@event": from the whole event; "@event+items": and a list gets the event's fields as item fields
     if (/^@event/.test(fromField)) return { touches: slicesOf(state, elementId), go: () => mapFromWholeEvent({ elementId, field, from: fromId, items: fromField === '@event+items', state }) };
     return { touches: slicesOf(state, elementId), go: () => mapField({ elementId, field, from: { elementId: fromId, field: fromField }, state }) };
+  },
+
+  // One more source of a field, or exactly one taken away (fromField "@event": the whole event)
+  addsource(state, elementId, field, fromId, fromField) {
+    if (!state.elements[elementId]) return 'No such sticky';
+    const from = { elementId: fromId, field: fromField === '@event' ? null : fromField };
+    return { touches: slicesOf(state, elementId), go: () => addFieldSource({ elementId, field, from, state }) };
+  },
+
+  dropsource(state, elementId, field, fromId, fromField) {
+    if (!state.elements[elementId]) return 'No such sticky';
+    const from = { elementId: fromId, field: fromField === '@event' ? null : fromField };
+    return { touches: slicesOf(state, elementId), go: () => removeFieldSource({ elementId, field, from, state }) };
   },
 
   unmap(state, elementId, field) {
