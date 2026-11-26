@@ -15,6 +15,12 @@ import { addToSlice } from '../board/command.js';
 import { stickyNamed } from '../planFile/build.js';
 import { parseScreen } from './padScreen.rules.js';
 import { mapScreenFields } from './screenMappings.command.js';
+import { placeFromSketch } from '../pages/pages.command.js'; // feature: pages
+
+// What other features do once a screen has a new sketch: (elementId, the sketch before, the sketch now) → why it was refused, or null
+const afterSketchSet = [
+  placeFromSketch, // feature: pages
+];
 
 const lower = s => String(s ?? '').trim().toLowerCase();
 
@@ -23,7 +29,9 @@ export function setScreenSketch(elementId, text) {
   if (el?.type !== 'screen') return 'Only a screen has a sketch';
   if (!canEditCurrent()) return 'Read only: check the book out to sketch a screen';
   const next = String(text ?? '');
-  return (el.sketch || '') === next || appendEvent(EventTypes.ScreenSketchSet, { elementId, text: next }) ? null : 'Read only: check the book out to sketch a screen';
+  if ((el.sketch || '') === next) return null;
+  if (!appendEvent(EventTypes.ScreenSketchSet, { elementId, text: next })) return 'Read only: check the book out to sketch a screen';
+  return afterSketchSet.map(after => after(elementId, el.sketch || '', next)).find(Boolean) || null;
 }
 
 // screens: [{ name, text }]. -> why it was refused, or null

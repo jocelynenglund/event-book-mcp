@@ -13,6 +13,12 @@ import { isNeat } from '../../ui/settings.js';
 import { fieldGapMark, noSourceMark } from '../fieldSources/fieldGaps.parts.js';
 import { fieldMappingMark } from '../fieldMapping/fieldMapping.parts.js';
 import { screenWire } from '../pad/screenWire.parts.js';
+import { screenPageChips } from '../pages/pages.parts.js'; // feature: pages
+
+// What other features add to a sticky (card.extras: [{ kind, view }], from boardLaneStickies.read.js), each drawn from its own view
+const cardExtras = {
+  pageChips: screenPageChips, // feature: pages
+};
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -66,6 +72,7 @@ export function boardCard(card, ui = {}) {
       <span class="bd-card-title"><span class="bd-card-more" role="button" aria-label="Edit ${escapeHtml(card.name)}" data-action="element" data-el="${card.elementId}" data-slice="${card.sliceId}">⋮</span><span class="bd-card-name">${escapeHtml(card.name)}</span>${card.places ? `<span class="bd-card-places" role="button" data-action="places" data-el="${card.elementId}" data-slice="${card.sliceId}" aria-label="In ${card.places} slices: show where" title="In ${card.places} slices">🔗 ${card.places}</span>` : ''}</span>
       ${card.to ? `<span class="bd-card-to">→ ${escapeHtml(card.to)}</span>` : ''}
       ${card.screen ? screenWire(card.screen) : ''}
+      ${(card.extras || []).map(x => cardExtras[x.kind](x.view)).join('')}
       ${props}
       ${updates}
     </button>`;

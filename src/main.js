@@ -8,7 +8,8 @@ import { leaveOldAddress, tidyMovedMark, moveIn } from './core/moveHouse.js';
 import { formatBytes } from './ui/bytes.js';
 import { initSheets, showSheet, hideAllSheets } from './ui/sheets.js';
 import { initReferences } from './features/references/sheet.js';
-import { render as renderFeed, toggleDetailsView, setOverviewTab, showSliceOnBoard, getView, showLibrary, showBoard, showOutline, showPad, showStart, showPreface, startReading, showSlicePage, leaveSlicePage, sliceOpenedFrom, wasInLibrary, isNewVisit, onRender } from './ui/feed.js';
+import { render as renderFeed, toggleDetailsView, setOverviewTab, showSliceOnBoard, getView, showLibrary, showBoard, showOutline, showPad, showStart, showPreface, startReading, showSlicePage, leaveSlicePage, sliceOpenedFrom, wasInLibrary, isNewVisit, onRender, registerView, showView } from './ui/feed.js';
+import { pagesView } from './features/pages/view.js'; // feature: pages
 
 // Features
 import { initBoard, openChapterPicker, toggleFabMenu, openUpdatedByPicker, openProcessorInputs, openCellSheet } from './features/board/sheets.js';
@@ -16,6 +17,7 @@ import { openEventsSheet } from './features/board/sheets/events.js';
 import { initDetails } from './features/details/view.js';
 import { initOutline } from './features/outline/view.js';
 import { initPad } from './features/pad/view.js';
+import { initUndoShortcut } from './features/undo/shortcut.js';
 import { initLiterature } from './features/literature/view.js';
 import { initWaiting } from './features/literature/waiting.js';
 import { initVotes } from './features/literature/votesView.js';
@@ -414,6 +416,8 @@ async function init() {
   initDetails();
   initOutline();
   initPad();
+  registerView(pagesView); // feature: pages
+  initUndoShortcut();
   initLiterature();
   initVotes();
   initWaiting();
@@ -427,7 +431,7 @@ async function init() {
   document.getElementById('libraryBtn').addEventListener('click', () => getView() === 'slice' ? leaveSlicePage() : showLibrary());
   document.getElementById('detailsBtn').addEventListener('click', e => {
     const b = e.target.closest('[data-view-switch]');
-    if (b) b.dataset.viewSwitch === 'board' ? showBoard() : b.dataset.viewSwitch === 'pad' ? showPad() : showOutline();
+    if (b) b.dataset.viewSwitch === 'board' ? showBoard() : b.dataset.viewSwitch === 'pad' ? showPad() : b.dataset.viewSwitch === 'outline' ? showOutline() : showView(b.dataset.viewSwitch);
   });
   document.querySelectorAll('.ov-tab').forEach(b => b.addEventListener('click', () => setOverviewTab(b.dataset.tab)));
   initShareImage();

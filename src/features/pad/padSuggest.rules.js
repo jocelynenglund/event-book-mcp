@@ -12,6 +12,13 @@
 // Nothing is ever overwritten but the word typed: a suggestion replaces [from, to) and nothing else.
 // ===========================================
 
+import { pageContext } from '../pages/pagesSuggest.js'; // feature: pages
+
+// Other features' contexts on a screen note's line: (the line up to the caret) → { kind, skip } (what is being named, after `skip` characters) or null
+export const screenContexts = [
+  pageContext, // feature: pages
+];
+
 const SHORT_KEYS = { g: 'given', w: 'when', t: 'then', q: 'query', a: 'and', '&': 'and' };
 const LONG_KEY = /^(given|when|then|and)(?::\s*|\s+)/i;                 // the keyword is done: a colon or a space follows it
 const SHORT_KEY = /^([gwtqa&])\s*:\s*/i;
@@ -92,6 +99,8 @@ export function contextAt(text, caret, colour, { viewFrame = false } = {}) {
     return null;
   }
   if (colour === 'screen') {
+    const other = screenContexts.map(ctx => ctx(before)).find(Boolean);
+    if (other) return at(out(other.kind, other.skip));
     const bracket = openBracket(before);
     if (!bracket) return null;
     const skip = bracket.at + 1, inside = before.slice(skip);

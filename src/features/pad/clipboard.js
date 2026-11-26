@@ -35,7 +35,7 @@ const selected = () => { const { noteIds, frameIds } = host.selection(); return 
 // Everything a copy or cut takes: the selected notes, and the notes inside the selected frames
 function takenIds(selection) {
   const pad = host.state().pad, noteIds = new Set(selection.noteIds.filter(id => pad.notes[id]));
-  selection.frameIds.map(id => pad.frames[id]).filter(Boolean).forEach(f => notesInFrame(pad, f).forEach(n => noteIds.add(n.id)));
+  selection.frameIds.map(id => pad.frames[id]).filter(Boolean).forEach(f => notesInFrame(pad, f, true).forEach(n => noteIds.add(n.id)));
   return { noteIds: [...noteIds], frameIds: selection.frameIds.filter(id => pad.frames[id]) };
 }
 

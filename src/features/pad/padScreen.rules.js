@@ -13,6 +13,16 @@
 // ===========================================
 
 import { titleCase, camelCase } from './padNote.rules.js';
+import { readOn, pagesNote } from '../pages/screenOn.rules.js'; // feature: pages
+
+// Other features' readers of a line (true when it took the line: it is not a part of the window; it leaves what it found on `found`, which parseScreen adds)
+export const screenLineReaders = [
+  readOn, // feature: pages
+];
+// ...and what they add to the drawing of a window: (screen, focus) → fields of the wireframe, `notes: [{ kind, text }]` being small lines under the window
+export const wireframeExtras = [
+  pagesNote, // feature: pages
+];
 
 const PART = /\{([^{}]*)\}|\[([^[\]]*)\]|\(([^()]*)\)/g;
 const lines = text => String(text ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -46,8 +56,8 @@ function partsOf(line) {
 // -> { title: as typed, name: Title Case, lines: [{ parts }], readModels: [{ name, fields, whole }], inputs: [{ field, label, line }], buttons: [{ label, line }] }
 // (line: the index in `lines` the part is on; a read model, input or button written twice is one)
 export function parseScreen(text) {
-  const [first = '', ...rest] = lines(text);
-  const out = { title: first, name: titleCase(first), lines: rest.map(l => ({ parts: partsOf(l) })), readModels: [], inputs: [], buttons: [] };
+  const found = {}, [first = '', ...all] = lines(text), rest = all.filter(l => !screenLineReaders.some(read => read(l, found)));
+  const out = { title: first, name: titleCase(first), lines: rest.map(l => ({ parts: partsOf(l) })), readModels: [], inputs: [], buttons: [], ...found };
   out.lines.forEach(({ parts }, line) => parts.forEach(p => {
     if (p.type === 'readModel') {
       const have = out.readModels.find(r => same(r.name, p.name));
@@ -101,5 +111,5 @@ export function wireframe(text, focus = null) {
     if (views.length) return p.type === 'input' || p.type === 'button' || (p.type === 'readModel' && !views.some(v => same(v, p.name)));
     return false;
   };
-  return { title: screen.title, empty: !screen.title && !screen.lines.length, lines: screen.lines.map(l => l.parts.map(p => ({ ...p, dim: dimmed(p) }))) };
+  return { title: screen.title, empty: !screen.title && !screen.lines.length, lines: screen.lines.map(l => l.parts.map(p => ({ ...p, dim: dimmed(p) }))), ...wireframeExtras.reduce((all, extra) => ({ ...all, ...extra(screen, focus) }), {}) };
 }

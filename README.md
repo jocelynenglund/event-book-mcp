@@ -32,12 +32,12 @@ the live view"*.
 | | Needs |
 |---|---|
 | Modelling: `new_model`, `add_steps`, `add_scenarios`, `outline`, `edit_slice`, `arrange_chapters` (order and parts), `fix_gaps` / `apply_fix` (information completeness), `map_field` / `trace_field` (where a field comes from, and how it travels), renames, moves, comments. Every slice has a short stable ref (`#k3f9q`, shown by `outline`) that every tool accepts instead of its S-number: S-numbers shift when slices are inserted, so replies list what shifted and an S-number the book has moved since you last looked is refused | Nothing: all on your machine |
-| Sketching: `new_model {sketch: true}`, `pad_outline`, `pad_add_notes`, `pad_frame`, `pad_link_copy`, `pad_move`, `pad_remove`, `pad_rename_frame`, `pad_make_chapter`, `pad_update_chapter`, `live_view {view: "pad"}`: fill the Pad with frames of notes, look at it live, then make the chapter | Nothing: local, like modelling |
+| Sketching: `new_model {sketch: true}`, `pad_outline`, `pad_add_notes`, `pad_frame`, `pad_link_copy`, `pad_move`, `pad_remove`, `pad_rename_frame`, `pad_make_chapter`, `pad_update_chapter`, `live_view {view: "pad"}`: fill the Pad with frames of notes (and a blue chapter arrow, `kind: "arrow"`, as a heading over a run of frames, for the eye only), look at it live, then make the chapter | Nothing: local, like modelling |
 | `update_mcp`: pull the newest version of this server (a fast-forward of your clone), then `/mcp` → reconnect. The first reply of a session says when an update is waiting | Needs git and network access to the repo (not private; just git) |
 | `live_view`: Event Book on `http://localhost:7979/?live`, following the model as it's built | Nothing: served from this repo |
 | `export_file`, then ☰ → Import in [Event Book](https://eventbook.itsybit.se/) | Nothing: Event Book keeps books in your browser |
 | `import_file`: bring in a test export, a `docs/slices.json` plan, or a plan file (`eventbook-plan/1`, below) | Nothing |
-| `share_link`: a link that opens a copy of the model, on any device | Uploads the model (without history) to Event Book's share service |
+| `share_link {name}`: a link that opens a copy of the model, on any device, called `name` (else the book's name and the day); `list_shares`: your links, newest first; `remove_share {link}`: takes one away (opening it then says it was removed) | Uploads the model (without history) to Event Book's share service. A link made while not connected has a delete key, kept in `~/.eventpad-mcp` and used only to remove it |
 | `connect_library`, `keep_model`, editing a ☁ book, `press_queue`, `start_building`, `finish_building`, `retire_plan` (for ☁ plans; `map` pairs a renamed slice with its built name, `evidence` records why an unmatched slice is built, for the owner's "Retire anyway") | An Event Book account (invite only for now) |
 | `generate_specs {repo, language: "js"}`: a failing Given/When/Then spec and a stub for each refined slice, in your repo; the plan remembers each slice's spec file, so the built code pairs with it exactly, whatever the names | `npm install --save-dev itsybit-gwt` there ([itsybit-gwt](https://www.npmjs.com/package/itsybit-gwt), MIT), then `node --test` |
 
@@ -49,6 +49,16 @@ and the plan file (`eventbook-plan/1`, schema at
 [plan.schema.json](https://eventbook.itsybit.se/plan.schema.json)). Open the file in Event Book with
 ☰ → Import, or give it to this server with `import_file`. The steps and scenarios are the same as
 `add_steps` and `add_scenarios` take.
+
+## Build books from your own tests
+
+A build book is a model Event Book makes from your Given/When/Then tests. In JavaScript,
+[itsybit-gwt](https://github.com/jocelynenglund/itsybit-gwt) writes the file for you (run your
+specs with `GWT_EXPORT=<dir>`). In any other language, write each test's Given, When and Then
+to a JSON file in the documented format. Then import it
+with ☰ → Import or `import_file`. The format is explained, with a complete example, in
+[eventbook.itsybit.se/llms.txt](https://eventbook.itsybit.se/llms.txt) and described by
+[build.schema.json](https://eventbook.itsybit.se/build.schema.json).
 
 ## Settings
 

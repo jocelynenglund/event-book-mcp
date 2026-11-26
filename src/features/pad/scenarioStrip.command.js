@@ -3,23 +3,25 @@
 // SC: Make Pad Scenario — the selected example notes (a row, read left to right: padStrip.rules.js) become one grey scenario note below them, inside
 // their frame when they are in one (the frame grows to hold it).
 // SC: Lay Out Pad Scenario — a scenario note's Given / When / Then drawn as a row of example notes below it, which become the selection.
-// Each is one batch, so one undo takes it all back. Both return { refused, ... }: refused says why nothing was done.
+// Make scenario can fold the example notes into the note it makes (foldStrip.command.js). Each is one batch, so one undo takes it all back. Both return { refused, ... }: refused says why nothing was done.
 // ===========================================
 
 import { projectState } from '../../core/projections.js';
 import { newId } from '../board/command.js';
-import { addNote, addNotes, changeFrame } from './command.js';
+import { addNote, addNotes, changeFrame, record } from './command.js';
+import { foldEvents } from './foldStrip.command.js';
 import { previewStrip, layOutOf, rowBelow } from './padStrip.rules.js';
 import { NOTE_SIZE, GROUP_MARGIN } from './sketch.js';
 
-// -> { refused, noteId }
-export function makeScenario({ noteIds = [], name = null, mustHave = false, noteId = newId('pn') }) {
+// fold: the example notes are folded into the new note (the Make scenario sheet ticks it); -> { refused, noteId }
+export function makeScenario({ noteIds = [], name = null, mustHave = false, noteId = newId('pn'), fold = false }) {
   const state = projectState(), strip = previewStrip(state, noteIds, { name: name || null, mustHave });
   if (!strip.ok) return { refused: strip.why, noteId: null };
   const refused = addNote({ noteId, x: strip.at.x, y: strip.at.y, colour: 'scenario', text: strip.text });
   if (refused) return { refused, noteId: null };
   const frame = strip.frameId && state.pad.frames[strip.frameId];
   if (frame) changeFrame(frame.id, { w: Math.max(frame.w, strip.at.x + NOTE_SIZE + GROUP_MARGIN - frame.x), h: Math.max(frame.h, strip.at.y + NOTE_SIZE + GROUP_MARGIN - frame.y) });
+  if (fold) record(foldEvents(projectState().pad, noteId, noteIds.filter(id => state.pad.notes[id])));
   return { refused: null, noteId };
 }
 

@@ -5,8 +5,10 @@
 import { getEventStream, EventTypes, storedEvents, readModelEvents } from './eventStore.js';
 import { byName, fieldKey } from './constants.js';
 import { isSliceEdit, editedSlices } from './sliceEdits.js';
+import { outlineGoalsProject } from '../features/outlineGoals/projection.js'; // feature: outline-goals
 import { editionOf } from '../features/editions/rules.js';
 import { padFold } from '../features/pad/sketch.js';
+import { projectPages } from '../features/pages/pages.projection.js'; // feature: pages
 import { chapterMoved, chaptersArranged, partStarted, partRenamed, partRemoved, chapterRemoved, layoutByName, layoutOnSnapshot } from '../features/arrange/arrangement.js';
 
 // Element ordering hierarchy (top to bottom)
@@ -121,6 +123,7 @@ export function projectState(eventStream = getEventStream()) {
   const everSliced = new Set();
 
   for (const event of eventStream) {
+    outlineGoalsProject(state, event); // feature: outline-goals
     // A change to the chapters or slices takes back the structure's approval (round one)
     if (state.structure?.approved && STRUCTURAL.has(event.type)) state.structure = { ...state.structure, approved: false, changed: true };
     // An edit to a refined slice makes it not refined (derived: no event is recorded for it)
@@ -398,8 +401,9 @@ export function projectState(eventStream = getEventStream()) {
       case EventTypes.ChapterMoved: chapterMoved(state, event.data); break;   // old books
 
       case EventTypes.ChaptersArranged: chaptersArranged(state, event.data); break;
-      case EventTypes.PadNoteAdded: case EventTypes.PadNoteMoved: case EventTypes.PadNoteEdited: case EventTypes.PadNoteRecoloured: case EventTypes.PadNoteRemoved: case EventTypes.PadNoteLinked: case EventTypes.PadNoteUnlinked:
+      case EventTypes.PadNoteAdded: case EventTypes.PadNoteMoved: case EventTypes.PadNoteEdited: case EventTypes.PadNoteRecoloured: case EventTypes.PadNoteRemoved: case EventTypes.PadNoteLinked: case EventTypes.PadNoteUnlinked: case EventTypes.PadNoteResized:
       case EventTypes.PadFrameAdded: case EventTypes.PadFrameChanged: case EventTypes.PadFrameRemoved: case EventTypes.PadFrameConverted:
+      case EventTypes.PadFrameShelved: case EventTypes.PadFrameUnshelved: case EventTypes.PadStripFolded: case EventTypes.PadStripUnfolded:
         padFold(state, event); break;
 
       case EventTypes.PartStarted: partStarted(state, event.data); break;
@@ -775,6 +779,7 @@ export function projectState(eventStream = getEventStream()) {
         }
         break;
     }
+    projectPages(state, event); // feature: pages
   }
 
   // A sticky whose slices were all deleted stays in the book but sits in no slice: its links are not drawn,

@@ -67,7 +67,13 @@ const { automationReads } = await import(new URL('features/board/processorReads.
 const arr = await import(new URL('features/arrange/command.js', src));
 const sc = await import(new URL('features/scenarios/command.js', src));
 const ol = await import(new URL('features/outline/command.js', src));
+const og = await import(new URL('features/outlineGoals/mcp.js', src)); // feature: outline-goals
 const cm = await import(new URL('features/comments/command.js', src));
+// What other features say beside a sticky in the outline: (sticky) → words or ''
+const outlineNotes = [
+  (await import(new URL('features/pages/pages.mcp.js', src))).outlineNote, // feature: pages
+];
+const noteOf = e => outlineNotes.map(note => note(e)).filter(Boolean).map(w => ` (${w})`).join('');
 const cmRead = await import(new URL('features/comments/read.js', src));
 const { kindOf } = await import(new URL('features/testImport/spec.js', src));
 const fromExport = await import(new URL('features/testImport/fromExport.js', src));
@@ -100,6 +106,7 @@ es.loadEventStream();
 const lib = await import('./library.mjs');
 const { padTools } = await import('./pad.mjs');
 const upd = await import('./update.mjs');
+const { createShares } = await import('./shares.mjs');   // feature: share-links
 // The version the server reports is the one literal in serverInfo below (scripts/pack-mcp.mjs and update_mcp read it from the file too)
 const SERVER_VERSION = fs.readFileSync(new URL(import.meta.url), 'utf8').match(/serverInfo: \{ name: 'eventpad', version: '([^']+)'/)?.[1] || '0.0.0';
 // The checkout this server runs from (EVENTPAD_MCP_CHECKOUT is for tests)
@@ -253,9 +260,10 @@ function literatureOutline(st, { chapter } = {}) {
 function outline({ chapter, scenarios = false } = {}) {
   const st = state();
   if (litr.isLiterature(st) && Object.keys(st.slices).length) return literatureOutline(st, { chapter });
-  if (!Object.keys(st.slices).length) return `${st.modelName || 'Untitled model'}${st.tags?.length ? ` [${st.tags.join(', ')}]` : ''}: no slices yet.`;
+  if (!Object.keys(st.slices).length) return [`${st.modelName || 'Untitled model'}${st.tags?.length ? ` [${st.tags.join(', ')}]` : ''}: no slices yet.`, ...og.outlineGoalsLines(st)].join('\n'); // feature: outline-goals
   const refs = new Map(sliceRefs(st).map(x => [x.slice.id, x.ref])), shorts = new Map(sliceRefs(st).map(x => [x.slice.id, x.short])), shown = [];
   const lines = [`${st.modelName || 'Untitled model'}${st.modelDescription ? ': ' + st.modelDescription : ''}${st.tags?.length ? ` [${st.tags.join(', ')}]` : ''}`];
+  lines.push(...og.outlineGoalsLines(st)); // feature: outline-goals
   if (ar.inRounds(st)) lines.push(ar.reviewRounds(st).text);
   pr.getBoardGroups(st).forEach(g => {
     if (chapter && g.chapter?.name.toLowerCase() !== chapter.toLowerCase()) return;
@@ -264,12 +272,13 @@ function outline({ chapter, scenarios = false } = {}) {
     const part = st.parts.find(p => p.firstChapter === g.chapter?.id);
     if (part) lines.push('', `# Part: ${part.name}`);
     lines.push('', `## ${g.chapter ? g.chapter.name : 'Not in a chapter'}${g.slices.length ? ` · ${pr.refinedLabel(refined, g.slices.length)}` : ''}`);
+    if (g.chapter) lines.push(...og.chapterGoalsLines(st, g.chapter.id)); // feature: outline-goals
     g.slices.forEach(s => {
       const els = s.elements.map(id => st.elements[id]).filter(Boolean);
       const of = t => els.filter(e => e.type === t);
       const kind = c.sliceActor(s, st) === 'processor' ? 'Auto' : kindLabel[s.type] || s.type;
       const parts = [
-        ...of('screen').map(e => `screen ${e.name}`), ...of('processor').map(e => `⚙ ${e.name}`),
+        ...of('screen').map(e => `screen ${e.name}${noteOf(e)}`), ...of('processor').map(e => `⚙ ${e.name}`),
         ...of('command').map(e => `cmd ${e.name}${props(e)}`),
         ...(s.type === 'SV' ? of('event').map(e => `evt ${e.name}${eventMark(e)}`) : []),
         ...of('readModel').map(e => `rm ${e.name}${e.list ? ' (list)' : ''}${props(e)}`),
@@ -348,7 +357,8 @@ const short = t => (t && t.length > 500 ? t.slice(0, 499).trimEnd() + '…' : t)
 // A book in the library opens as itself from this link (to read or check out): what she does
 // in it (Refined, comments) reaches the library. A share link is a copy that stays on their device.
 const bookLink = serverId => `${APP}?book=${encodeURIComponent(serverId)}`;
-async function shareLink() {
+const shares = createShares({ token: () => token(), shareApi: SHARE_API, app: APP, storage: localStorage });   // feature: share-links
+async function shareLink({ name } = {}) {
   const kept = links()[es.getCurrentModelId()];
   if (kept) return `${bookLink(kept.serverId)}\nIt's in the library: this link opens the book itself, so Refined ticks and comments reach the library.`;
   const events = es.getEventStream();
@@ -358,14 +368,13 @@ async function shareLink() {
   const json = JSON.stringify(packed);
   if (json.length > 900_000) packed = ['gz:' + zlib.gzipSync(json).toString('base64')];
   const res = await fetch(`${SHARE_API}/shares`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    // The share service keeps up to 500 characters of each: a longer one goes up shortened
-    body: JSON.stringify({ name: short(st.modelName), description: short(st.modelDescription), events: packed })
+    method: 'POST', headers: shares.headers({ 'Content-Type': 'application/json' }),   // feature: share-links
+    // The share service keeps up to 500 characters of each: a longer one goes up shortened. No name: it names the link after the book and the day
+    body: JSON.stringify({ name: short(name || ''), bookName: short(st.modelName), bookId: es.getCurrentModelId(), description: short(st.modelDescription), events: packed })
   });
   if (res.status === 413) throw new Error('Too big for a share link: use export_file');
   if (!res.ok) throw new Error(`Share failed (${res.status})${res.status === 400 ? `: ${(await res.json().catch(() => null))?.error || ''}` : ''}`);
-  const { id } = await res.json();
-  return `${APP}?m=${encodeURIComponent(id)}\nA copy: what the person does in it (Refined, comments) stays on their device. To hand over a plan, keep_model and send its book link instead.`;
+  return shares.created(await res.json());   // feature: share-links
 }
 
 function exportFile(file, history = false) {
@@ -1468,8 +1477,13 @@ const tools = [
   { name: 'live_view', description: 'A page on this machine that shows the open model live as you build it (opens it in the browser unless open:false). view: "pad" opens it on the Pad, to watch a sketch (pad_add_notes) grow.',
     inputSchema: { type: 'object', properties: { open: { type: 'boolean' }, view: { type: 'string', enum: ['pad'] } } },
     run: ({ open = true, view }) => `Live view: ${openLive(view, open)}` },
-  { name: 'share_link', description: 'For a book in the library: its book link (?book=), the book itself. Otherwise: upload a copy (as it stands, without history) and get a ?m= link, for someone outside the library; anything done in a copy stays on that device. To hand over a plan, use keep_model.',
-    inputSchema: { type: 'object', properties: {} }, run: shareLink },
+  { name: 'share_link', description: 'For a book in the library: its book link (?book=), the book itself. Otherwise: upload a copy (as it stands, without history) and get a ?m= link, for someone outside the library; anything done in a copy stays on that device. name: what to call the link (else the book\'s name and the date). To hand over a plan, use keep_model.',
+    inputSchema: { type: 'object', properties: { name: S } }, run: shareLink },
+  // feature: share-links
+  { name: 'list_shares', description: 'Your share links, newest first, with their names: the copies made from your account (connect_library) and the ones made here without it.',
+    inputSchema: { type: 'object', properties: {} }, run: () => shares.list() },
+  { name: 'remove_share', description: 'Remove a share link (a ?m= link or its id): opening it then says it was removed by the person who shared it. Only the one who shared it can.',
+    inputSchema: { type: 'object', properties: { link: S, id: S } }, run: args => shares.remove(args) },
   { name: 'export_file', description: 'Save the open model as a file to import in Event Book (☰ → Import). Without history unless history:true.',
     inputSchema: { type: 'object', properties: { path: S, history: { type: 'boolean' } } },
     run: ({ path: p, history }) => `Saved ${exportFile(p, history)}` },
@@ -1491,7 +1505,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.5.0' },
+      serverInfo: { name: 'eventpad', version: '0.6.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

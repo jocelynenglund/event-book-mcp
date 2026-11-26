@@ -25,6 +25,7 @@ const FIRST_MODEL = 'default';
 const streamKey = id => id === FIRST_MODEL ? 'eventpad_events' : 'eventpad_events_' + id;
 
 // Event stream (source of truth) of the open model
+let previewing = false;   // a look at a shared copy (see previewEvents)
 let eventStream = [];
 let currentModelId = FIRST_MODEL;
 
@@ -256,11 +257,12 @@ export function replaceModelEvents(id, events) {
     localStorage.setItem(streamKey(id), JSON.stringify(events));
   }
   touch(id);
-  if (id === currentModelId) eventStream = [...events];
+  if (id === currentModelId && !previewing) eventStream = [...events];
 }
 
 // Load the open model (from memory, or from localStorage without IndexedDB)
 export function loadEventStream() {
+  previewing = false;   // loading a book from the shelves ends any look at a shared copy
   replayLimit = null;
   const index = readIndex();
   const saved = localStorage.getItem(CURRENT_KEY);
@@ -321,6 +323,20 @@ export function createModel(events = [], { id: givenId = null } = {}) {
   return id;
 }
 
+// A look at a book that isn't on this device (a share link, before you add it): its events stand in for the open
+// model's, read only, and nothing is saved. endPreview gives the open model back, as it was.
+export const isPreviewing = () => previewing;
+export function previewEvents(events) {
+  previewing = true;
+  replayLimit = null;
+  eventStream = [...events];
+}
+export function endPreview() {
+  if (!previewing) return;
+  previewing = false;
+  loadEventStream();
+}
+
 // How a model was started: 'outline' (a plotter's), 'pad' (a pantser's, sketching first) or 'board' (older books)
 export function setModelStartIn(id, where) {
   const index = readIndex();
@@ -368,7 +384,7 @@ export function withoutSaving(fn) {
 }
 
 export function saveEventStream() {
-  if (holdSave) return;
+  if (holdSave || previewing) return;
   if (db) {
     streams.set(currentModelId, eventStream);
     queueWrite(currentModelId);
@@ -409,10 +425,12 @@ export const isFrozenCurrent = () => isFrozen(eventStream);
 // checked out here, not that it be a draft
 // A build book is never checked out (a plan starts from it), so its guard (true) lets arranging through
 export function canArrangeCurrent() {
+  if (previewing) return false;   // a look at a shared copy (linkLoading/shareBrowse): read only
   const g = typeGuard(currentModelId, EventTypes.ChaptersArranged);
   return g === true || (g !== false && (!editGuard || editGuard(currentModelId)));
 }
 export function canEditCurrent() {
+  if (previewing) return false;   // a look at a shared copy (linkLoading/shareBrowse): read only
   if (typeGuard(currentModelId, null) === false) return false;
   return (!editGuard || editGuard(currentModelId)) && !isFrozen(eventStream);
 }
@@ -429,6 +447,7 @@ function typeGuard(id, type) {
   return null;
 }
 
+let lastPreviewBlocked = 0;
 let lastReviewBlocked = 0;
 function reviewBlocked() {
   if (Date.now() - lastReviewBlocked < 1500) return;
@@ -459,6 +478,10 @@ const ON_PUBLISHED = new Set([EventTypes.NextDraftStarted, EventTypes.UsageImpor
   EventTypes.ChaptersArranged, EventTypes.PartStarted, EventTypes.PartRenamed, EventTypes.PartRemoved]);
 
 export function appendEvent(type, data) {
+  if (previewing) {   // a look at a shared book: nothing is written to it (not even a comment), and it says so
+    if (Date.now() - lastPreviewBlocked > 1500) { lastPreviewBlocked = Date.now(); import('../ui/toast.js').then(t => t.showToast('Add it to your bookshelves to edit')).catch(() => {}); }
+    return null;
+  }
   // A comment is talk, not a change: it goes onto a read-only or published book too
   const allowed = typeGuard(currentModelId, type);
   if (allowed === false) { reviewBlocked(); return null; }

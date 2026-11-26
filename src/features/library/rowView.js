@@ -93,7 +93,7 @@ export function librarySpine(book, ui = {}) {
   const loan = book.loan ? ` data-loan="${book.loan}"` : '';
   const mark = `data-component="Library spine" data-key="${book.id}"`;
   const label = escapeHtml(book.title), editionLabel = escapeHtml(book.edition.text);
-  const hover = `title="${label} · ${editionLabel}"`;
+  const hover = `title="${label} · ${escapeHtml(book.size?.text ?? '')}${book.size ? ' · ' : ''}${editionLabel}"`;
   const kind = book.published ? 'cloth' : 'kraft';
   const footSpan = `<span class="ed-foot" data-sync-shelf="${book.id}">${foot}</span>`;
   if (book.layout === 'propped') {
@@ -123,14 +123,14 @@ export function librarySpine(book, ui = {}) {
     ${detailsButton(book)}
     </span>`;
   }
-  const fit = (ui.fit || fitSpine)(book.title, 36, book.height - 84, 17);
+  const fit = (ui.fit || fitSpine)(book.title, (book.thickness ?? 49) - 13, book.height - 84, 17, true);
   return `
     <span class="ed-book" ${mark} style="--w:${fit.width + 13}px">
     <button class="ed-spine ${kind}"${loan} data-library-action="open" data-model="${book.id}" ${hover}
       style="--h:${book.height}px; --cloth:${book.cloth}" aria-label="${label}, ${editionLabel}">
       <span class="ed-pg" aria-hidden="true"></span>
       ${sheetsOf(book)}
-      <span class="ed-title" style="font-size:${fit.size}px">${label}</span>
+      <span class="ed-title" style="font-size:${fit.size}px">${fit.cut ? escapeHtml(fit.text) : label}</span>
       <span class="ed-m" aria-hidden="true">${spineMeta(book)}</span>
       ${planBuildProgressLine(book.progress)}
       ${footSpan}

@@ -9,19 +9,19 @@
 import { appendEvent, EventTypes, canEditCurrent } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import { newId } from '../board/command.js';
-import { COLOURS, FRAME_MIN, notesInFrame, frameAround, originalId, placesOf } from './sketch.js';
+import { COLOURS, FRAME_MIN, ARROW_WIDTH, arrowWidth, notesInFrame, frameAround, originalId, placesOf } from './sketch.js';
 
-const READ_ONLY = 'Read only: check the book out to sketch on the Pad';
+export const READ_ONLY = 'Read only: check the book out to sketch on the Pad';
 const pad = () => projectState().pad;
 const round = v => Math.round(Number(v) || 0);
 
 // Records each [type, data] in turn; a refused write (the book can not be changed here) says why
-const record = events => (events.every(([type, data]) => appendEvent(type, data)) ? null : READ_ONLY);
+export const record = events => (events.every(([type, data]) => appendEvent(type, data)) ? null : READ_ONLY);
 
-const BAD_COLOUR = 'Notes are blue, orange, green, red, white, scenario, screen or automation';
+const BAD_COLOUR = 'Notes are blue, orange, green, red, white, scenario, screen, automation or arrow';
 const goodColour = ({ colour = 'blue' }) => COLOURS.includes(colour);
-const noteAdded = ({ noteId = newId('pn'), x, y, colour = 'blue', text = '' }) =>
-  [EventTypes.PadNoteAdded, { noteId, x: round(x), y: round(y), colour, text: String(text).replace(/\r\n?/g, '\n') }];
+const noteAdded = ({ noteId = newId('pn'), x, y, colour = 'blue', text = '', w }) =>
+  [EventTypes.PadNoteAdded, { noteId, x: round(x), y: round(y), colour, text: String(text).replace(/\r\n?/g, '\n'), ...(colour === 'arrow' ? { w: arrowWidth(w || ARROW_WIDTH) } : {}) }];
 
 export function addNote(note) {
   if (!canEditCurrent()) return READ_ONLY;
@@ -49,6 +49,13 @@ export function moveNotes(moves) {
   const { notes } = pad();
   return record(moves.filter(m => notes[m.noteId] && (notes[m.noteId].x !== round(m.x) || notes[m.noteId].y !== round(m.y)))
     .map(m => [EventTypes.PadNoteMoved, { noteId: m.noteId, x: round(m.x), y: round(m.y) }]));
+}
+
+// A chapter arrow's width (its head dragged); only an arrow has one, and the same width changes nothing
+export function resizeNote(noteId, w) {
+  if (!canEditCurrent()) return READ_ONLY;
+  const note = pad().notes[noteId];
+  return note?.colour === 'arrow' && note.w !== arrowWidth(w) ? record([[EventTypes.PadNoteResized, { noteId: originalId(pad(), noteId), w: arrowWidth(w) }]]) : null;
 }
 
 export function editNote(noteId, text) {
@@ -126,7 +133,7 @@ export function dragBy({ noteIds = [], frameIds = [] }, dx, dy) {
   const sketch = pad();
   const frames = frameIds.map(id => sketch.frames[id]).filter(Boolean);
   const ids = new Set(noteIds.filter(id => sketch.notes[id]));
-  frames.forEach(f => notesInFrame(sketch, f).forEach(n => ids.add(n.id)));
+  frames.forEach(f => notesInFrame(sketch, f, true).forEach(n => ids.add(n.id)));
   const moves = [...ids].map(id => ({ noteId: id, x: sketch.notes[id].x + dx, y: sketch.notes[id].y + dy }));
   return record([
     ...frames.filter(f => dx || dy).map(f => [EventTypes.PadFrameChanged, { frameId: f.id, x: round(f.x + dx), y: round(f.y + dy) }]),

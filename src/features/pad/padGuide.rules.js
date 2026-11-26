@@ -52,6 +52,11 @@ export const KINDS = [
     colour: 'automation', name: 'Automation', purpose: 'A policy: it reads a view, then triggers a command or translates into an event of its own. A frame with one is an automation slice.',
     format: ['First line: its name', 'reads Reminders Due: the view it reads (required)', '→ Send Reminder: the command it triggers, or the event it translates into (-> works too)'],
     example: 'Send reminder\nreads Reminders Due\n→ Send Reminder'
+  },
+  {
+    colour: 'arrow', name: 'Chapter arrow', purpose: 'A heading over a run of slices, as in classic event modeling: for the eye only. Make chapter ignores it, and so does everything else that reads the Pad.',
+    format: ['One line: the chapter\'s heading', 'Drag the handle at its head to make it longer or shorter'],
+    example: 'Ordering'
   }
 ];
 

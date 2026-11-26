@@ -15,6 +15,13 @@ const STICKY_TYPE = { command: 'command', view: 'readModel', event: 'event' };
 export const stickyTypeOf = role => STICKY_TYPE[role];
 export const lower = s => String(s ?? '').trim().toLowerCase();
 
+// The field lines a frame's step carries: the blue command's or green view's own note's fields, not those of the event notes around it
+// (the events keep theirs: eventFieldsOf). An automation frame keeps all its fields.
+export function ownFieldLines(lines) {
+  const main = lines.find(l => l.role === 'command' || l.role === 'view');
+  return lines.filter(l => l.role === 'field' && (!main || l.noteId === main.noteId));
+}
+
 // The notes inside the frame now, as the snapshot keeps them
 export const notesNow = (pad, frame) => Object.fromEntries(notesInFrame(pad, frame).map(n => [n.id, { colour: n.colour, text: n.text }]));
 
@@ -32,7 +39,7 @@ export function madeOf(state, frame, slice, sliceId, off) {
     noteId: l.noteId, role: l.role, name: l.name,
     elementId: board.find(el => el.type === STICKY_TYPE[l.role] && lower(el.name) === lower(l.name))?.id || null
   }));
-  const fields = [...new Map(lines.filter(l => l.role === 'field').map(l => [lower(l.name), l.name])).values()];
+  const fields = [...new Map(ownFieldLines(lines).map(l => [lower(l.name), l.name])).values()];
   const extras = lines.filter(l => l.role === 'hotspot' || l.role === 'note').map(l => ({ noteId: l.noteId, role: l.role, text: l.text }));
   const screens = lines.filter(l => l.role === 'screen').map(l => ({ noteId: l.noteId, name: l.name, text: l.screenText, implied: !!l.implied, elementId: board.find(el => el.type === 'screen' && lower(el.name) === lower(l.name))?.id || null }));
   return { notes: notesNow(state.pad, frame), stickies, fields, extras, screens, off: [...off] };

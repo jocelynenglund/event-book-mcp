@@ -37,7 +37,10 @@ function wrapTitle(title, size, length) {
 // A long title is set smaller, the way a publisher would; a very long one also
 // gets a slightly wider book, and only past 9px is it cut short with "…"
 const SPINE_LINE = 1.05;
-export function fitSpine(title, width, length, largest = 14) {
+// fixed: the width is the book's own (its slices'), so the title never widens it: it is set smaller,
+// wrapped into as many lines as the width holds, and cut short with "…" when even 9px won't fit
+export function fitSpine(title, width, length, largest = 14, fixed = false) {
+  if (fixed) return fitFixedSpine(title, width, length, largest);
   for (let size = largest; size >= 9; size--) {
     const lines = wrapTitle(title, size, length);
     const fits = lines.every(l => textWidth(l, size) <= length);
@@ -56,6 +59,23 @@ export function fitSpine(title, width, length, largest = 14) {
   }
   lines = lines.map(l => { while (l.length > 1 && textWidth(l, size) > length) l = l.slice(0, -2) + '…'; return l; });
   return { size, lines, width: Math.max(width, Math.min(76, Math.ceil(lines.length * size * SPINE_LINE + 10))) };
+}
+
+function fitFixedSpine(title, width, length, largest) {
+  const room = size => Math.max(1, Math.floor((width - 10) / (size * SPINE_LINE)));
+  for (let size = largest; size >= 9; size--) {
+    const lines = wrapTitle(title, size, length);
+    if (lines.length <= room(size) && lines.every(l => textWidth(l, size) <= length)) return { size, lines, width, text: lines.join(' '), cut: false };
+  }
+  const size = 9, max = room(size);
+  let lines = wrapTitle(title, size, length);
+  const cut = lines.length > max || lines.some(l => textWidth(l, size) > length);
+  if (lines.length > max) {
+    lines = lines.slice(0, max);
+    lines[max - 1] = lines[max - 1].trimEnd() + '…';
+  }
+  lines = lines.map(l => { while (l.length > 1 && textWidth(l, size) > length) l = l.slice(0, -2).trimEnd() + '…'; return l; });
+  return { size, lines, width, text: lines.join(' '), cut };
 }
 
 // One book: its size (in CSS pixels), cloth, a block per slice (up to 12), and its

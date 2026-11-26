@@ -10,6 +10,8 @@
 import * as es from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import * as c from '../board/command.js';
+import { addEventProperties } from '../outline/command.js';
+import { eventFieldsOf } from './makeChapter.command.js';
 import { addFields, addScenario, stickyNamed } from '../planFile/build.js';
 import { addHotspotComment } from '../comments/command.js';
 import { padMakeChapter } from './padMakeChapter.read.js';
@@ -43,6 +45,7 @@ export function updateChapter({ frameId }) {
     const lines = view.steps.filter(s => s.kind === 'description').map(s => s.text);
     if (lines.length) c.describeSlice(sliceId, [projectState().slices[sliceId].description, ...lines].filter(Boolean).join('\n'));
     const after = projectState(), off = frame.made.off, slice = padMakeChapter(after, { frameIds: [frameId], off }).slices[0];
+    if (slice.kind !== 'automation') addEventProperties(sliceId, eventFieldsOf(slice));   // a view frame's events keep the fields their notes say
     es.appendEvent(es.EventTypes.PadFrameConverted, { frameId, chapterId: frame.chapterId, sliceId, made: madeOf(after, after.pad.frames[frameId], slice, sliceId, off) });
     return { refused: null, changes: view.steps.length };
   } catch (e) { return refuse(e.message); }

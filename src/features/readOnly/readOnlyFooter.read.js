@@ -4,7 +4,7 @@
 // is checked out (or taken over, or taken back from an agent editing it); a book that can be changed here offers Edit.
 // ===========================================
 
-import { isFrozenCurrent, getEventStream } from '../../core/eventStore.js';
+import { isPreviewing, isFrozenCurrent, getEventStream } from '../../core/eventStore.js';
 import { isBuildBook } from '../buildVersions/rules.js';
 
 // readOnly: the book can't be changed here. modelId: the open book. elementId, sliceId: the sticky shown.
@@ -12,6 +12,8 @@ import { isBuildBook } from '../buildVersions/rules.js';
 // -> { note, button, attr + value: the button's action (data-<attr>="<value>"), data: its other data attributes }
 export function readOnlyFooter({ readOnly, modelId = '', elementId = '', sliceId = null, checkoutAction = null, agent = null }) {
   const model = { model: modelId || '' };
+  // A shared copy you are looking at (linkLoading/shareBrowse): add it to edit
+  if (isPreviewing()) return { note: 'Viewing a shared copy: read only', button: 'Add to my bookshelves', attr: 'data-shared-action', value: 'add', data: {} };
   if (!readOnly) return { note: '', button: 'Edit', attr: 'data-board-action', value: 'read-edit', data: { el: elementId, slice: sliceId || '' } };
   // A build: never checked out, a plan starts from it
   if (isBuildBook(getEventStream())) return { note: 'A build: read only', button: 'Start a plan from this build', attr: 'data-title-action', value: 'plan', data: model };

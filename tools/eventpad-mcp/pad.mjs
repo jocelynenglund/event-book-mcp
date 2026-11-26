@@ -11,15 +11,19 @@ const { padMakeChapter } = await import(new URL('features/pad/padMakeChapter.rea
 const { changedSince } = await import(new URL('features/pad/padMade.rules.js', src));
 const { titleCase } = await import(new URL('features/pad/padNote.rules.js', src));
 const { newId } = await import(new URL('features/board/command.js', src));
+// What other features add to the note formats the tools describe
+const formatNotes = [
+  (await import(new URL('features/pages/pages.mcp.js', src))).formatNote, // feature: pages
+];
 
 const { originalId } = sk;
-const { NOTE_SIZE, SCREEN_WIDTH, NOTE_GAP, GROUP_MARGIN, GROUP_HEAD, ROW_OF, COLOURS, notesInFrame, placesOf } = sk;
+const { NOTE_SIZE, SCREEN_WIDTH, ARROW_HEIGHT, NOTE_GAP, GROUP_MARGIN, GROUP_HEAD, ROW_OF, COLOURS, notesInFrame, placesOf } = sk;
 const STEP = NOTE_SIZE + NOTE_GAP, COLS = 6;   // a frame's notes sit in a grid of up to COLS a row
 const SCENARIO_WIDTH = 164;   // a scenario note is drawn a little narrower than a plain one
 const S = { type: 'string' };
 
 // What an agent calls a note, and the colour it is (a colour name works too).
-const COLOUR_OF = { command: 'blue', event: 'orange', view: 'green', hotspot: 'red', note: 'white', scenario: 'scenario', screen: 'screen', automation: 'automation' };
+const COLOUR_OF = { command: 'blue', event: 'orange', view: 'green', hotspot: 'red', note: 'white', scenario: 'scenario', screen: 'screen', automation: 'automation', arrow: 'arrow' };
 const KIND_OF = Object.fromEntries(Object.entries(COLOUR_OF).map(([k, c]) => [c, k]));
 const KINDS = Object.keys(COLOUR_OF).join(', ');
 // Reading order inside a frame: what the slice is (command, view, screen), then its events, then everything else; scenarios go below
@@ -56,6 +60,7 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
 
   // ---------- Placing ----------
   // A note's real width (a screen is a wider window, a scenario a little narrower); every note is NOTE_SIZE tall
+  const wOf = n => n.colour === 'arrow' ? n.w : widthOf(n.colour);   // an arrow is as wide as its note says
   const widthOf = colour => colour === 'screen' ? SCREEN_WIDTH : colour === 'scenario' ? SCENARIO_WIDTH : NOTE_SIZE;
   // How many grid cells (STEP wide) a note takes in a frame's rows, so a wide note never lies over its neighbour
   const spanOf = colour => Math.ceil((widthOf(colour) + NOTE_GAP) / STEP);
@@ -87,7 +92,7 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
   }
   // Everything on the Pad: where it ends (notes by their real width), to put new things beyond it
   function extent() {
-    const sk0 = sketch(), all = [...Object.values(sk0.frames).map(f => ({ x: f.x, y: f.y, r: f.x + f.w, b: f.y + f.h })), ...Object.values(sk0.notes).map(n => ({ x: n.x, y: n.y, r: n.x + widthOf(n.colour), b: n.y + NOTE_SIZE }))];
+    const sk0 = sketch(), all = [...Object.values(sk0.frames).map(f => ({ x: f.x, y: f.y, r: f.x + f.w, b: f.y + f.h })), ...Object.values(sk0.notes).map(n => ({ x: n.x, y: n.y, r: n.x + wOf(n), b: n.y + NOTE_SIZE }))];
     return all.length ? { x: Math.min(...all.map(a => a.x)), y: Math.min(...all.map(a => a.y)), r: Math.max(...all.map(a => a.r)), b: Math.max(...all.map(a => a.b)), empty: false } : { x: 0, y: 0, r: 0, b: 0, empty: true };
   }
   // A tidy grid under everything else (loose notes), ROW_OF a row
@@ -105,7 +110,7 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
     const push = (pick, edge, right) => {
       const sk0 = sketch(), own = new Set(notesInFrame(sk0, found).map(n => n.id));
       const others = Object.values(sk0.frames).filter(f => f.id !== found.id), inOthers = new Set(others.flatMap(f => notesInFrame(sk0, f).map(n => n.id)));
-      const frames = others.filter(f => pick(f.x, f.y, f.w, f.h, true)), notes = Object.values(sk0.notes).filter(n => !own.has(n.id) && !inOthers.has(n.id) && pick(n.x, n.y, widthOf(n.colour), NOTE_SIZE, false));
+      const frames = others.filter(f => pick(f.x, f.y, f.w, f.h, true)), notes = Object.values(sk0.notes).filter(n => !own.has(n.id) && !inOthers.has(n.id) && pick(n.x, n.y, wOf(n), NOTE_SIZE, false));
       const near = Math.min(...frames.map(edge), ...notes.map(edge));
       const need = (right ? newR : newB) + FRAME_GAP - near;
       if (Number.isFinite(near) && need > 0) done(pad.dragBy({ frameIds: frames.map(f => f.id), noteIds: notes.map(n => n.id) }, right ? need : 0, right ? 0 : need));
@@ -138,7 +143,7 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
   };
   const frameLines = (f, positions) => {
     const st = state(), chapter = f.chapterId ? st.chapters[f.chapterId]?.name : null;
-    const mark = f.chapterId ? `made into chapter "${chapter ?? f.chapterId}"${f.sliceId && sliceName(f.sliceId) ? ` (${sliceName(f.sliceId)})` : ''}${changedSince(sketch(), f) ? ', changed since (pad_update_chapter)' : ''}` : 'not made';
+    const mark = f.chapterId ? `made into chapter "${chapter ?? f.chapterId}"${f.sliceId && sliceName(f.sliceId) ? ` (${sliceName(f.sliceId)})` : ''}${changedSince(sketch(), f) ? ', changed since (pad_update_chapter)' : ''}${f.shelved ? ', shelved (not drawn on the Pad)' : ''}` : 'not made';
     return [`▭ ${f.name || '(unnamed)'}${positions ? ` @${f.x},${f.y} ${f.w}×${f.h} (x ${f.x}..${f.x + f.w})` : ''} — ${mark}`, ...notesInFrame(sketch(), f).flatMap(n => noteLines(n, positions, '   '))];
   };
 
@@ -190,7 +195,7 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
 
   // ---------- Tools ----------
   const sketchFirst = 'Sketch first: for a new feature, fill the Pad with notes and frames, let the person look and rearrange, then pad_make_chapter.';
-  const formats = ' Formats: command/view/event notes: first line the name, then "- field" lines. scenario: "★ name" (★ or * = must have), then Given … / When … / Then … (short forms G: W: T: Q: A:; "Then rejected: reason"). screen (white window): first line its name, then "{ Read model }" or "{ Read model: field, field }" (a read model it shows), "[ Input ]" (a field of the command), "( Button )" (sends a command, matched by name). automation (lilac): first line its name, "reads <view>", "→ <command or event>"; a frame with an automation and no command or view makes an automation slice.';
+  const formats = ' Formats: command/view/event notes: first line the name, then "- field" lines. scenario: "★ name" (★ or * = must have), then Given … / When … / Then … (short forms G: W: T: Q: A:; "Then rejected: reason"). screen (white window): first line its name, then "{ Read model }" or "{ Read model: field, field }" (a read model it shows), "[ Input ]" (a field of the command), "( Button )" (sends a command, matched by name). automation (lilac): first line its name, "reads <view>", "→ <command or event>"; a frame with an automation and no command or view makes an automation slice. arrow (a long blue chapter arrow): one line, the heading over a run of frames, for the eye only; it is placed above the frames and Make chapter, pad_outline warnings and completeness ignore it.' + formatNotes.join('');
   const noteSchema = { type: 'object', properties: { kind: { type: 'string', enum: Object.keys(COLOUR_OF) }, colour: { type: 'string', enum: COLOURS }, text: S, frame: S }, required: ['text'] };
 
   return [
@@ -208,7 +213,7 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
           const colour = n.colour || COLOUR_OF[n.kind];
           if (!colour || !COLOURS.includes(colour)) throw new Error(`Note ${i + 1}: kind is ${KINDS}${n.kind ? ` (not "${n.kind}")` : ''}`);
           if (!String(n.text ?? '').trim()) throw new Error(`Note ${i + 1} has no text`);
-          return { colour, text: String(n.text), noteId: newId('pn'), frame: n.frame ?? frame ?? null };
+          return { colour, text: String(n.text), noteId: newId('pn'), frame: colour === 'arrow' ? null : n.frame ?? frame ?? null };   // an arrow is a heading over frames, never in one
         });
         const names = [...new Set(items.filter(n => n.frame).map(n => n.frame))], touched = [];
         for (const name of names) {
@@ -218,10 +223,13 @@ export function padTools({ es, pr, state, fsrc, sliceRefs, notLiterature }) {
           done(pad.addNotes(mine.map(({ noteId, x, y, colour, text }) => ({ noteId, x, y, colour, text }))));
           touched.push(placed.frame);
         }
-        const loose = items.filter(n => !n.frame), grid = looseGrid(loose.length);
+        const arrows = items.filter(n => n.colour === 'arrow'), loose = items.filter(n => !n.frame && n.colour !== 'arrow'), grid = looseGrid(loose.length);
         loose.forEach((n, i) => Object.assign(n, grid[i]));
+        const top = extent();   // arrows go above everything, one on a row, left-aligned
+        arrows.forEach((n, i) => Object.assign(n, { x: top.x, y: (top.empty ? 0 : top.y) - (arrows.length - i) * (ARROW_HEIGHT + NOTE_GAP) - NOTE_GAP }));
+        if (arrows.length) done(pad.addNotes(arrows.map(({ noteId, x, y, colour, text }) => ({ noteId, x, y, colour, text }))));
         if (loose.length) done(pad.addNotes(loose.map(({ noteId, x, y, colour, text }) => ({ noteId, x, y, colour, text }))));
-        return [`Added ${plural(items.length, 'note', 'notes')}${touched.length ? ` to ${touched.map(id => `"${sketch().frames[id].name}"`).join(', ')}` : ' (loose)'}: ${items.map(n => `${firstLine(n.text)} (${n.noteId})`).join('; ')}`, framesOutline(touched)].filter(Boolean).join('\n');
+        return [`Added ${plural(items.length, 'note', 'notes')}${touched.length ? ` to ${touched.map(id => `"${sketch().frames[id].name}"`).join(', ')}` : arrows.length === items.length ? ' (above the frames)' : ' (loose)'}: ${items.map(n => `${firstLine(n.text)} (${n.noteId})`).join('; ')}`, framesOutline(touched)].filter(Boolean).join('\n');
       } },
     { name: 'pad_frame', edits: true,
       description: 'Put a frame (named) round notes already on the Pad (ids or first lines). The notes stay where they are.',

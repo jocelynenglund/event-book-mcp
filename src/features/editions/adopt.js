@@ -6,6 +6,7 @@
 // adoptBuiltSlice (editions/command.js) calls adoptBuiltContent and nothing else.
 // ===========================================
 
+import { carriedEvents } from '../../core/carriedEvents.js';
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
 import { projectState } from '../../core/projections.js';
 import { fieldKey } from '../../core/constants.js';
@@ -45,6 +46,7 @@ export function adoptBuiltContent(planSliceId, builtState, builtSliceId) {
       if (el.todo) appendEvent(T.ElementTodoSet, { elementId: id, todo: true });
       if (el.list) appendEvent(T.ElementListSet, { elementId: id, list: true });
       if (el.sketch) appendEvent(T.ScreenSketchSet, { elementId: id, text: el.sketch });
+      carriedEvents(el, id).forEach(e => appendEvent(e.type, e.data));
     }
     const have = new Set((same?.properties || []).map(p => p.name.toLowerCase()));
     (el.properties || []).filter(p => !have.has(p.name.toLowerCase())).forEach(p => {

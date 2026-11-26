@@ -20,11 +20,22 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;700&family=Courier+Prime:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="slices/whats-new/slice.css">
-  <!-- Opening a share link: hide the model you had open until the shared one arrives -->
-  <script>if (/[?&]m=/.test(location.search)) document.documentElement.classList.add('opening-link');
+  <!-- Opening a link (?m= a share, ?book= a library book): the loader below covers the screen from the first paint, so the model you had open never shows -->
+  <script>if (/[?&](m|book)=/.test(location.search)) document.documentElement.classList.add('opening-link');
     if (/[?&]debug\b/.test(location.search)) document.documentElement.classList.add('debug');</script>
 </head>
 <body>
+  <!-- Link loader (src/features/linkLoading): a little book turning its pages. Drawn here so it is there on the first paint, before any script. -->
+  <div class="link-loader" id="linkLoader" role="status" aria-live="polite">
+    <div class="ll-book" aria-hidden="true">
+      <span class="ll-left"></span>
+      <span class="ll-right"></span>
+      <span class="ll-page ll-p1"></span><span class="ll-page ll-p2"></span><span class="ll-page ll-p3"></span>
+      <span class="ll-ribbon"></span>
+    </div>
+    <div class="ll-text" data-component="Link loader" data-key="opening"><p class="ll-title">Opening a shared book…</p></div>
+  </div>
+  <script>if (/[?&]book=/.test(location.search)) document.querySelector('#linkLoader .ll-title').textContent = 'Opening a book from your library…';</script>
   <div class="header">
     <button class="hd-strip" id="headerStrip" aria-label="Show the header"><span class="hd-strip-title"></span><span class="hd-strip-icon" aria-hidden="true">⤡</span></button>
     <div class="header-title">
@@ -47,6 +58,7 @@
           </div>
           <button class="burger-item" onclick="window.EventPad.openExport(); window.EventPad.toggleBurger()">⬇ Export…</button>
           <button class="burger-item" onclick="document.getElementById('importFileInput').click(); window.EventPad.toggleBurger()">⬆ Import…</button>
+          <button class="burger-item" id="shareLinksItem">🔗 Share links</button><!-- feature: share-links -->
           <button class="burger-item" onclick="window.EventPad.openSettings(); window.EventPad.toggleBurger()">⚙ Settings…</button>
           <button class="burger-item" onclick="window.EventPad.showAbout(); window.EventPad.toggleBurger()">ⓘ About</button>
           <button class="burger-item" onclick="document.dispatchEvent(new Event('itsybit-feedback:open')); window.EventPad.toggleBurger()">💬 Send feedback</button>
@@ -268,6 +280,7 @@
       <div class="share-chips" id="shareChips"></div>
       </details>
       <button class="sheet-btn" id="shareGo">Share image</button>
+      <div id="shareLinkNameMount"></div><!-- feature: share-links: the Name field for a copy link -->
       <div class="share-secondary">
         <button class="share-small" id="shareLinkBtn">🔗 Copy link</button>
         <button class="share-small" id="shareDownload">⬇ Download</button>

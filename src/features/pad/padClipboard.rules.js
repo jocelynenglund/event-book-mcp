@@ -17,10 +17,10 @@ const byPlace = (a, b) => a.y - b.y || a.x - b.x;
 export function copyOf(pad, { noteIds = [], frameIds = [] }) {
   const frames = frameIds.map(id => pad.frames[id]).filter(Boolean);
   const chosen = new Map(noteIds.filter(id => pad.notes[id]).map(id => [id, pad.notes[id]]));
-  frames.forEach(f => notesInFrame(pad, f).forEach(n => chosen.set(n.id, n)));
+  frames.forEach(f => notesInFrame(pad, f, true).forEach(n => chosen.set(n.id, n)));
   if (!chosen.size && !frames.length) return null;
   return {
-    notes: [...chosen.values()].map(n => ({ x: n.x, y: n.y, colour: n.colour, text: n.text })).sort(byPlace),
+    notes: [...chosen.values()].map(n => ({ x: n.x, y: n.y, colour: n.colour, text: n.text, ...(n.colour === 'arrow' ? { w: n.w } : {}) })).sort(byPlace),
     frames: frames.map(f => ({ x: f.x, y: f.y, w: f.w, h: f.h, name: f.name })).sort(byPlace)
   };
 }
@@ -34,7 +34,7 @@ export function payloadOf(raw) {
     const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!p || !Array.isArray(p.notes) || !Array.isArray(p.frames)) return null;
     const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
-    const notes = p.notes.map(n => ({ x: num(n.x), y: num(n.y), colour: String(n.colour || 'blue'), text: String(n.text ?? '') }));
+    const notes = p.notes.map(n => ({ x: num(n.x), y: num(n.y), colour: String(n.colour || 'blue'), text: String(n.text ?? ''), ...(n.colour === 'arrow' && n.w ? { w: num(n.w) } : {}) }));
     const frames = p.frames.map(f => ({ x: num(f.x), y: num(f.y), w: num(f.w), h: num(f.h), name: String(f.name ?? '') }));
     return notes.length || frames.length ? { notes, frames } : null;
   } catch { return null; }
@@ -49,7 +49,7 @@ export function pastePlan(copy, { at = null, step = 1, ids }) {
   const dx = at ? Math.round(at.x) - left : PASTE_STEP * step, dy = at ? Math.round(at.y) - top : PASTE_STEP * step;
   return {
     frames: copy.frames.map(f => ({ frameId: ids.frame(), x: f.x + dx, y: f.y + dy, w: f.w, h: f.h, name: f.name })),
-    notes: copy.notes.map(n => ({ noteId: ids.note(), x: n.x + dx, y: n.y + dy, colour: n.colour, text: n.text }))
+    notes: copy.notes.map(n => ({ noteId: ids.note(), x: n.x + dx, y: n.y + dy, colour: n.colour, text: n.text, ...(n.w ? { w: n.w } : {}) }))
   };
 }
 

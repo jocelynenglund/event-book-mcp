@@ -5,7 +5,7 @@
 import { account, kept, isKept, shelfStatus, startSignIn, verifySignIn, signOut, listDevices, revokeDevice, createInvite,
   serverLibrary, keepOnServer, download, onSyncChange, onPulled, syncAll, serverIds,
   holderOf, agentDeviceName, checkOut, checkIn, takeOver, onEditBlocked, isBuildShelf, syncModel, saveFacts } from './client.js';
-import { getCurrentModelId, isFrozenCurrent, canEditCurrent, canArrangeCurrent, openModel } from '../../core/eventStore.js';
+import { getCurrentModelId, isPreviewing, isFrozenCurrent, canEditCurrent, canArrangeCurrent, openModel } from '../../core/eventStore.js';
 import { sectionHead, sectionBody } from '../library/folds.js';
 import { openBoardSheet } from '../board/sheets/shared.js';
 import { hideAllSheets } from '../../ui/sheets.js';
@@ -20,6 +20,8 @@ import { librarySignIn } from './librarySignIn.read.js';
 import { libraryAccountBar, saveChipButton } from './sync.parts.js';
 import { saveChip } from './saveChip.read.js';
 import { reviewOf } from '../review/client.js';
+import { drawLinkLoader, closeLinkLoader } from '../linkLoading/loader.js';
+import { linkProblem } from '../linkLoading/linkLoadingState.read.js';
 
 const APP_URL = 'https://eventbook.itsybit.se/';
 
@@ -142,7 +144,7 @@ function openBlocked(modelId) {
 export function updateCheckoutBanner() {
   let el = document.getElementById('syCheckout');
   const id = getCurrentModelId();
-  const show = account() && isKept(id) && !isBuildShelf(id) && !document.body.classList.contains('library-mode');
+  const show = account() && !isPreviewing() && isKept(id) && !isBuildShelf(id) && !document.body.classList.contains('library-mode');
   // A published edition is frozen, kept on the server or not
   if (!show) { el?.remove(); agentBanner(null, id); setReadOnly(!canEditCurrent() && !document.body.classList.contains('library-mode')); return; }
   if (!el) {
@@ -160,8 +162,9 @@ export function updateCheckoutBanner() {
   el.dataset.model = id;
   el.title = title;
   el.setAttribute('aria-label', title);
-  if (h && !h.you && isAgent(h)) el.innerHTML = `${itsybitMark({ size: 13 })} ${escapeHtml(label)}`;
-  else el.textContent = label;
+  // The icon, then the words (a phone shows the icon only; the words stay in aria-label)
+  if (h && !h.you && isAgent(h)) el.innerHTML = `${itsybitMark({ size: 13 })}<span class="sy-chip-text"> ${escapeHtml(label)}</span>`;
+  else { const [icon, ...words] = label.split(' '); el.innerHTML = `<span class="sy-chip-icon">${escapeHtml(icon)}</span><span class="sy-chip-text"> ${escapeHtml(words.join(' '))}</span>`; }
   agentBanner(h, id);
   // Not checked out here: taps only read (features/readOnly)
   setReadOnly(!h?.you || isFrozenCurrent(), action, h && !h.you && isAgent(h) ? agentName(h) : null);
@@ -419,11 +422,13 @@ export function initSyncView() {
 }
 
 async function openBookLink(serverId) {
-  if (!account()) { showToast('Sign in to open this book from your library'); openSignIn(); return; }
+  // The loader (index.html) has covered the screen since the first paint: it either gives way to the book or says why not
+  if (!account()) { drawLinkLoader({ kind: 'book', problem: linkProblem('book', { signedOut: true }) }); openSignIn(); return; }
   let id;
   try { id = await download(serverId); }
-  catch (e) { showToast(e.status === 404 || e.status === 403 ? 'That book isn’t in your library' : 'Couldn’t open that book: try again'); return; }
+  catch (e) { drawLinkLoader({ kind: 'book', problem: linkProblem('book', e) }); return; }
   hideAllSheets();
   openModel(id);
   window.EventPad.showStart();
+  closeLinkLoader();
 }
