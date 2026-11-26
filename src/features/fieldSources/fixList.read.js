@@ -4,7 +4,7 @@
 // each sticky whose fields are written as prose as one row ("Tidy fields…"). Fixed gaps are not there any more.
 // scope: { sliceId }, { chapterId } or { all: true } (the whole book, for an agent). readOnly: a book that can't be changed here lists the gaps and offers no fix.
 // { scope: 'slice' | 'chapter' | 'book', id, title, readOnly, total,
-//   groups: [{ sliceId, slice, rows: [{ elementId, sticky, field (null for prose), why, fixes: [{ id, kind, label }] }] }] }
+//   groups: [{ sliceId, chapterId (to unfold it on the way there), slice, rows: [{ elementId, sticky, field (null for prose), why, refs: [{ id, name }] (the other stickies the why names: a tap goes to them), fixes: [{ id, kind, label }] }] }] }
 // ===========================================
 
 import { fieldSources } from './rules.js';
@@ -20,10 +20,10 @@ export function fixList(state, { sliceId = null, chapterId = null, all = false }
   const offer = fixes => (readOnly ? [] : fixes);
   const groups = ids.map(id => {
     const rows = [
-      ...gaps.filter(g => g.sliceId === id).map(g => ({ elementId: g.elementId, sticky: g.sticky, field: g.field, why: g.why, fixes: offer(fixesOf(g, state)) })),
-      ...tidy.filter(t => t.sliceId === id).map(t => ({ elementId: t.elementId, sticky: t.sticky, field: null, why: `fields written as prose: ${quoted(t.fields)}`, fixes: offer([tidyFix(t)]) }))
+      ...gaps.filter(g => g.sliceId === id).map(g => ({ elementId: g.elementId, sticky: g.sticky, field: g.field, why: g.why, refs: (g.from || []).filter(f => g.why.includes(f.name)), fixes: offer(fixesOf(g, state)) })),
+      ...tidy.filter(t => t.sliceId === id).map(t => ({ elementId: t.elementId, sticky: t.sticky, field: null, why: `fields written as prose: ${quoted(t.fields)}`, refs: [], fixes: offer([tidyFix(t)]) }))
     ];
-    return { sliceId: id, slice: sliceTitle(state.slices[id], state), rows };
+    return { sliceId: id, chapterId: state.slices[id].chapterId || null, slice: sliceTitle(state.slices[id], state), rows };
   }).filter(g => g.rows.length);
   return {
     scope: all ? 'book' : sliceId ? 'slice' : 'chapter', id: all ? null : sliceId || chapterId,

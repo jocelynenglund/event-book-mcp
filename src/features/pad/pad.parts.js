@@ -50,7 +50,7 @@ export function padFrame(frame) {
         ${name}
         ${chip}
         ${frame.canUpdate ? `<button class="pad-frame-update" data-pad-action="update-chapter" data-frame="${escapeHtml(frame.frameId)}" title="Carry what changed in this sketch over to its slice">Update chapter</button>` : ''}
-        ${frame.canShelve ? `<button class="pad-frame-shelve" data-pad-action="shelve-frame" data-frame="${escapeHtml(frame.frameId)}" title="Put this frame and its notes on the shelf: the Pad stops drawing them (the chapter stays on the board)">Shelve</button>` : ''}
+        ${frame.canShelve ? `<button class="pad-frame-shelve" data-pad-action="shelve-chapter" data-chapter="${escapeHtml(frame.chapter.chapterId)}" title="Put the chapter ${escapeHtml(frame.chapter.name)} on the shelf: the Pad stops drawing its frames and notes (the chapter stays on the board)">Shelve</button>` : ''}
         ${frame.warning ? `<span class="pad-frame-warn">⚠ ${escapeHtml(frame.warning)}</span>` : ''}
         <span class="pad-frame-count">${plural(frame.noteCount, 'note', 'notes')}</span>
       </div>
@@ -216,7 +216,7 @@ export function padMakeChapter(view) {
       ${view.madeTwice.map(w => `<div class="pad-make-warn" role="alert">⚠ ${escapeHtml(w.event)} is also made by ${w.others.map(escapeHtml).join(', ')} (one command makes an event)</div>`).join('')}
       ${view.slices.map(slice).join('')}
       <label class="pad-scn-must pad-make-shelve"><input type="checkbox" data-pad-make="shelve" ${view.shelve ? 'checked' : ''}> Put it on the shelf</label>
-      <div class="pad-make-sub">The frames wait on the shelf under the Pad, so it draws less: tap one there to bring it back</div>
+      <div class="pad-make-sub">The frames wait on the shelf under the Pad, so it draws less: tap the chapter's chip there to bring them back</div>
       <div class="pad-make-actions">
         <button class="sheet-btn" data-pad-action="make-cancel">Cancel</button>
         <button class="sheet-btn primary" data-pad-action="make-go" ${view.canMake ? '' : 'disabled'}>Make chapter</button>
@@ -268,14 +268,14 @@ export function padScenarioStrip(view) {
     </div>`;
 }
 
-// The shelf along the bottom of the Pad: a chip for each shelved frame (a tap puts it back) and "Shelve all made (N)" while made frames are still on the canvas.
+// The shelf along the bottom of the Pad: a chip for each shelved chapter (a tap puts its frames back) and "Shelve all chapters (N)" while made frames are still on the canvas.
 // view: Pad Shelf
 export function padShelf(view) {
   if (!view.visible) return '';
   return `
     <div class="pad-shelf" data-component="Pad shelf" data-key="pad-shelf" role="group" aria-label="Shelf">
       <span class="pad-shelf-title">Shelf</span>
-      ${view.chips.map(c => `<button type="button" class="pad-shelf-chip" data-pad-action="unshelve" data-frame="${escapeHtml(c.frameId)}" title="${escapeHtml(c.title)}">${escapeHtml(c.label)}</button>`).join('')}
+      ${view.chips.map(c => `<button type="button" class="pad-shelf-chip" data-pad-action="unshelve" data-frames="${escapeHtml(c.frameIds.join(' '))}" title="${escapeHtml(c.title)}">${escapeHtml(c.label)} <small class="pad-shelf-count">${escapeHtml(c.count)}</small></button>`).join('')}
       ${view.shelveAll ? `<button type="button" class="pad-shelf-all" data-pad-action="shelve-all" title="${escapeHtml(view.shelveAll.title)}">${escapeHtml(view.shelveAll.label)}</button>` : ''}
     </div>`;
 }

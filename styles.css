@@ -3939,6 +3939,13 @@ button.ol-field.has-gap:hover, button.ol-field.has-gap:focus-visible { backgroun
 .fx-group:first-of-type .fx-row:first-child { border-top: 0; }
 .fx-what { font-size: 15px; }
 .fx-sticky { font-weight: 700; }
+/* Names that go to their slice or sticky: look like text, underline on hover and focus; a tap area of 40px */
+.fx-link { font: inherit; color: inherit; background: none; border: 0; padding: 6px 0; margin: -6px 0; min-height: 32px; cursor: pointer; text-align: left; border-radius: 4px; text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 3px; }
+.fx-link:hover, .fx-link:focus-visible { text-decoration-style: solid; text-decoration-color: currentColor; }
+.fx-link:focus-visible { outline: 2px solid var(--fg-warn, #b26a00); outline-offset: 1px; }
+.fx-link.fx-sticky { font-weight: 700; }
+.fx-why .fx-link { color: var(--text); font-weight: 600; padding: 4px 0; margin: -4px 0; min-height: 0; }
+@media (pointer: coarse) { .fx-link { min-height: 40px; display: inline-flex; align-items: center; } .fx-why .fx-link { min-height: 36px; } }
 .fx-field { font-family: var(--font-mono); font-size: 14px; color: var(--fg-warn, #b26a00); }
 .fx-sheet .fx-why { margin: 3px 0 8px; font-size: 14px; color: var(--text-muted); line-height: 1.35; }
 .fx-fixes { display: flex; flex-wrap: wrap; gap: 8px; }

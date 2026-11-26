@@ -72,6 +72,16 @@ export function jumpToFrame(frameId) {
   redraw();
 }
 
+// The frames of a chapter that came back off the shelf: all in view, and the selection
+export function jumpToFrames(frameIds) {
+  const fs = S.scene.frames.filter(x => frameIds.includes(x.frameId));
+  if (!fs.length) return;
+  S.sel = { noteIds: new Set(), frameIds: new Set(fs.map(f => f.frameId)) };
+  fit(false, fs.map(f => ({ x: f.x, y: f.y, w: f.w, h: f.drawnH ?? f.h })));
+  applyView();
+  redraw();
+}
+
 // A place in the 🔗 list: that note comes into view (never closer than 100%), is the selection, and flashes
 export function jumpToNote(noteId) {
   if (!S.scene.notes.some(x => x.noteId === noteId)) reveal({ noteId });   // on the shelf or folded away: it comes back first

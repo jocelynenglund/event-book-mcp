@@ -12,7 +12,10 @@
 import { openBoardSheet, onEnter } from '../board/sheets/shared.js';
 import { hideAllSheets } from '../../ui/sheets.js';
 import { showToast } from '../../ui/toast.js';
-import { render } from '../../ui/feed.js';
+import { render, getView, getOverviewTab, showSliceOnBoard } from '../../ui/feed.js';
+import { isChapterFolded, toggleChapterFolded } from '../board/view.js';
+import { scrollToSlice } from '../board/sheets/shared.js';
+import { openElementMenu } from '../elementMenu/sheet.js';
 import { copyText } from '../../ui/clipboard.js';
 import { isReadOnly } from '../readOnly/sheet.js';
 import { toastWithUndo } from '../undo/command.js';
@@ -72,12 +75,36 @@ function applyOne(fix) {
   toastWithUndo({ add: 'Field added', draw: 'Event drawn in', remove: 'Field removed', tidy: 'Fields tidied' }[fix.split('|')[0]] || 'Fixed');
 }
 
+// A slice or sticky named in the list: the sheet closes and the screen goes there. The Outline scrolls to the slice's row and flashes it
+// (the Pad has no list, so it falls to the board, which is where a slice made from a frame lives); a sticky's editor then opens (read-only in a book that isn't checked out)
+function goToSlice(sliceId, chapterId) {
+  hideAllSheets();
+  if (chapterId && isChapterFolded(chapterId)) { toggleChapterFolded(chapterId); render(); }
+  if (getView() === 'details' && getOverviewTab() === 'outline') {
+    const row = document.querySelector(`#outlineView [data-component="Outline row"][data-key="${sliceId}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.remove('ol-flash');
+    void row.offsetWidth;
+    row.classList.add('ol-flash');
+    setTimeout(() => row.classList.remove('ol-flash'), 1400);
+  } else if (getView() === 'board') scrollToSlice(sliceId);
+  else showSliceOnBoard(sliceId);
+}
+
+function goToElement(elementId, sliceId, chapterId) {
+  goToSlice(sliceId, chapterId);
+  setTimeout(() => openElementMenu(elementId, sliceId), 350);
+}
+
 // Taps in the sheets (the board's sheet wiring asks each module in turn)
 export function onSheetAction(a, t) {
   const { el, slice, field } = t.dataset;
   if (a === 'fg-ask') { openFieldGapSheet(el, slice, field, { asking: true }); return true; }
   if (a === 'fg-how') { const input = document.getElementById('fgHow'); if (input) { input.value = t.dataset.how; input.focus(); } return true; }
   if (a === 'fg-set') { setBySystem(el, field); return true; }
+  if (a === 'fx-go-slice') { goToSlice(t.dataset.slice, t.dataset.chapter); return true; }
+  if (a === 'fx-go-el') { goToElement(el, slice, t.dataset.chapter); return true; }
   if (a === 'fx-apply') { applyOne(t.dataset.fix); return true; }
   if (a === 'fx-system') { openFieldGapSheet(el, slice, field, { asking: true }); return true; }
   // Comes from… / Map from…: pick the field; a fix list comes back to itself when it is done

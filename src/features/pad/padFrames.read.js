@@ -14,6 +14,7 @@ import { titleAndBody, noteHeightOfText } from './padNotes.read.js';
 import { FRAME_PAD } from './padNoteHeight.rules.js';
 import { ownCommand } from './padAutomation.rules.js';
 import { changedSince } from './padMade.rules.js';
+import { sliceRef, sliceTitle } from '../../core/projections.js';
 
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const CHIP_MAX = 24;
@@ -39,6 +40,19 @@ const defaultName = notes => {
   return note ? titleAndBody(note.text).title : '';
 };
 
+// A made frame's chip names the slices it became, "S3 · S4" (three at most, then "…"); with none left on the board it names the chapter
+const SLICES_MAX = 3;
+function madeChip(state, f, chapter, chapterLabel, changed) {
+  const slices = [f.sliceId].filter(id => id && state.slices[id] && sliceRef(state, id));
+  const changedText = changed ? 'changed since' : null;
+  if (!slices.length) return { label: `→ ${chapterLabel}`, title: `In chapter ${chapter.name}`, changedText };
+  const refs = slices.map(id => sliceRef(state, id));
+  return {
+    label: refs.slice(0, SLICES_MAX).join(' · ') + (refs.length > SLICES_MAX ? ' …' : ''),
+    title: `Made into ${slices.map(id => `${sliceRef(state, id)} ${sliceTitle(state.slices[id], state)}`).join(', ')}, in the chapter ${chapter.name}`, changedText
+  };
+}
+
 export function padFrames(state, { editable = true, selectedIds = [], editing = null, withShelved = false } = {}) {
   const pad = state.pad || { notes: {}, frames: {} };
   return {
@@ -54,7 +68,7 @@ export function padFrames(state, { editable = true, selectedIds = [], editing = 
         noteIds: movers.map(n => n.id), noteCount: inside.length, warning: warningOf(inside),
         selected: selectedIds.includes(f.id), editing: editing?.id === f.id, editable, chapter,
         made: !!chapter, shelved: !!f.shelved, canShelve: editable && !!chapter && !f.shelved && selectedIds.includes(f.id), changed, canUpdate: editable && changed && !!state.slices[f.sliceId],
-        chip: chapter ? { label: `→ ${label}`, title: `In chapter ${chapter.name}`, changedText: changed ? 'changed since' : null } : null
+        chip: chapter ? madeChip(state, f, chapter, label, changed) : null
       };
     })
   };

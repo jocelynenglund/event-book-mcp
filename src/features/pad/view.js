@@ -28,7 +28,7 @@ import { drawShelf, initFold } from './fold.js';
 import { initScenarioStrip } from './scenarioStrip.js';
 import { canEditCurrent, getCurrentModelId } from '../../core/eventStore.js';
 import { S, $, VIEW_KEY, store, bindDraw, padSelectionNow, wrote } from './padScreenState.js';
-import { applyView, drawBar, fit, toWorld, centre, jumpToNote, jumpToFrame } from './padViewport.js';
+import { applyView, drawBar, fit, toWorld, centre, jumpToNote, jumpToFrames } from './padViewport.js';
 import { onDown, onMove, onUp, onWheel, cancelGesture, forgetPointer } from './gestures.js';
 import { onKey, onSpaceUp } from './keyboard.js';
 import { endEdit, onSwatchDown, suggestNote } from './noteEditing.js';
@@ -101,7 +101,7 @@ export function initPad() {
   });
   initSuggest();
   initPlaces(jumpToNote);
-  initFold({ wrote, jumpToFrame });
+  initFold({ wrote, jumpToFrames });
   view.addEventListener('focusout', e => {
     if (S.editing && e.target.matches?.('[data-pad-input]')) setTimeout(() => { if (S.editing && !document.querySelector('#padView [data-pad-input]:focus')) endEdit(); }, 0);
   });

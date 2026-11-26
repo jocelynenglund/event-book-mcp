@@ -9,7 +9,7 @@
 import { padShelf as shelfView } from './padShelf.read.js';
 import { padBookName as bookNameView } from './padBookName.read.js';
 import { padShelf, padBookName } from './pad.parts.js';
-import { shelveFrames, shelveAllMade, unshelveFrames, revealNote, revealFrame } from './shelf.command.js';
+import { shelveChapters, shelveAllMade, unshelveFrames, revealNote, revealFrame } from './shelf.command.js';
 import { foldStrip, unfoldStrip } from './foldStrip.command.js';
 import { canEditCurrent } from '../../core/eventStore.js';
 
@@ -43,13 +43,13 @@ function onTap(e) {
   const t = e.target.closest('[data-pad-action]');
   if (!t) return;
   const a = t.dataset.padAction;
-  if (a === 'shelve-frame') host.wrote(shelveFrames([t.dataset.frame]), 'Put on the shelf');
-  else if (a === 'shelve-all') host.wrote(shelveAllMade(), 'Put the made frames on the shelf');
+  if (a === 'shelve-chapter') host.wrote(shelveChapters([t.dataset.chapter]), 'Put the chapter on the shelf');
+  else if (a === 'shelve-all') host.wrote(shelveAllMade(), 'Put the chapters on the shelf');
   else if (a === 'unshelve') {
-    const id = t.dataset.frame;
-    if (!host.wrote(unshelveFrames([id]), 'Taken off the shelf')) return;
-    host.jumpToFrame(id);
-    flashFrame(id);
+    const ids = t.dataset.frames.split(' ');
+    if (!host.wrote(unshelveFrames(ids), 'Taken off the shelf')) return;
+    host.jumpToFrames(ids);
+    ids.forEach(flashFrame);
   }
   else if (a === 'toggle-fold') host.wrote(t.dataset.open === 'true' ? foldStrip(t.dataset.note) : unfoldStrip(t.dataset.note), null);
 }

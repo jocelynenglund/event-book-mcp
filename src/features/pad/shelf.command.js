@@ -1,11 +1,11 @@
 // ===========================================
 // PAD - Shelf
-// SC: Shelve Pad Frames — made frames (a frame Make chapter built into a chapter) go on the shelf: the Pad draws neither them nor their
-//     notes, which keeps a big Pad light. The notes stay on the Pad, in their frame, hidden (sketch.js), and the chapter stays on the board.
-// SC: Shelve All Made Pad Frames — every made frame that is on the Pad.
-// SC: Unshelve Pad Frames — the frames are drawn again, where they were.
+// SC: Shelve Pad Chapters — a chapter's made frames (frames Make chapter built into it) go on the shelf together: the Pad draws neither them nor
+//     their notes, which keeps a big Pad light. The notes stay on the Pad, in their frame, hidden (sketch.js), and the chapter stays on the board.
+// SC: Shelve All Made Pad Frames — every made frame that is on the Pad (all chapters).
+// SC: Unshelve Pad Frames — the frames are drawn again, where they were, with the rest of their chapter's shelved frames.
 // SC: Reveal Pad Note / Reveal Pad Frame — a jump to something hidden (a place of a linked note, "Made by ↗") takes what hides it away first:
-//     the shelf, and the folded strip.
+//     the shelf (the whole chapter), and the folded strip.
 // Each is one batch, so one undo takes it back. Each returns null when it recorded what it should (or there was nothing to change), else why it was refused.
 // ===========================================
 
@@ -15,18 +15,23 @@ import { READ_ONLY, record } from './command.js';
 import { notesInFrame } from './sketch.js';
 import { unfoldEvents } from './foldStrip.command.js';
 
-export const NOT_MADE = 'Only a frame made into a chapter can go on the shelf';
+export const NOT_MADE = 'Only a chapter made from frames can go on the shelf';
 
 // Made: Make chapter built it into a chapter that is still on the board
 const isMade = (state, f) => !!(f.chapterId && state.chapters[f.chapterId]);
-const unshelved = (pad, frames) => frames.map(id => pad.frames[id]).filter(f => f && !f.shelved);
 const shelving = (pad, frame) => [EventTypes.PadFrameShelved, { frameId: frame.id, noteIds: notesInFrame(pad, frame).map(n => n.id) }];
 
-export function shelveFrames(frameIds) {
+// The shelved frames that come back with these: a chapter's frames go and return together (a frame without a chapter is alone)
+const withChapterMates = (pad, frameIds) => {
+  const frames = frameIds.map(id => pad.frames[id]).filter(Boolean), chapters = new Set(frames.map(f => f.chapterId).filter(Boolean));
+  return Object.values(pad.frames).filter(f => f.shelved && (frames.includes(f) || (f.chapterId && chapters.has(f.chapterId))));
+};
+
+export function shelveChapters(chapterIds) {
   if (!canEditCurrent()) return READ_ONLY;
-  const state = projectState(), todo = unshelved(state.pad, frameIds);
-  if (todo.some(f => !isMade(state, f))) return NOT_MADE;
-  return record(todo.map(f => shelving(state.pad, f)));
+  const state = projectState(), frames = Object.values(state.pad.frames);
+  if (chapterIds.some(id => !frames.some(f => f.chapterId === id && isMade(state, f)))) return NOT_MADE;
+  return record(frames.filter(f => !f.shelved && chapterIds.includes(f.chapterId)).map(f => shelving(state.pad, f)));
 }
 
 // Every made frame on the Pad, in the order they are on the Pad
@@ -39,16 +44,15 @@ export function shelveAllMade() {
 export function unshelveFrames(frameIds) {
   if (!canEditCurrent()) return READ_ONLY;
   const { pad } = projectState();
-  return record(frameIds.map(id => pad.frames[id]).filter(f => f?.shelved).map(f => [EventTypes.PadFrameUnshelved, { frameId: f.id }]));
+  return record(withChapterMates(pad, frameIds).map(f => [EventTypes.PadFrameUnshelved, { frameId: f.id }]));
 }
 
-// What hides a note: its frame on the shelf, and the strip it is folded into; null when nothing does
+// What hides a note: its frame (and the chapter's others) on the shelf, and the strip it is folded into; null when nothing does
 export function revealNote(noteId) {
   if (!canEditCurrent()) return READ_ONLY;
   const { pad } = projectState(), n = pad.notes[noteId];
   if (!n) return null;
-  const frame = pad.frames[n.shelvedIn];
-  return record([...(frame?.shelved ? [[EventTypes.PadFrameUnshelved, { frameId: frame.id }]] : []), ...unfoldEvents(pad, n.foldedInto)]);
+  return record([...withChapterMates(pad, n.shelvedIn ? [n.shelvedIn] : []).map(f => [EventTypes.PadFrameUnshelved, { frameId: f.id }]), ...unfoldEvents(pad, n.foldedInto)]);
 }
 
 export function revealFrame(frameId) {
