@@ -32,6 +32,7 @@ import { initUsageStats } from './features/usage/view.js';
 import { initSettings, settingsHtml } from './ui/settings.js';
 import { initProductUsage } from './features/productUsage/view.js';
 import { exportNotation } from './features/export/notation.js';
+import { modelMdActions, modelMdExportOptions } from './features/modelMd/sheet.js'; // feature: model-md
 import { reviewOf, canAddScenariosHere } from './features/review/client.js';
 import { readyToChange } from './features/sync/client.js';
 import { openModelNameSheet } from './features/board/sheets.js';
@@ -241,6 +242,7 @@ window.EventPad = {
   menuSetElementFlow,
   
   exportNotation,
+  ...modelMdActions, // feature: model-md
   exportDraft,
   // burger
   openSettings: () => openBoardSheet(settingsHtml()),
@@ -273,6 +275,7 @@ window.EventPad = {
         <div class="sheet-option-text"><div class="sheet-option-title">As text</div>
           <div class="sheet-option-desc">Event-model notation (S,C: / E: / R: / test), one line a sticky: to read, diff or paste</div></div>
       </div>
+      ${modelMdExportOptions() /* feature: model-md */}
       <div class="sheet-option" onclick="window.EventPad.hideSheets(); window.EventPad.exportForEventmodelers()">
         <div class="sheet-option-icon" style="background: var(--surface-hover);">⬇</div>
         <div class="sheet-option-text"><div class="sheet-option-title">For eventmodelers.ai</div>

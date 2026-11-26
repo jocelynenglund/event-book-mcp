@@ -70,6 +70,7 @@ const ol = await import(new URL('features/outline/command.js', src));
 const og = await import(new URL('features/outlineGoals/mcp.js', src)); // feature: outline-goals
 const cm = await import(new URL('features/comments/command.js', src));
 const cloneMcp = await import(new URL('features/cloneSlice/cloneSlice.mcp.js', src)); // feature: clone-slice
+const { modelMdTools } = await import(new URL('features/modelMd/modelMd.mcp.js', src)); // feature: model-md
 // What other features say beside a sticky in the outline: (sticky) → words or ''
 const outlineNotes = [
   (await import(new URL('features/pages/pages.mcp.js', src))).outlineNote, // feature: pages
@@ -1407,6 +1408,7 @@ const tools = [
       return `Deleted "${hit.name}" from ${nameOf(s, st)}.${scenariosNow(s)}`;
     } },
   cloneMcp.cloneSliceTool({ findSlice, nameOf, S }), // feature: clone-slice
+  ...modelMdTools({ S }), // feature: model-md
   { name: 'move_slice', edits: true, description: 'Put a slice (#ref, S-number or title) right after another one in the order (an automation moves with its other half). To move it to another chapter use edit_slice {chapter}.',
     inputSchema: { type: 'object', properties: { slice: S, after: S }, required: ['slice', 'after'] },
     run: ({ slice, after }) => {
@@ -1577,7 +1579,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.13.3' },
+      serverInfo: { name: 'eventpad', version: '0.14.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});

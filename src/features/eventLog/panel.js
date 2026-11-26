@@ -12,6 +12,7 @@ import { showToast } from '../../ui/toast.js';
 import { render } from '../../ui/feed.js';
 import { copyText } from '../../ui/clipboard.js';
 import { importDraftFile } from '../literature/draftFile.js';
+import { modelMdFile } from '../modelMd/sheet.js'; // feature: model-md
 
 export function toggleEventLog() {
   document.getElementById('eventLog').classList.toggle('open');
@@ -90,6 +91,7 @@ export function exportModel({ history = true } = {}) {
 export function importModel(input) {
   const file = input.files[0];
   if (!file) return;
+  if (input.files.length === 1 && /\.(md|markdown|txt)$/i.test(file.name) && modelMdFile(file, input, importDraftFile)) return; // feature: model-md
   // A Markdown draft: a literature book of its own
   if (input.files.length === 1 && /\.(md|markdown|txt)$/i.test(file.name)) {
     importDraftFile(file).catch(() => showToast("Couldn't import that draft")).finally(() => { input.value = ''; });

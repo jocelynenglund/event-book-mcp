@@ -23,6 +23,7 @@ import { openModelNameSheet, openSliceInfo, openSliceMenu, onSheetAction as slic
 import { onSheetAction as processorAction } from './sheets/processor.js';
 import { onSheetAction as cloneSliceAction } from '../cloneSlice/sheet.js'; // feature: clone-slice
 import { onSheetAction as storedElsewhereAction } from '../storedElsewhere/sheet.js'; // feature: stored-elsewhere
+import { onSheetAction as modelMdAction } from '../modelMd/sheet.js'; // feature: model-md
 import { openFindSheet, onSheetAction as findAction, onSheetInput as findInput } from './sheets/find.js';
 import { openReferencePicker } from '../references/sheet.js';
 import { onFieldTap, onCountTap, onSheetAction as fieldGapAction } from '../fieldSources/sheet.js';
@@ -142,6 +143,7 @@ function revealComment(c) {
 const sheetActions = [readSheetAction, newSliceAction, chapterAction, arrangeAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction, fieldGapAction, fieldMapAction,
   cloneSliceAction, // feature: clone-slice
   storedElsewhereAction, // feature: stored-elsewhere
+  modelMdAction, // feature: model-md
 ];
 
 function handleSheetClick(e) {
