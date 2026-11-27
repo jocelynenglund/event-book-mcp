@@ -10,6 +10,7 @@ import { editionOf } from '../features/editions/rules.js';
 import { padFold } from '../features/pad/sketch.js';
 import { projectPages } from '../features/pages/pages.projection.js'; // feature: pages
 import { projectCloneSlice } from '../features/cloneSlice/cloneSlice.projection.js'; // feature: clone-slice
+import { projectScreenSelect } from '../features/screenSelect/screenSelect.projection.js'; // feature: screen-select
 import { projectStoredElsewhere } from '../features/storedElsewhere/storedElsewhere.projection.js'; // feature: stored-elsewhere
 import { chapterMoved, chaptersArranged, partStarted, partRenamed, partRemoved, chapterRemoved, layoutByName, layoutOnSnapshot } from '../features/arrange/arrangement.js';
 
@@ -797,6 +798,7 @@ export function projectState(eventStream = getEventStream()) {
     projectPages(state, event); // feature: pages
     projectCloneSlice(state, event); // feature: clone-slice
     projectStoredElsewhere(state, event); // feature: stored-elsewhere
+    projectScreenSelect(state, event); // feature: screen-select
   }
 
   // A sticky whose slices were all deleted stays in the book but sits in no slice: its links are not drawn,

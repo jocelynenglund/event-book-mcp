@@ -16,6 +16,7 @@ import { addFieldSource } from '../fieldMapping/command.js';
 import { propOf } from '../fieldMapping/mappings.js';
 import { parseRows } from '../viewQueries/query.js';
 import { fieldKey, parsePropertyText } from '../../core/constants.js';
+import { setScreenFieldsFromText } from '../screenSelect/screenSelect.command.js'; // feature: screen-select
 import { storageError, storageFromSpec } from '../storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 
 export const PLAN_FORMAT = 'eventbook-plan/1';
@@ -179,11 +180,11 @@ export function addStep(step, chId) {
   if (marks) throw new Error(marks);
   const mapping = checkFieldMappings(step);
   if (mapping) throw new Error(mapping);
-  let sliceId;
+  let sliceId, screenId = null;
   if (kind === 'do') {
     if (!step.command) throw new Error('A Do step needs a command');
     sliceId = c.createSlice('SC', step.name || null, { chapterId: chId });
-    if (step.screen) c.addToSlice(sliceId, 'screen', as('screen', step.screen));
+    if (step.screen) screenId = c.addToSlice(sliceId, 'screen', as('screen', step.screen));
     c.addToSlice(sliceId, 'command', as('command', step.command));
     addEvents(sliceId, eventSpecs(step.events || step.event, step));
   } else if (kind === 'see') {
@@ -192,11 +193,12 @@ export function addStep(step, chId) {
     addEvents(sliceId, eventSpecs(step.events || step.event, step));
     const rmId = c.addToSlice(sliceId, 'readModel', as('readModel', step.readModel));
     if (step.list && !state().elements[rmId]?.list) es.appendEvent(es.EventTypes.ElementListSet, { elementId: rmId, list: true });
-    if (step.screen) c.addToSlice(sliceId, 'screen', as('screen', step.screen));
+    if (step.screen) screenId = c.addToSlice(sliceId, 'screen', as('screen', step.screen));
   } else if (kind === 'auto') {
     sliceId = addAutomation(step, chId);
   } else throw new Error(`Step kind "${step.kind}": use do, see or auto`);
   if (step.fields) addFields(sliceId, step.fields);
+  if (step.screenFields && screenId) { const why = setScreenFieldsFromText(screenId, step.screenFields); if (why) throw new Error(why); }   // feature: screen-select
   if (step.description) c.describeSlice(sliceId, step.description);
   return sliceId;
 }
@@ -307,7 +309,7 @@ export function chapterId(name, st = state()) {
 
 // ---------- A whole plan file ----------
 
-const stepKeys = ['kind', 'name', 'description', 'screen', 'command', 'event', 'events', 'readModel', 'when', 'external', 'table', 'storage', 'published', 'to', 'list', 'using', 'todo', 'processor', 'result', 'fields', 'scenarios'];
+const stepKeys = ['kind', 'name', 'description', 'screen', 'command', 'event', 'events', 'readModel', 'when', 'external', 'table', 'storage', 'published', 'to', 'list', 'using', 'todo', 'processor', 'result', 'fields', 'screenFields', 'scenarios'];   // feature: screen-select (screenFields)
 const planKeys = ['format', '$schema', 'name', 'description', 'chapters'];
 const chapterKeys = ['name', 'steps'];
 
@@ -363,6 +365,7 @@ export function checkPlan(plan) {
       if (marks) return `${at}: ${marks}`;
       const mapping = checkStepFieldMappings(step, known);
       if (mapping) return `${at}: ${mapping}`;
+      if (step.screenFields !== undefined && (typeof step.screenFields !== 'string' || !step.screen)) return `${at}: screenFields is the screen's fields as text ("guests []{Guest List}, size (){Sizes}, <requestId>, email*") and needs a screen`;   // feature: screen-select
       if (step.scenarios !== undefined && !Array.isArray(step.scenarios)) return `${at}: scenarios is a list`;
       for (const [xi, x] of (step.scenarios || []).entries()) {
         try { checkScenario(x); } catch (e) { return `${at}, scenario ${xi + 1}: ${e.message}`; }

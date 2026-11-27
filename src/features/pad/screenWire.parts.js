@@ -6,12 +6,15 @@
 // board's screen sticky and on the slice page, each from its own view.
 // ===========================================
 
+import { selectPartHtml, requiredMark } from '../screenSelect/screenSelect.draw.js'; // feature: screen-select
+
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const partHtml = p => {
   const dim = p.dim ? ' data-dim="true"' : '';
   if (p.type === 'readModel') return `<span class="pad-wire-rm"${dim}><span class="pad-wire-rm-name">${escapeHtml(p.name)}</span>${p.fields.length ? `<span class="pad-wire-rm-fields">${p.fields.map(escapeHtml).join(' · ')}</span>` : ''}</span>`;
-  if (p.type === 'input') return `<span class="pad-wire-input"${dim} title="${escapeHtml(p.field)}">${escapeHtml(p.label)}</span>`;
+  if (p.type === 'select' || p.type === 'hidden') return selectPartHtml(p, dim, escapeHtml);   // feature: screen-select
+  if (p.type === 'input') return `<span class="pad-wire-input"${dim} title="${escapeHtml(p.field)}">${escapeHtml(p.label)}${requiredMark(p, escapeHtml)}</span>`;   // feature: screen-select
   if (p.type === 'button') return `<span class="pad-wire-button"${dim}>${escapeHtml(p.label)}</span>`;
   return `<span class="pad-wire-text">${escapeHtml(p.text)}</span>`;
 };

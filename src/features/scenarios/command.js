@@ -3,6 +3,8 @@
 // ===========================================
 
 import { appendEvent, EventTypes } from '../../core/eventStore.js';
+import { projectState } from '../../core/projections.js';
+import { addToSlice } from '../board/command.js';
 
 // Generate unique ID
 function uid() {
@@ -47,7 +49,17 @@ export function deleteScenario(scenarioId, sliceId) {
 }
 
 // Set Given events
+// A view (a See slice, an automation's to-do view) reads every event its scenarios start from: the ones it does not read yet are
+// linked to it, the same way a hand-made link is (a Do slice's Givens are the state its command needs, not events it shows)
 export function setGiven(scenarioId, events) {
+  const sliceId = projectState().scenarios[scenarioId]?.sliceId;
+  const slice = sliceId && projectState().slices[sliceId];
+  if (slice?.type === 'SV') {
+    (events || []).forEach(g => {
+      const el = projectState().elements[g.elementId];
+      if (el?.type === 'event' && !projectState().slices[sliceId].elements.includes(el.id)) addToSlice(sliceId, 'event', { elementId: el.id });
+    });
+  }
   appendEvent(EventTypes.GivenSet, {
     scenarioId,
     events // [{elementId, values}]

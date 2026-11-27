@@ -48,7 +48,8 @@ export const KINDS = [
   },
   {
     colour: 'screen', name: 'Screen', purpose: 'A low-fi window. One screen is shown in every slice it touches: its inputs feed commands, it displays views.',
-    format: ['First line: the screen\'s name', '{ Product List } shows that view (add : fields to list some)', '[ Selected ] is an input, a field of the command', '( Add ) is a button that sends the command called that'],
+    format: ['First line: the screen\'s name', '{ Product List } shows that view (add : fields to list some)', '[ Selected ] is an input, a field of the command', '( Add ) is a button that sends the command called that',
+      '- guests []{Guest List} picks many from that view; - size (){Sizes} picks one (also [ guests ]{Guest List} and ( size ){Sizes})', '- <requestId> is hidden: carried into the command, never shown', 'email* is required, note? is optional (also [ email* ], [ note? ])'],   // feature: screen-select
     example: 'Basket\n{ Product List }\n[ Selected ] ( Add )'
   },
   {

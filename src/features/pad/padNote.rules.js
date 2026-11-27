@@ -22,9 +22,9 @@ export function camelCase(text) {
   return words(text).map((w, i) => (i === 0 ? soft(w)[0].toLowerCase() : soft(w)[0].toUpperCase()) + soft(w).slice(1)).join('');
 }
 
-// The words after "field:" that are a type, not a value: the types a field can have ("amount: number"), and bool for boolean
-const TYPES = new Set([...propertyTypes, 'bool']);
-const TYPE_NAME = { bool: 'boolean' };
+// The words after "field:" that are a type, not a value: the types a field can have ("amount: number"), and bool for boolean, int and integer for number
+const TYPES = new Set([...propertyTypes, 'bool', 'int', 'integer']);
+const TYPE_NAME = { bool: 'boolean', int: 'number', integer: 'number' };   // int is a number here (there is no separate integer type)
 const FIELD_VALUE = /^([^:()]+?)\s*:\s*(.+)$/s;
 
 // One line after the name → { line, name, note } (null when there is nothing in it); "name: <known type>" also says its `type`, and any

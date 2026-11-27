@@ -2,7 +2,8 @@
 // property with item fields gets a line per item), filled with the values so far, and whether it is a list read model (rows)
 // rather than one record. prefix says which part of the sheet the boxes belong to (given, when, then-event, then-rm, then-row).
 // null when the sticky is gone.
-import { propLabel } from '../../core/constants.js';
+import { propLabel, fieldKey } from '../../core/constants.js';
+import { requiredHint } from '../screenSelect/screenSelect.label.js'; // feature: screen-select
 
 export function scenarioElementFields(book, elementId, prefix = '', values = {}) {
   const el = book.elements[elementId];
@@ -13,7 +14,8 @@ export function scenarioElementFields(book, elementId, prefix = '', values = {})
     fields: (el.properties || []).map(p => ({
       elementId, prefix, name: p.name, type: p.type, label: propLabel(p),
       items: p.type === 'array' && p.items?.length ? p.items : null,
-      value: values?.[p.name] ?? ''
+      value: values?.[p.name] ?? '',
+      ...(el.type === 'command' && (el.mappings?.[fieldKey(p.name)]?.sources || []).some(s => book.elements[s.elementId]?.properties?.some(q => fieldKey(q.name) === fieldKey(p.name) && q.required === true)) ? { hint: requiredHint(p.name) } : {})   // feature: screen-select
     }))
   };
 }

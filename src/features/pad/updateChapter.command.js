@@ -44,9 +44,9 @@ export function updateChapter({ frameId }) {
       if (s.external && elementId) es.appendEvent(es.EventTypes.ElementExternalSet, { elementId, external: true });   // an event marked (external) is another system's
     });
     const now = padMakeChapter(projectState(), { frameIds: [frameId], off: frame.made.off }).slices[0], command = now.kind === 'automation' && now.lines.find(l => l.included && l.role === 'command');
-    if (view.steps.some(s => s.kind === 'add' || s.kind === 'field') && view.fields.length) {
+    if (view.steps.some(s => s.kind === 'add' || s.kind === 'field') && view.fieldSpecs.length) {
       if (command) addElementProperties(sliceId, 'command', [{ name: command.name, fields: commandFieldsOf(now) }]);   // an automation's command keeps its fields to itself
-      else addFields(sliceId, view.fields);
+      else addFields(sliceId, view.fieldSpecs);
     }
     const refused = placeScreens(sliceId, view.steps.filter(s => s.kind === 'screen' || s.kind === 'sketch'));
     if (refused) throw new Error(refused);

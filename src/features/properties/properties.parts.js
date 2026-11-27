@@ -69,6 +69,25 @@ export function propertyEditor(form) {
     </div>`;
 }
 
+// The property being read, in a book that can't be changed here: what it is and where it comes from, and ⤳ Trace
+export function propertyFieldReader(v) {
+  const facts = [
+    v.itemsText ? `<li>Each item has <b>${escapeHtml(v.itemsText)}</b></li>` : '',
+    v.generated ? '<li>Generated: made by the system, never copied</li>' : '',
+    v.system ? `<li>Set by the system: ${escapeHtml(v.system)}</li>` : '',
+    v.query ? `<li>Query parameter: <code>?${escapeHtml(v.name)}</code></li>` : '',
+    `<li>${v.from ? `Comes from <b>${escapeHtml(v.from.text)}</b>${v.from.more ? ` +${v.from.more}` : ''}` : 'Comes from nowhere'}</li>`
+  ].join('');
+  return `
+    <div data-component="Property field reader" data-key="${v.id}">
+    <div class="bd-sheet-label">Property</div>
+    <div class="pr-read-head"><b class="pr-read-name">${escapeHtml(v.name)}</b> <span class="pr-type">${escapeHtml(v.type)}</span></div>
+    <ul class="pr-read-facts">${facts}</ul>
+    <div class="pr-hint">Read only here: check the book out to change it.</div>
+    <div class="pr-from"><button class="sheet-btn secondary" data-prop-action="trace" title="Follow this property through the book">⤳ Trace</button></div>
+    </div>`;
+}
+
 // The box that adds several properties at once ("orderId, drink, size:number"); adding = { type }
 export function propertyAdder(adding) {
   return `
@@ -127,7 +146,14 @@ export function propertiesDoneButton() {
 // The whole sheet, from the views the sheet put together:
 //   list (Property List Rows), form (Property Edit Form or null), adding ({ type } while the add box is open, else null),
 //   suggestions (Property Suggestions), copy (Property Copy Targets or null)
-export function propertiesSheetBody({ list, form, adding, suggestions, copy }) {
+// In a book that can't be changed here it is the read sheet: the rows (no pen) and reading (Property Field Read, or null)
+export function propertiesSheetBody({ list, form, adding, suggestions, copy, reading = null, readOnly = false }) {
+  if (readOnly) return `
+    <div class="sheet-title">Properties <span class="bd-sheet-sub">on ${escapeHtml(list.name)}</span></div>
+    ${list.heading ? `<div class="bd-sheet-label">${escapeHtml(list.heading.replace(/ · tap one to edit it$/, ' · tap one to read it'))}</div>
+    <div class="pr-list pr-list-ro">${list.rows.map(propertyRow).join('')}</div>` : ''}
+    ${reading ? propertyFieldReader(reading) : ''}
+    ${propertiesDoneButton()}`;
   const editing = !!form;
   return `
     <div class="sheet-title">Properties <span class="bd-sheet-sub">on ${escapeHtml(list.name)}</span></div>

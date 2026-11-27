@@ -17,7 +17,7 @@ const DEFAULT_NOTHING = 'accepted, changes nothing';
 export const STORED = 'stored elsewhere';
 
 const fieldText = f => `${f.name}${f.type === 'array' ? '[]' : f.type && f.type !== 'string' ? `:${f.type}` : ''}`;
-const withFields = (name, fields) => ({ name, fields: (fields || []).map(fieldText) });
+const withFields = (name, fields, screen = false) => ({ name, fields: (fields || []).map(f => (screen && f.optional ? `${f.name}?` : fieldText(f))) });   // feature: screen-select (a screen's note? is optional)
 const eventSpec = e => ({ name: e.name, ...(e.mark === 'external' ? { external: true } : {}), ...(e.mark === 'stored' ? { storage: { kind: STORED } } : {}) });
 const quote = v => (/[\s,:(){}"]/.test(v) && !/^[\[{]/.test(v) ? `"${v.replace(/"/g, '\\"')}"` : v);
 const argsText = a => Object.entries(a || {}).map(([k, v]) => `${k}:${quote(String(v))}`).join(', ');
@@ -64,7 +64,7 @@ function stepOf(s, skipped) {
   const used = new Map();
   const skip = [];
   const fields = [];                        // [{ type, name, fields: ['stars:number', …] }]
-  const addFields = (type, f) => { if (f) fields.push({ type, ...withFields(f.name, f.fields) }); };
+  const addFields = (type, f) => { if (f) fields.push({ type, ...withFields(f.name, f.fields, type === 'screen') }); };
   const how = (f) => (f.fields || []).filter(x => x.how).forEach(x => notes.push(`How: ${f.name}.${x.name}: ${x.how}`));
   const base = { name: s.name };
   let step;

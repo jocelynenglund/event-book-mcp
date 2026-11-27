@@ -14,7 +14,7 @@ export function elementRead(v) {
       ${v.description ? `<p class="ro-desc">${escapeHtml(v.description)}</p>` : ''}
       <div class="bd-sheet-label ro-fields-head">Fields${v.foldLabel ? `<button class="cm-btn quiet" data-fold-fields="${escapeHtml(v.id)}">${v.foldLabel}</button>` : ''}</div>
       ${v.fields.length ? `<ul class="ro-fields">${v.fields.map(p => `
-        <li><span class="ro-field-name">${p.generated ? '<span title="Generated">⚙</span> ' : ''}${escapeHtml(p.label)}</span><span class="ro-field-type">${escapeHtml(p.type)}</span></li>`).join('')}
+        <li><button class="ro-field-btn" data-ro-field="${escapeHtml(v.id)}" data-prop="${escapeHtml(p.id)}" aria-label="Open ${escapeHtml(p.name)}"><span class="ro-field-name">${p.generated ? '<span title="Generated">⚙</span> ' : ''}${escapeHtml(p.label)}</span><span class="ro-field-type">${escapeHtml(p.type)}</span></button><button class="ro-field-trace" data-ro-trace="${escapeHtml(v.id)}" data-field="${escapeHtml(p.name)}" aria-label="Trace ${escapeHtml(p.name)}">⤳ Trace</button></li>`).join('')}
       </ul>` : '<p class="sy-p">No fields</p>'}
       ${v.flags.length ? `<div class="ro-flags">${v.flags.map(f => `<span>${escapeHtml(f)}</span>`).join('')}</div>` : ''}
       <div class="bd-sheet-label">${v.slicesHeading}</div>

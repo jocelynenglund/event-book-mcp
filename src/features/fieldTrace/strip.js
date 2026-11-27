@@ -24,7 +24,7 @@ export const hideTraceStrip = () => drawTraceStrip(null);
 function showStep(elementId, sliceId, chapterId) {
   if (getView() === 'board') { showElementOnBoard(elementId, sliceId); return; }
   if (chapterId && isChapterFolded(chapterId)) { toggleChapterFolded(chapterId); render(); }
-  const row = document.querySelector(`#outlineView [data-component="Outline row"][data-key="${sliceId}"]`);
+  const row = document.querySelector(`#outlineView [data-component="Outline row"][data-key="${sliceId}"], #outlineView [data-component="Outline desk row"][data-key="${sliceId}"]`);
   if (!row) return;
   row.scrollIntoView({ behavior: 'smooth', block: 'center' });
   row.classList.add('ol-flash');

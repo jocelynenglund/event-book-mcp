@@ -38,6 +38,7 @@ export function valueInputRow(field) {
   return `
       <div class="property-input-row" data-component="Value input row" data-key="${escapeHtml(field.name)}">
         <label>${escapeHtml(field.label)}</label>
+        ${field.hint ? `<div class="property-hint" data-hint="required">${escapeHtml(field.hint)}</div>` : ''}   <!-- feature: screen-select -->
         <input type="${inputType}"${inputType === 'number' ? ' step="any" inputmode="decimal"' : ''}
                class="property-value-input"
                data-prefix="${field.prefix}"

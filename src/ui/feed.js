@@ -295,6 +295,7 @@ export function render() {
     const on = b.dataset.viewSwitch === 'board' ? isBoard : b.dataset.viewSwitch === 'pad' ? isPad : extraViews.has(b.dataset.viewSwitch) ? isExtra && view === b.dataset.viewSwitch : isDetails && !isPad;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
+    if (on && b.offsetWidth) { const sw = b.parentElement; if (sw.scrollWidth > sw.clientWidth) sw.scrollLeft = b.offsetLeft - (sw.clientWidth - b.offsetWidth) / 2; }   // a narrow phone's switch scrolls: keep the lit tab in view
   });
   // The trace strip belongs to the board and the Outline: they draw it (or leave it hidden)
   hideTraceStrip();

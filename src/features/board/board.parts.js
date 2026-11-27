@@ -51,7 +51,8 @@ const partLabel = { given: 'Given', when: 'When', then: 'Then' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 // One field on a sticky: ⚙ when generated, a dashed underline and a ⚠ when it has no source, "← Sticky.field" when it comes from another's
-const boardProp = p => `<span data-prop="${p.id}"${p.generated ? ' class="bd-prop-generated" title="Generated"' : ''}${p.gap ? ' data-gap="true"' : ''}>${p.generated ? '⚙' : ''}<span${p.gap ? ' class="fg-name"' : ''}>${escapeHtml(p.label)}</span>${p.gap ? fieldGapMark(p.gap) : ''}${p.from ? fieldMappingMark(p.from) : ''}</span>`;
+// The chip is a tap target of its own (data-action="field": its property sheet, or the trace in a read-only book) and offers ⤳ Trace on hover
+const boardProp = (p, card = {}) => `<span data-prop="${p.id}" role="button" tabindex="0" data-action="field" data-el="${card.elementId}" data-slice="${card.sliceId}" data-field-name="${escapeHtml(p.name)}"${p.generated ? ' class="bd-prop-generated" title="Generated"' : ''}${p.gap ? ' data-gap="true"' : ''}>${p.generated ? '⚙' : ''}<span${p.gap ? ' class="fg-name"' : ''}>${escapeHtml(p.label)}</span>${p.gap ? fieldGapMark(p.gap) : ''}${p.from ? fieldMappingMark(p.from) : ''}<span class="bd-trace-btn" role="button" tabindex="0" data-action="field-trace" data-el="${card.elementId}" data-field-name="${escapeHtml(p.name)}" aria-label="Trace ${escapeHtml(p.name)}"></span></span>`;
 
 // One sticky
 export function boardCard(card, ui = {}) {
@@ -65,7 +66,7 @@ export function boardCard(card, ui = {}) {
   const props = card.foldedProps
     ? `<div class="bd-props bd-props-folded">${card.foldedProps}</div>`
     : card.props.length
-    ? `<div class="bd-props">${card.props.map(boardProp).join('')}</div>`
+    ? `<div class="bd-props">${card.props.map(p => boardProp(p, card)).join('')}</div>`
     : '';
   // A to-do list's updates (tap a tag to flip + ⇄ ✓); a processor's inputs from elsewhere
   const updates = card.tags.length ? `<div class="bd-todo-tags">${card.tags.map(tag =>
@@ -132,7 +133,7 @@ export function boardLane(lane, ui = {}) {
          + ${lane.add.more ? '' : lane.add.label}
        </button>`
     : '';
-  return `<div class="bd-cell lane-${lane.lane}" ${mark} ${at(ui.col, lane.lane + 3)} ${flow}>${lane.cards.map(c => boardCard(c)).join('')}${add}</div>`;
+  return `<div class="bd-cell lane-${lane.lane}" ${mark} ${at(ui.col, lane.lane + 3)} ${flow}>${lane.cards.map(c => boardCard(c)).join('')}${add}${lane.list ? `<button class="bd-events-open" data-action="events" data-slice="${lane.sliceId}">All events ▸</button>` : ''}</div>`;
 }
 
 // The scenarios cell under the lanes. ui.open: each scenario in full; closed, a count and the Given stack.

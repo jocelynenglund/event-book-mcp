@@ -2464,7 +2464,7 @@ body.library-mode .burger-row { display: none; }
 /* The events drawer: a row per event, the card goes to its command, ✎ edits */
 .bd-event-row { display: flex; align-items: stretch; gap: 8px; }
 .bd-event-row .bd-card { flex: 1; min-width: 0; }
-.bd-event-edit, .bd-event-remove { flex-shrink: 0; width: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 17px; cursor: pointer; }
+.bd-event-edit, .bd-event-remove, .bd-event-jump { flex-shrink: 0; width: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 17px; cursor: pointer; }
 
 /* The board's bar (close all books, replay, counts) sits at the bottom, a thumb away; + rides above it */
 :root { --stats-h: calc(47px + env(safe-area-inset-bottom, 0px)); }
@@ -3290,7 +3290,16 @@ body:not(.library-mode) .header .sy-chip { margin: 0; min-width: 0; max-width: 1
 body:not(.library-mode) .header .title-share { flex: none; }
 @media (max-width: 480px) {
   body:not(.library-mode) .header { padding-left: 12px; padding-right: 10px; column-gap: 6px; }
-  body:not(.library-mode) .header .view-switch button { padding-left: 8px; padding-right: 8px; font-size: 13px; }
+  body:not(.library-mode) .header .view-switch button { padding-left: 5px; padding-right: 5px; font-size: 12px; height: 30px; flex: none; }
+  /* four views (Board, Outline, Pad, Pages): the switch is the one part that may shrink, and scrolls sideways if it must (the lit tab is scrolled into view) */
+  body:not(.library-mode) .header { grid-template-columns: auto minmax(0, max-content) minmax(min-content, 1fr) auto; }
+  body:not(.library-mode) .header .view-switch { min-width: 0; max-width: 100%; justify-self: start; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+  body:not(.library-mode) .header .view-switch::-webkit-scrollbar { display: none; }
+  body:not(.library-mode) .header .title-row { gap: 4px; }
+  body:not(.library-mode) .header .title-share { width: 34px; height: 34px; }
+  body:not(.library-mode) .header .burger-btn { width: 34px; min-width: 0; padding: 0; }
+  body:not(.library-mode) .header .hd-home img { width: 22px; height: 22px; }
+  body:not(.library-mode) .header { column-gap: 4px; padding-left: 8px; padding-right: 8px; }
   body:not(.library-mode) .header .sy-chip { padding-left: 9px; padding-right: 9px; font-size: 13px; }
 }
 .bd-book-title {
@@ -4159,6 +4168,14 @@ body.pad-mode { overflow: hidden; }
 .pad-wire-rm-name { font-weight: 700; }
 .pad-wire-rm-fields { font-size: 10px; opacity: 0.8; }
 .pad-wire-input { min-width: 68px; padding: 2px 8px; border: 1px solid #8f877a; border-radius: 3px; background: #fff; color: #7a7266; }
+.ss-pick { display: flex; flex: 1 1 100%; align-items: center; gap: 6px; flex-wrap: wrap; padding: 2px 8px; border: 1px solid #8f877a; border-radius: 3px; background: #fff; color: #5a5144; } /* feature: screen-select */
+.ss-options { display: inline-flex; gap: 4px; font-style: normal; color: #7a7266; } /* feature: screen-select */
+.ss-options i { font-style: normal; } /* feature: screen-select */
+.ss-from { font-size: 9.5px; opacity: 0.75; margin-left: auto; } /* feature: screen-select */
+.ss-hidden { border-style: dashed; color: #9a9385; background: #f3f1ec; } /* feature: screen-select */
+.ss-tag { font-size: 9px; font-style: normal; padding: 0 5px; border-radius: 999px; background: #d9d4c8; color: #5a5144; } /* feature: screen-select */
+.ss-req { color: #b3261e; } /* feature: screen-select */
+.ss-opt { font-size: 9px; opacity: 0.7; } /* feature: screen-select */
 .pad-wire-button { padding: 2px 11px; border: 1.5px solid #2b241c; border-radius: 999px; background: #fff; font-weight: 700; }
 .pad-wire [data-dim="true"] { opacity: 0.3; filter: grayscale(1); }
 .bd-card .pad-wire, .sp-sticky .pad-wire { margin-top: 6px; border: 1px solid #b4ad9e; border-radius: 5px; overflow: hidden; background: #fff; pointer-events: none; }
@@ -4325,6 +4342,7 @@ body.pad-mode { overflow: hidden; }
 .pad-bulk-preview .sheet-btn { margin: 0 0 10px; width: 100%; }
 
 .bd-event-remove { width: 36px; }
+.bd-event-jump { width: 40px; }
 .bd-card-kind.bd-hint { opacity: 0.6; font-style: italic; }
 
 /* ＋ Several…: a box of event lines and what each will do */
@@ -4438,3 +4456,25 @@ body.browsing-shared:not(.library-mode) .header { grid-template-areas: "banner b
 body.browsing-shared.has-back:not(.library-mode) .header { grid-template-areas: "banner banner banner banner" "nav nav nav nav" "home switch title menu"; }
 body.browsing-shared.library-mode .sc-banner { display: none; }
 body.browsing-shared.header-hidden:not(.library-mode) .header > .sc-banner { display: flex !important; }
+
+/* ═══════════ Trace a field from where it is shown ═══════════ */
+.bd-props [data-action="field"] { cursor: pointer; position: relative; }
+.bd-props .bd-trace-btn { display: none; width: max-content; max-width: none; overflow-wrap: normal; text-decoration: none; position: absolute; left: 0; top: 100%; z-index: 5; white-space: nowrap; padding: 3px 8px; border-radius: 6px; background: var(--text); color: var(--bg); font: 600 11px var(--font-body); cursor: pointer; }
+@media (hover: hover) {
+  .bd-props [data-action="field"]:hover .bd-trace-btn, .bd-props [data-action="field"]:focus-within .bd-trace-btn { display: inline-block; }
+  .ol-field-wrap:hover .ol-trace-btn, .ol-field-wrap:focus-within .ol-trace-btn { display: inline-block; }
+}
+.ol-field-wrap { position: relative; display: inline-block; }
+.ol-trace-btn { display: none; position: absolute; left: 0; top: 100%; z-index: 5; white-space: nowrap; padding: 3px 8px; border-radius: 6px; border: 0; background: var(--text); color: var(--bg); font: 600 11px var(--font-body); cursor: pointer; }
+.ro-field-btn { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 40px; cursor: pointer; }
+.ro-fields li:has(.ro-field-btn) { padding: 0 10px; }
+.ro-field-btn .ro-field-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ro-field-trace { all: unset; box-sizing: border-box; cursor: pointer; font: 600 11px var(--font-body); color: var(--text-muted); white-space: nowrap; min-height: 40px; display: flex; align-items: center; padding: 0 4px; }
+.ro-field-trace:focus-visible { outline: 2px solid var(--text); border-radius: 6px; }
+.pr-list-ro .pr-edit { display: none; }
+.pr-read-head { margin: 6px 0; font-size: 15px; }
+.pr-read-facts { margin: 0 0 8px; padding-left: 18px; font-size: 14px; }
+.ro-field-btn:focus-visible { outline: 2px solid var(--text); border-radius: 6px; }
+.bd-props .bd-trace-btn::before, .ol-trace-btn::before { content: "⤳ Trace"; }
+
+.bd-events-open { align-self: flex-start; min-height: 36px; padding: 0 10px; border: 0; background: none; color: var(--text-muted); font: 600 12px var(--font-body); cursor: pointer; }

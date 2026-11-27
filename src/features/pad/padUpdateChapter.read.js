@@ -20,7 +20,7 @@ import { scenarioLines } from './padScenario.rules.js';
 const NOT_MADE = 'This frame was not made into a chapter, or was made before changes could be followed';
 const GONE = 'The chapter or its slice is gone from the board';
 const ROLE_WORD = { command: 'command', view: 'view', event: 'event' };
-const out = (frameId, why) => ({ frameId, available: false, why, chapterName: '', sliceName: '', sliceId: null, steps: [], changes: [], notRemoved: [], notChanged: [], fields: [], canUpdate: false });
+const out = (frameId, why) => ({ frameId, available: false, why, chapterName: '', sliceName: '', sliceId: null, steps: [], changes: [], notRemoved: [], notChanged: [], fields: [], fieldSpecs: [], canUpdate: false });
 
 export function padUpdateChapter(state, { frameId }) {
   const frame = state.pad?.frames[frameId], made = frame?.made;
@@ -54,6 +54,7 @@ export function padUpdateChapter(state, { frameId }) {
   made.stickies.filter(s => state.elements[s.elementId] && !kept.has(key(s.noteId, s.role))).forEach(s => notRemoved.push(`${ROLE_WORD[s.role]} ${state.elements[s.elementId].name}`));
 
   const fields = [...new Map(ownFieldLines(lines).map(l => [lower(l.name), l.name])).values()];
+  const fieldSpecs = [...new Map(ownFieldLines(lines).map(l => [lower(l.name), l.type ? `${l.name}:${l.type}` : l.name])).values()];   // with their types: "signedUp:number"
   const had = new Set(made.fields.map(lower)), have = new Set(fields.map(lower));
   fields.filter(n => !had.has(lower(n))).forEach(name => steps.push({ kind: 'field', name }));
   made.fields.filter(n => !have.has(lower(n))).forEach(n => notRemoved.push(`field ${n}`));
@@ -87,6 +88,6 @@ export function padUpdateChapter(state, { frameId }) {
   })[s.kind];
   return {
     frameId, available: true, why: null, chapterName: chapter.name, sliceName: slice.name || fresh.name, sliceId: frame.sliceId,
-    steps, changes: steps.map((s, i) => ({ key: `${i}`, text: say(s) })), notRemoved, notChanged, fields, canUpdate: true
+    steps, changes: steps.map((s, i) => ({ key: `${i}`, text: say(s) })), notRemoved, notChanged, fields, fieldSpecs, canUpdate: true
   };
 }

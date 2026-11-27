@@ -15,7 +15,7 @@ export function elementReadSheet(elementId) {
   const slices = getOrderedSlices(state).filter(s => s.elements.includes(el.id));
   return {
     id: el.id, type: el.type, attrs: externalAttr(el), kind: `${typeIcons[el.type] || ''} ${elementLabel(el)}`, name: el.name, description: el.description || '',
-    fields: props.map(p => ({ label: propLabel(p), type: p.type || 'string', generated: !!p.generated })),
+    fields: props.map(p => ({ id: p.id, name: p.name, label: propLabel(p), type: p.type || 'string', generated: !!p.generated })),
     foldLabel: props.length ? (fieldsFolded(el.id) ? 'Show on the board' : 'Fold on the board') : null,
     flags: [
       el.type === 'event' && el.external ? 'From another system (external)' : '',

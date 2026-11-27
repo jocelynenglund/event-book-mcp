@@ -11,6 +11,8 @@ import { hideAllSheets } from '../../ui/sheets.js';
 import { openElementMenu } from '../elementMenu/sheet.js';
 import { toggleFieldsFolded } from '../board/foldedFields.js';
 import { render } from '../../ui/feed.js';
+import { startTrace } from '../fieldTrace/traceState.js';
+import { openPropertySheet } from '../properties/sheet.js';
 import { elementReadSheet } from './elementReadSheet.read.js';
 import { readOnlyFooter } from './readOnlyFooter.read.js';
 import { elementRead, readOnlyFooterBar } from './readOnly.parts.js';
@@ -50,6 +52,22 @@ document.addEventListener('click', e => {
   const folded = toggleFieldsFolded(t.dataset.foldFields);
   t.textContent = folded ? 'Show on the board' : 'Fold on the board';
   render();
+});
+
+// A field row in the sheet opens that field's sheet (read only in a book that can't be changed here)
+document.addEventListener('click', e => {
+  const f = e.target.closest('[data-ro-field]');
+  if (!f) return;
+  hideAllSheets();
+  openPropertySheet(f.dataset.roField, f.dataset.prop);
+});
+
+// Its ⤳ Trace starts that field's trace directly (the sheet closes), in every book
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-ro-trace]');
+  if (!t) return;
+  hideAllSheets();
+  startTrace(t.dataset.roTrace, t.dataset.field);
 });
 
 export function openElementReadSheet(elementId, sliceId = null) {

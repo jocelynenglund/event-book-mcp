@@ -53,6 +53,8 @@ export function sliceEventsDrawer(book, sliceId, { readOnly = false, givens = fa
           props: (el.properties || []).map(propLabel),
           // where a tap goes: to the command that produces it, else to the sticky (read, or edit when it can be)
           go: from ? { action: 'event-go', el: from.commandId, slice: from.slice.id } : { action: locked ? 'event-read' : 'event-edit', el: el.id, slice: sliceId },
+          // ↗ beside ✎ ✕: to the slice that records it and flashes it (none for an event nothing in the book produces)
+          jump: from ? { el: from.commandId, slice: from.slice.id, label: `Go to ${from.slice.name || sliceTitle(from.slice, book)}, where ${el.name} is recorded` } : null,
           editable: !locked
         };
       })

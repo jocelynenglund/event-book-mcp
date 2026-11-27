@@ -14,6 +14,7 @@
 
 import { titleCase, camelCase } from './padNote.rules.js';
 import { readOn, pagesNote } from '../pages/screenOn.rules.js'; // feature: pages
+import { inputPart, selectPart, hiddenPart, fieldLine, inputExtras } from '../screenSelect/screenSelect.rules.js'; // feature: screen-select
 
 // Other features' readers of a line (true when it took the line: it is not a part of the window; it leaves what it found on `found`, which parseScreen adds)
 export const screenLineReaders = [
@@ -24,7 +25,7 @@ export const wireframeExtras = [
   pagesNote, // feature: pages
 ];
 
-const PART = /\{([^{}]*)\}|\[([^[\]]*)\]|\(([^()]*)\)/g;
+const PART = /\[([^[\]]*)\]\{([^{}]*)\}|\(([^()]*)\)\{([^{}]*)\}|<([^<>]+)>|\{([^{}]*)\}|\[([^[\]]*)\]|\(([^()]*)\)/g;   // feature: screen-select (the first three: [ many ]{View}, ( one ){View}, <hidden>)
 const lines = text => String(text ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 const same = (a, b) => titleCase(a).toLowerCase() === titleCase(b).toLowerCase();
 
@@ -37,13 +38,18 @@ function readModelOf(inside) {
 
 // One line as its parts, in the order typed (the text between them as text)
 function partsOf(line) {
+  const whole = fieldLine(line);   // feature: screen-select (a whole line that is one field: "- guests []{Guest List}", "- <requestId>", "- email*")
+  if (whole) return [whole];   // feature: screen-select
   const parts = [];
   let text = '', at = 0;
   const flush = () => { if (text.trim()) parts.push({ type: 'text', text: text.trim() }); text = ''; };
   for (const m of line.matchAll(PART)) {
-    const part = m[1] !== undefined ? readModelOf(m[1])
-      : m[2] !== undefined ? (camelCase(m[2]) ? { type: 'input', field: camelCase(m[2]), label: m[2].trim() } : null)
-      : m[3].trim() ? { type: 'button', label: m[3].trim() } : null;
+    const part = m[1] !== undefined ? selectPart(m[1], m[2], 'many')   // feature: screen-select
+      : m[3] !== undefined ? selectPart(m[3], m[4], 'one')   // feature: screen-select
+      : m[5] !== undefined ? hiddenPart(m[5])   // feature: screen-select
+      : m[6] !== undefined ? readModelOf(m[6])
+      : m[7] !== undefined ? inputPart(m[7])
+      : m[8].trim() ? { type: 'button', label: m[8].trim() } : null;
     text += line.slice(at, m.index) + (part ? '' : m[0]);
     at = m.index + m[0].length;
     if (part) { flush(); parts.push(part); }
@@ -63,7 +69,7 @@ export function parseScreen(text) {
       const have = out.readModels.find(r => same(r.name, p.name));
       if (!have) out.readModels.push({ name: p.name, fields: [...p.fields], whole: p.whole });
       else { have.fields.push(...p.fields.filter(f => !have.fields.includes(f))); have.whole ||= p.whole; }
-    } else if (p.type === 'input' && !out.inputs.some(i => i.field === p.field)) out.inputs.push({ field: p.field, label: p.label, line });
+    } else if (['input', 'select', 'hidden'].includes(p.type) && !out.inputs.some(i => i.field === p.field)) out.inputs.push({ field: p.field, label: p.label, line, ...inputExtras(p) });   // feature: screen-select
     else if (p.type === 'button' && !out.buttons.some(b => b.label.toLowerCase() === p.label.toLowerCase())) out.buttons.push({ label: p.label, line });
   }));
   return out;
@@ -108,7 +114,7 @@ export function wireframe(text, focus = null) {
   const sends = label => { const { command } = matchButton(label, focus?.candidates || commands); return !!command && commands.some(c => same(c, command)); };
   const dimmed = p => {
     if (commands.length) return p.type === 'readModel' || (p.type === 'button' && !sends(p.label));
-    if (views.length) return p.type === 'input' || p.type === 'button' || (p.type === 'readModel' && !views.some(v => same(v, p.name)));
+    if (views.length) return ['input', 'select', 'hidden', 'button'].includes(p.type) || (p.type === 'readModel' && !views.some(v => same(v, p.name)));
     return false;
   };
   return { title: screen.title, empty: !screen.title && !screen.lines.length, lines: screen.lines.map(l => l.parts.map(p => ({ ...p, dim: dimmed(p) }))), ...wireframeExtras.reduce((all, extra) => ({ ...all, ...extra(screen, focus) }), {}) };

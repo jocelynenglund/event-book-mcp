@@ -8,6 +8,8 @@
 
 import { getBoardGroups, getScenariosForSlice, sliceTitle } from '../../core/projections.js';
 import { processorReads, processorTriggers } from '../board/processorReads.js';
+import { isScreenField } from '../screenSelect/screenSelect.label.js'; // feature: screen-select
+import { screenFieldText } from '../screenSelect/screenSelect.rules.js'; // feature: screen-select
 import { queryParametersOf } from '../viewQueries/queryFields.js';
 
 const TYPE_WORD = { number: 'number', date: 'date', decimal: 'money', guid: 'id', boolean: 'bool', array: 'list' };
@@ -29,7 +31,7 @@ const valuesText = values => Object.entries(values || {}).filter(([, v]) => v !=
 export function render(state, { notation = 'v1.1' } = {}) {
   const v11 = notation !== 'v1';
   const el = id => state.elements[id];
-  const field = p => `${clean(p.name)}${v11 && TYPE_WORD[p.type] ? `: ${TYPE_WORD[p.type]}` : ''}`;
+  const field = p => isScreenField(p) ? screenFieldText(p) : `${clean(p.name)}${v11 && TYPE_WORD[p.type] ? `: ${TYPE_WORD[p.type]}` : ''}`;   // feature: screen-select (a screen's pick-one, hidden and required fields)
   const sticky = (mark, e, extra = '') => {
     const fields = (e.properties || []).filter(p => !(e.queryFields && e.queryFields[String(p.name).toLowerCase()]) && !queryParametersOf(e).includes(p.name));
     return ` ${mark} ${clean(e.name)}${e.list ? '[]' : ''}(${fields.map(field).join(', ')})${extra}`;
