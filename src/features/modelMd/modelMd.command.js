@@ -12,6 +12,7 @@ import * as ol from '../outline/command.js';
 import { setQueryFields } from '../viewQueries/command.js';
 import { parsePropertyText } from '../../core/constants.js';
 import { addStep, addScenario, chapterId, checkScenario, elementByName } from '../planFile/build.js';
+import { setScreenFieldsFromText } from '../screenSelect/screenSelect.command.js'; // feature: screen-select
 import { parse } from './modelMd.parse.rules.js';
 import { toPlan } from './modelMd.plan.rules.js';
 import { render } from './modelMd.render.rules.js';
@@ -30,6 +31,7 @@ function putFields(list) {
     const el = ol.findByName(type, name, state());
     if (!el) return;
     const text = fields.join(', ');
+    if (type === 'screen') { setScreenFieldsFromText(el.id, text); return; }   // feature: screen-select
     parsePropertyText(text, 'string', el.properties.map(p => p.name)).parsed.forEach(({ name: field, type: propertyType, items }) =>
       es.appendEvent(es.EventTypes.PropertyAdded, { elementId: el.id, propertyId: c.newId('prop'), name: field, propertyType, ...(items ? { items } : {}) }));
     setQueryFields(el.id, parsePropertyText(text, 'string', []).parsed);

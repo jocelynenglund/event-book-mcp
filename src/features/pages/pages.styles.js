@@ -41,7 +41,6 @@ export const pagesCss = `
 .bd-page-chip { padding: 1px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--text) 35%, transparent); background: rgba(255, 255, 255, 0.55); color: var(--text); font: 700 11px/1.5 var(--font-body); white-space: nowrap; cursor: pointer; }
 .bd-page-chip:hover, .bd-page-chip:focus-visible { background: var(--text); color: var(--bg); outline: none; }
 
-/* On a phone the top switch has no room for a fourth view beside the check-out chip: Pages is in ☰ instead */
-@media (max-width: 480px) { .view-switch [data-view-switch="pages"] { display: none; } }
-@media (min-width: 481px) { .burger-item.burger-pages { display: none; } }
+/* On a phone Pages stays in the top switch (the header tightens and the switch scrolls sideways if it must); ☰ has it only on wide screens' behalf, so hide it there too */
+@media (min-width: 1px) { .burger-item.burger-pages { display: none; } }
 `;

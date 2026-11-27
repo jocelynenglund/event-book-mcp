@@ -15,11 +15,13 @@ import { addToSlice } from '../board/command.js';
 import { stickyNamed } from '../planFile/build.js';
 import { parseScreen } from './padScreen.rules.js';
 import { mapScreenFields } from './screenMappings.command.js';
+import { setScreenFieldsFromSketch } from '../screenSelect/screenSelect.command.js'; // feature: screen-select
 import { placeFromSketch } from '../pages/pages.command.js'; // feature: pages
 
 // What other features do once a screen has a new sketch: (elementId, the sketch before, the sketch now) → why it was refused, or null
 const afterSketchSet = [
   placeFromSketch, // feature: pages
+  setScreenFieldsFromSketch, // feature: screen-select
 ];
 
 const lower = s => String(s ?? '').trim().toLowerCase();

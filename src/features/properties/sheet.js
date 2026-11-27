@@ -17,6 +17,7 @@ import { render } from '../../ui/feed.js';
 import { splitArrayName, splitItemFields, parsePropertyText } from '../../core/constants.js';
 import { isReadOnly, openElementReadSheet } from '../readOnly/sheet.js';
 import { propertyListRows } from './propertyListRows.read.js';
+import { propertyFieldRead } from './propertyFieldRead.read.js';
 import { propertyEditForm } from './propertyEditForm.read.js';
 import { propertyNames } from './propertyNames.read.js';
 import { propertySuggestions } from './propertySuggestions.read.js';
@@ -42,7 +43,7 @@ let book = null;
 const load = () => (book = projectState());
 
 export function openPropertySheet(elementId, propertyId = null) {
-  if (isReadOnly()) { openElementReadSheet(elementId); return; }   // not checked out here: read it
+  if (isReadOnly() && !propertyId) { openElementReadSheet(elementId); return; }   // not checked out here: read the sticky (one field: its read sheet)
   const list = propertyListRows(load(), elementId);
   if (!list) return;
   editingElementId = elementId;
@@ -65,6 +66,10 @@ function renderPropertySheet() {
   if (!list || !container) return;
 
   // Read first: what it has, then adding (opened on request, so no keyboard), then copying
+  if (isReadOnly()) {
+    container.innerHTML = propertiesSheetBody({ list, readOnly: true, reading: propertyFieldRead(book, editingElementId, editingPropertyId) });
+    return;
+  }
   const form = propertyEditForm(book, editingElementId, editingPropertyId);
   const adding = !form && addOpen ? { type: addType } : null;
   container.innerHTML = propertiesSheetBody({
@@ -167,7 +172,8 @@ function setQuery(clear) {
 
 // Comes from… (pick the field it comes from), Unmap, and Trace (follow it through the book): on the field being edited
 function mapOrTrace(a) {
-  const form = propertyEditForm(load(), editingElementId, editingPropertyId);
+  if (isReadOnly() && a !== 'trace') return;
+  const form = (isReadOnly() ? propertyFieldRead : propertyEditForm)(load(), editingElementId, editingPropertyId);
   if (!form) return;
   const elementId = editingElementId;
   if (a === 'unmap') {

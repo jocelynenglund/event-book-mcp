@@ -46,7 +46,7 @@ function chainOf(slice, state) {
 // a sticky of the slice (no source, or a piece of a field written as prose) says where: gap { elementId, field, tidy }.
 // One that comes from another sticky's field says which (from: "Order Placed.orderId"); onTrace: it is on the traced
 // path (trace: Field Trace). at: the sticky and property a tap on the chip opens (the gap's, else the mapped one, else the first).
-function fieldsOf(slice, state, trace) {
+export function fieldsOf(slice, state, trace) {
   const carriers = slice.elements.map(id => state.elements[id]).filter(e => e?.properties?.length);
   const { at } = fieldSources(state);
   const byName = new Map();

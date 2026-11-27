@@ -25,6 +25,7 @@ import { getScenariosForSlice, sliceTitle } from '../../core/projections.js';
 import { tidyOf, isPlainName } from './tidy.js';
 import { mappingOf, itemField } from '../fieldMapping/mappings.js';
 import { screenGaps } from './screenGaps.js';
+import { selectGaps } from '../screenSelect/screenSelect.gaps.js'; // feature: screen-select
 import { processorTriggers } from '../board/processorReads.js';
 import { isQueryField } from '../viewQueries/queryFields.js';
 
@@ -109,6 +110,7 @@ function check(state, slice, out) {
 
   // A screen made from a Pad sketch: its inputs go to the command, its read models carry the fields it shows, its buttons send commands
   screenGaps(state, slice, screens, commands, gap);
+  selectGaps(state, slice, screens, gap); // feature: screen-select
   // An automation reads a view: an input is always a read model, fed by events. One made the older way (an event
   // that wakes the processor, no read model) says so, once, on the first slice it sits in
   els.filter(el => el.type === 'processor' && !out.automations.has(el.id)).forEach(proc => {

@@ -68,6 +68,7 @@ import { renderLiteratureOutline } from '../literature/view.js';
 import { outlineGoalsFor, outlineGoalsClick, outlineGoalsKey } from '../outlineGoals/view.js'; // feature: outline-goals
 import { openDrafts } from '../outlineGoals/rules.js'; // feature: outline-goals
 import { suggestShow, suggestClear, suggestKey, initSuggest } from '../pad/suggestInput.js';
+import { drawOutlineDesktop, initOutlineDesktop } from '../outlineDesktop/outlineDesktop.screen.js'; // feature: outline-desktop
 
 let selecting = false;
 let query = '';            // the search box: filters slices (and opens folded chapters while it does)
@@ -248,6 +249,7 @@ export function renderOutline() {
   const trace = activeFieldTrace(state);
   layout.chapters.forEach(ch => ch.rows.forEach(r => { rows[r.slice.id] = outlineSliceRow(state, r.slice, { ...r, trace }); }));
   screenNow = { layout, rows };
+  if (drawOutlineDesktop(container, { state, layout, extras, built, query, editable: !isReadOnly() && !built, arrangeable: canArrangeCurrent(), trace })) { pinOutline(); return; } // feature: outline-desktop
 
   const rowUi = row => ({
     selecting, selected: selected.has(row.sliceId), query,
@@ -292,7 +294,7 @@ export function renderOutline() {
 
 // Not checked out here: expanding, folding, fields and scenarios still open; a slice's row
 // opens its page, a scenario its slice's scenarios to read; anything that would change it does nothing
-const readOnlyReads = new Set(['field-gap', 'field-menu', 'fix-list', 'chapter-menu', 'jump', 'open-slice', 'gwt', 'expand', 'collapse-all', 'comment', 'next-comment', 'testers', 'progress-history', 'verdict', 'verdict-save', 'nice', 'values-one', 'fields-one', 'fields', 'fold', 'search-clear', 'share-slice', 'add-scenario']);
+const readOnlyReads = new Set(['field-gap', 'field-menu', 'field-trace', 'fix-list', 'chapter-menu', 'jump', 'open-slice', 'gwt', 'expand', 'collapse-all', 'comment', 'next-comment', 'testers', 'progress-history', 'verdict', 'verdict-save', 'nice', 'values-one', 'fields-one', 'fields', 'fold', 'search-clear', 'share-slice', 'add-scenario']);
 function readOnlyTap(a, t) {
   if (readOnlyReads.has(a)) return false;
   if (a === 'edit') { hideAllSheets(); openSliceMenu(t.dataset.slice); }   // read-only: only sharing
@@ -313,7 +315,8 @@ function handleClick(e) {
   else if (a === 'progress-history') openProgressHistory(id);
   else if (a === 'field-gap') onFieldTap(t.dataset.el, id, t.dataset.field);
   // Any other field: its editor (Comes from…, Trace); a book that can't be changed here traces it
-  else if (a === 'field-menu') { if (isReadOnly()) startTrace(t.dataset.el, t.dataset.field); else openPropertySheet(t.dataset.el, t.dataset.prop); }
+  else if (a === 'field-menu') openPropertySheet(t.dataset.el, t.dataset.prop);
+  else if (a === 'field-trace') startTrace(t.dataset.el, t.dataset.field);
   else if (a === 'fix-list') onCountTap(t);
   else if (a === 'open-slice') { hideAllSheets(); showSlicePage(id); }
   else if (a === 'add-scenario') openScenariosSheet(id, { readOnly: isReadOnly() && !canAddScenariosHere() });
@@ -491,6 +494,7 @@ export function initOutline() {
   view?.addEventListener('click', outlineGoalsClick); // feature: outline-goals
   view?.addEventListener('keydown', outlineGoalsKey); // feature: outline-goals
   initOutlineArrange(view);
+  initOutlineDesktop(view); // feature: outline-desktop
   view?.addEventListener('input', e => {
     if (e.target.id !== 'olSearch') return;
     query = e.target.value;

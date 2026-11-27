@@ -1,10 +1,13 @@
 import { OutlineGoalsEvents } from '../features/outlineGoals/events.js'; // feature: outline-goals
 import { StoredElsewhereEvents } from '../features/storedElsewhere/storedElsewhere.events.js'; // feature: stored-elsewhere
+import { screenFieldLabel } from '../features/screenSelect/screenSelect.label.js'; // feature: screen-select
+import { ScreenSelectEvents } from '../features/screenSelect/screenSelect.events.js'; // feature: screen-select
 import { storageLabel } from '../features/storedElsewhere/storedElsewhere.rules.js'; // feature: stored-elsewhere
 // Event Types
 export const EventTypes = {
   ...OutlineGoalsEvents, // feature: outline-goals
   ...StoredElsewhereEvents, // feature: stored-elsewhere
+  ...ScreenSelectEvents, // feature: screen-select
   // Element events
   ElementCreated: 'ElementCreated',
   ElementDeleted: 'ElementDeleted',
@@ -240,6 +243,7 @@ export const fieldKey = name => String(name ?? '').toLowerCase().replace(/\[\s*\
 
 // A property as written on cards and pictures: arrays get [] ("items[]")
 export function propLabel(p) {
+  if (screenFieldLabel(p)) return screenFieldLabel(p); // feature: screen-select
   return p.name + (p.type === 'array' ? '[]' : '') + (p.type === 'array' && p.items?.length ? `{${p.items.join(', ')}}` : '');
 }
 

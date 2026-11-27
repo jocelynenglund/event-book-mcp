@@ -25,18 +25,18 @@ export function planScreenMappings(state, screenId, text) {
   const commandNames = Object.values(state.elements).filter(e => e.type === 'command').map(e => e.name);
   const slices = state.sliceOrder.map(id => state.slices[id]).filter(s => s?.elements.includes(screenId));
   const wanted = new Set(), seen = new Set();
-  const want = (target, field, source, label, text) => {
+  const want = (target, field, source, label, text, many = false) => {
     const key = `${target.id}|${fieldKey(field)}`;
     if (seen.has(key)) return;
     seen.add(key);
     const was = target.mappings?.[fieldKey(field)]?.from;
     if (was && !(was.elementId === source.id && fieldKey(was.field) === fieldKey(field))) return;   // it comes from somewhere else: leave it
     wanted.add(key);
-    plan.map.push({ elementId: target.id, field, from: { elementId: source.id, field }, have: !!was, label, text });
+    plan.map.push({ elementId: target.id, field, from: { elementId: source.id, field }, have: !!was, label, text, ...(many ? { many } : {}) });
   };
   slices.forEach(slice => {
     const els = slice.elements.map(id => state.elements[id]).filter(Boolean), commands = els.filter(e => e.type === 'command');
-    if (commands.length) commands.forEach(c => inputsForCommand(parsed, c.name, commandNames).forEach(i => want(c, i.field, screen, '[ ]', `${i.field} → ${c.name}`)));
+    if (commands.length) commands.forEach(c => inputsForCommand(parsed, c.name, commandNames).forEach(i => want(c, i.field, screen, '[ ]', `${i.field} → ${c.name}`, i.select === 'many')));
     else els.filter(e => e.type === 'readModel').forEach(view => {
       const shown = parsed.readModels.find(r => same(r.name, view.name));
       const fields = (shown?.fields || []).filter(f => propOf(view, f));

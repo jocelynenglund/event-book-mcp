@@ -33,13 +33,13 @@ const chainText = row => row.chain.length ? row.chain.map(escapeHtml).join(' →
 // One field of a slice. A gap (no source, or a piece of prose) is a button with a ⚠: it opens that field's sheet. Any
 // other is a button too: it opens the field's editor (Comes from…, Trace), or, in a book that can't be changed here, traces it.
 // A ← after the name says it comes from another sticky's field; on-trace: it is on the traced path.
-const fieldChip = sliceId => ({ prop, marks, gap, from, onTrace, query, at }) => {
+export const fieldChip = sliceId => ({ prop, marks, gap, from, onTrace, query, at }) => {
   const arrow = from ? ` <span class="fm-chip-mark" title="comes from ${escapeHtml(from)}">←</span>` : '';
   const label = `${marks.map(t => fieldMark[t]).join('')}${marks.length ? ' ' : ''}${query ? '?' : ''}${escapeHtml(propLabel(prop))}${prop.type && prop.type !== 'string' ? ` <i>${escapeHtml(prop.type)}</i>` : ''}${arrow}`;
   const on = `${from ? ' mapped' : ''}${onTrace ? ' on-trace' : ''}`;
   return gap
     ? `<button class="ol-field has-gap${on}" data-outline-action="field-gap" data-el="${gap.elementId}" data-slice="${sliceId}" data-field="${escapeHtml(gap.field)}" aria-label="${escapeHtml(gap.field)} ${gap.tidy ? 'needs tidying' : 'has no source'}: tap for why and the fix">${label}<span class="fg-mark-chip" aria-hidden="true"> ⚠</span></button>`
-    : `<button class="ol-field${on}" data-outline-action="field-menu" data-el="${at.elementId}" data-prop="${at.propertyId}" data-slice="${sliceId}" data-field="${escapeHtml(prop.name)}" aria-label="${escapeHtml(prop.name)}${from ? `, comes from ${escapeHtml(from)}` : ''}: edit, map or trace it">${label}</button>`;
+    : `<span class="ol-field-wrap"><button class="ol-field${on}" data-outline-action="field-menu" data-el="${at.elementId}" data-prop="${at.propertyId}" data-slice="${sliceId}" data-field="${escapeHtml(prop.name)}" aria-label="${escapeHtml(prop.name)}${from ? `, comes from ${escapeHtml(from)}` : ''}: edit, map or trace it">${label}</button><button class="ol-trace-btn" data-outline-action="field-trace" data-el="${at.elementId}" data-field="${escapeHtml(prop.name)}" aria-label="Trace ${escapeHtml(prop.name)}"></button></span>`;
 };
 
 function fieldList(row) {

@@ -9,6 +9,7 @@ import { render, showSlicePage } from '../../ui/feed.js';
 import { isReadOnly, openElementReadSheet } from '../readOnly/sheet.js';
 import { openElementMenu } from '../elementMenu/sheet.js';
 import { openPropertySheet } from '../properties/sheet.js';
+import { startTrace } from '../fieldTrace/traceState.js';
 import { moveSlice, setUpdateRole } from './command.js';
 import { openReplay } from '../replay/replay.js';
 import { toggleChapterFolded, setAllChaptersFolded, isChapterFolded, toggleGwtLane, showFlow } from './view.js';
@@ -50,6 +51,13 @@ function handleBoardClick(e) {
   // A tap on a grip is only a grip: it opens what the grip sits on (a spine), but not the buttons a grip carries (a part tab's)
   if (!t || t.contains(e.target.closest('.bd-grip'))) return;
   const { action, slice, el, to } = t.dataset;
+  // A field chip on a card goes straight to that field: its property sheet (Trace, Comes from…), or the trace when the book can't be changed here
+  if (action === 'field-trace') { startTrace(el, t.dataset.fieldName); return; }
+  if (action === 'field') {
+    const prop = projectState().elements[el]?.properties?.find(p => p.name === t.dataset.fieldName);
+    if (!prop) startTrace(el, t.dataset.fieldName); else openPropertySheet(el, prop.id);
+    return;
+  }
   if (isReadOnly() && !(action === 'part-menu' && canArrangeCurrent()) && readOnlyTap(action, t)) return;
   if (action === 'new-slice') openNewSliceSheet(t.dataset.chapter || undefined);
   else if (action === 'chapter-menu') openChapterMenu(t.dataset.chapter);
@@ -179,6 +187,11 @@ export function initBoard() {
     if (!e.target.closest('#fab, #fabMenu')) toggleFabMenu(false);
   });
   document.getElementById('board').addEventListener('click', handleBoardClick);
+  // Enter on a focused field chip (or its ⤳ Trace) does what a tap does
+  document.getElementById('board').addEventListener('keydown', e => {
+    const t = e.target.closest?.('[data-action="field"], [data-action="field-trace"]');
+    if (t && e.key === 'Enter' && e.target === t) { e.preventDefault(); t.click(); }
+  });
   document.getElementById('boardStats')?.addEventListener('click', e => {
     if (e.target.closest('[data-find-open]')) { openFindSheet(); return; }
     if (e.target.closest('[data-replay]')) { openReplay(); return; }

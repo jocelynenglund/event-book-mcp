@@ -18,7 +18,7 @@ export function mapScreenFields(screenId) {
   if (state.elements[screenId]?.type !== 'screen' || !state.elements[screenId].sketch) return null;
   const { map, clear } = planScreenMappings(state, screenId);
   for (const m of map.filter(x => !x.have)) {
-    [m.elementId, m.from.elementId].forEach(id => propOf(projectState().elements[id], m.field) || addProperty(id, m.field));
+    [m.elementId, m.from.elementId].forEach(id => propOf(projectState().elements[id], m.field) || addProperty(id, m.field, m.many ? 'array' : 'string'));   // feature: screen-select (a pick-many field is a list)
     const why = mapField({ elementId: m.elementId, field: m.field, from: m.from });
     if (why && !/^already comes from/.test(why)) return why;
   }

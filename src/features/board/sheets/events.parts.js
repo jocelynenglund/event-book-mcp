@@ -4,7 +4,7 @@
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// One event: tap to go to its command (or read it), ✎ to edit it, ✕ to stop reading it here
+// One event: tap to go to its command (or read it), ↗ to jump to the slice that records it, ✎ to edit it, ✕ to stop reading it here
 export function eventDrawerRow(row) {
   return `
       <div class="bd-event-row" data-component="Event drawer row" data-key="${row.id}">
@@ -13,6 +13,7 @@ export function eventDrawerRow(row) {
           <span class="bd-card-name">${escapeHtml(row.name)}</span>
           ${row.props.length ? `<div class="bd-props">${row.props.map(p => `<span>${escapeHtml(p)}</span>`).join('')}</div>` : ''}
         </button>
+        ${row.jump ? `<button class="bd-event-jump" data-board-action="place-go" data-el="${row.jump.el}" data-slice="${row.jump.slice}" aria-label="${escapeHtml(row.jump.label)}" title="Where it is recorded">↗</button>` : ''}
         ${row.editable ? `<button class="bd-event-edit" data-board-action="event-edit" data-el="${row.id}" data-slice="${row.sliceId}" aria-label="Edit ${escapeHtml(row.name)}">✎</button>` : ''}
         ${row.remove ? `<button class="bd-event-remove" data-board-action="event-stop" data-el="${row.id}" data-slice="${row.sliceId}" aria-label="${escapeHtml(row.remove.label)}" title="Not read here">✕</button>` : ''}
       </div>`;

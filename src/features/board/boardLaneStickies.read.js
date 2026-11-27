@@ -5,7 +5,7 @@
 // of this list, so the Board card draws from the same view (a list and its item are one unit).
 // ===========================================
 
-import { getScenariosForSlice, elementFlow, eventsWithoutScenario, getTodoUpdates } from '../../core/projections.js';
+import { elementFlow, getTodoUpdates } from '../../core/projections.js';
 import { elementLabel, externalAttr } from '../../core/constants.js';
 import { fieldLabel } from '../viewQueries/queryFields.js';
 import { laneOf, laneTypeFor, sliceActor, sliceProcessor } from './command.js';
@@ -98,15 +98,17 @@ function cardOf(el, slice, state, { trigger, first, shownFlowId, gaps, mappings,
     foldedProps: props.length && fieldsFolded(el.id) ? foldedLabel(props.length) : null,
     // A field with no source wears a ⚠ (Sticky Field Gaps): its why and fix, and where it sits
     // ...and one that comes from another sticky's field says which (Sticky Field Mappings)
-    props: props.map(p => ({ id: p.id, label: fieldLabel(el, p), generated: !!p.generated, gap: gapOf(gaps, el, slice, p), from: mappedFrom(mappings, el.id, p.name) })),
+    props: props.map(p => ({ id: p.id, name: p.name, label: fieldLabel(el, p), generated: !!p.generated, gap: gapOf(gaps, el, slice, p), from: mappedFrom(mappings, el.id, p.name) })),
     // While a field is traced: the step numbers this sticky is on (Field Trace), or false when it is off the path
     trace: trace ? trace.marks[el.id] || false : null,
     tags
   };
 }
 
-// A view only reads its events: on the board they're one pile, not stickies to edit
-const piled = (slice, lane, laneEls, state) => lane === 2 && laneEls.length > 0 && slice.type === 'SV' && sliceActor(slice, state) !== 'processor';
+// A view only reads its events, so a view's events lane shows each as the shared sticky (with its 🔗 N and the ↑ to the read
+// model), whether or not a scenario starts from it. Only a long list (over this many) folds into one pile, opened in a drawer.
+const MOST_STICKIES = 4;
+const piled = (slice, lane, laneEls, state) => lane === 2 && laneEls.length > MOST_STICKIES && slice.type === 'SV' && sliceActor(slice, state) !== 'processor';
 
 // col: the column from the layout ({ slice, … }); lane: 0, 1 or 2; layout: what the layout hands every part
 // (the first slice of each to-do list, the flow shown in a chapter)
@@ -119,15 +121,8 @@ export function boardLaneStickies(state, col, lane, layout) {
   const flow = sliceArrows[lane] && byLane[lane].length && byLane[lane - 1].length ? sliceArrows[lane] : null;
   const base = { lane, flow };
   if (piled(slice, lane, laneEls, state)) {
-    const open = new Set(eventsWithoutScenario(slice.id, state).map(e => e.id));
-    const uncovered = laneEls.filter(e => open.has(e.id));
-    if (uncovered.length) {
-      // The events no scenario starts from yet; the covered ones are in the given stack under the scenarios
-      const hasScenarios = getScenariosForSlice(slice.id, state).length > 0;
-      return { ...base, sliceId: slice.id, cards: [], add: null, tiltKey: slice.id + 'pile',
-        pile: { names: uncovered.map(e => e.name), count: uncovered.length, note: slice.type === 'SV' ? (hasScenarios ? ' with no scenario yet' : ' it reads') : '' } };
-    }
-    laneEls = [];   // every event is covered: they're in the given stack under the scenarios
+    return { ...base, sliceId: slice.id, cards: [], add: null, tiltKey: slice.id + 'pile',
+      pile: { names: laneEls.map(e => e.name), count: laneEls.length, note: ' it reads' } };
   }
   const type = laneTypeFor(slice, lane, state);
   const processor = sliceProcessor(slice, state);
@@ -139,6 +134,8 @@ export function boardLaneStickies(state, col, lane, layout) {
   // processor can read several read models
   const readsMany = lane === 1 && slice.type === 'SV' && sliceActor(slice, state) === 'processor';
   const canAdd = type && !slice.id.startsWith('au_inferred_') && (laneEls.length === 0 || lane === 2 || readsMany);
-  return { ...base, sliceId: slice.id, cards, pile: null,
+  // A view's events also open as a list (where each came from, ↗ there, ✎, ✕): the lane's "all events" link
+  const list = lane === 2 && slice.type === 'SV' && sliceActor(slice, state) !== 'processor' && cards.length > 0;
+  return { ...base, sliceId: slice.id, cards, pile: null, list,
     add: canAdd ? { type, label: typeNames[type] || type, more: laneEls.length > 0 } : null };
 }
