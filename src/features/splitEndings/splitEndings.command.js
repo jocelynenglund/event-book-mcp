@@ -10,6 +10,7 @@ import { projectState, sliceTitle, getScenariosForSlice } from '../../core/proje
 import { addToSlice, removeFromSlice } from '../board/command.js';
 import { moveScenario } from '../scenarios/command.js';
 import { cloneSlice } from '../cloneSlice/cloneSlice.command.js';
+import { putInEndingFlow } from '../alternateFlows/alternateFlows.command.js'; // feature: alternate-flows
 import { endingsOf, keptOutcome } from './splitEndings.rules.js';
 
 // plan(state, sliceId) → why it can't, or { touches, go() → null }  (the shape fixes.command.js plans have)
@@ -28,6 +29,7 @@ export function splitEndingsPlan(state, sliceId) {
       if (typeof made === 'string') return made;
       addToSlice(made.sliceId, 'event', { elementId: e.id });
       removeFromSlice(sliceId, e.id);
+      putInEndingFlow(made.sliceId, e.name); // feature: alternate-flows
       scenarios.filter(s => s.then?.type === 'event' && s.then.eventId === e.id).forEach(s => moveScenario(s.id, made.sliceId));
     }
     return null;

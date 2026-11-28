@@ -181,7 +181,7 @@ const chapterGrip = (chapter, cls, mark = '') => `<span class="bd-grip ${cls}" d
 export function boardChapterHead(chapter, ui = {}) {
   const chips = chapter.flows.length ? `
       <div class="bd-flows">
-        <button class="bd-flow ${chapter.shownFlow ? '' : 'active'}" data-action="show-flow" data-chapter="${chapter.id}" data-flow="">Main</button>
+        <button class="bd-flow ${chapter.shownFlow ? '' : 'active'}" data-action="show-flow" data-chapter="${chapter.id}" data-flow="">Main line</button>
         ${chapter.flows.map(f => `<button class="bd-flow ${chapter.shownFlow === f.id ? 'active' : ''}" data-action="show-flow" data-chapter="${chapter.id}" data-flow="${f.id}">↳ ${escapeHtml(f.name)}</button>`).join('')}
       </div>` : '';
   return `

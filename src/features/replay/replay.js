@@ -11,6 +11,7 @@ import { projectState, sliceTitle } from '../../core/projections.js';
 import { render, showSliceOnBoard, getView } from '../../ui/feed.js';
 import { isChapterFolded } from '../board/view.js';
 import { showToast } from '../../ui/toast.js';
+import { mountRestore, refreshRestore } from '../replayRestore/replayRestore.ui.js'; // feature: replay-restore
 
 let steps = [];      // [{ end, events }] end = how many events the model has after this step
 let at = 0;          // the step shown
@@ -68,6 +69,7 @@ function show(i, follow = false) {
   bar.querySelector('#replayPos').textContent = `${at} / ${steps.length}`;
   bar.querySelector('#replayWhat').textContent = step ? describe(step) : 'Before anything was added';
   bar.querySelector('#replayWhen').textContent = step ? when(step.events[0].timestamp) : '';
+  refreshRestore(); // feature: replay-restore
   // Playing: keep the slice being built in view (unless its chapter is a closed book)
   const sliceId = step?.events.map(e => e.data?.sliceId).find(Boolean);
   if (follow && sliceId && getView() === 'board') {
@@ -134,5 +136,6 @@ export function openReplay(atEvents = null) {
   bar.querySelector('#replaySlider').addEventListener('input', e => { stop(); show(Number(e.target.value)); });
   bar.querySelector('#replayPlay').addEventListener('click', play);
   bar.querySelector('#replayClose').addEventListener('click', closeReplay);
+  mountRestore(bar, { name: () => projectState(events).modelName || 'Untitled', at: () => at, total: () => steps.length, end: () => steps[at - 1]?.end ?? 0, what: () => (steps[at - 1] ? describe(steps[at - 1]) : 'before anything was added'), when: () => (steps[at - 1] ? when(steps[at - 1].events[0].timestamp) : ''), close: closeReplay }); // feature: replay-restore
   show(atEvents == null ? steps.length : steps.filter(s => s.end <= atEvents).length);
 }

@@ -8,9 +8,11 @@ import { showToast } from '../../ui/toast.js';
 import { render } from '../../ui/feed.js';
 import { toastWithUndo } from '../undo/command.js';
 import { openBoardSheet, scrollToSlice } from '../board/sheets/shared.js';
+import { showFlow } from '../board/view.js';
 import { cloneSliceChoicesNow } from './cloneSliceChoices.read.js';
-import { cloneSliceSheet } from './cloneSlice.parts.js';
-import { cloneSlice, giveScenarioItsOwnEnding } from './cloneSlice.command.js';
+import { cloneSliceSheet, alternateOfSheet } from './cloneSlice.parts.js';
+import { alternateOfChoicesNow } from './alternateOfChoices.read.js';
+import { cloneSlice, giveScenarioItsOwnEnding, setAlternateOf } from './cloneSlice.command.js';
 import { ensureCloneSliceStyles } from './cloneSlice.styles.js';
 
 ensureCloneSliceStyles();
@@ -19,6 +21,20 @@ function openCloneSheet(sliceId, scenarioId = null) {
   const choices = cloneSliceChoicesNow(sliceId, scenarioId);
   if (!choices) { showToast('That slice is gone'); return; }
   openBoardSheet(cloneSliceSheet(choices), 'csName');
+}
+
+function openAlternateOfSheet(sliceId) {
+  const choices = alternateOfChoicesNow(sliceId);
+  if (!choices) { showToast('That slice is gone'); return; }
+  openBoardSheet(alternateOfSheet(choices));
+}
+
+function pickAlternateOf(t) {
+  const made = setAlternateOf({ sliceId: t.dataset.slice, alternateOf: t.dataset.of || null });
+  if (typeof made === 'string') { showToast(made); return; }
+  hideAllSheets();
+  render();
+  toastWithUndo(made.alternateOf ? 'Now an alternate of that slice' : 'Now a plain slice');
 }
 
 function submit(t) {
@@ -42,6 +58,8 @@ export function onSheetAction(a, t) {
   if (a === 'clone-slice') openCloneSheet(t.dataset.slice);
   else if (a === 'clone-own-ending') openCloneSheet(t.dataset.slice, t.dataset.scenario);
   else if (a === 'clone-submit') submit(t);
+  else if (a === 'alternate-of') openAlternateOfSheet(t.dataset.slice);
+  else if (a === 'alternate-of-pick') pickAlternateOf(t);
   else return false;
   return true;
 }
@@ -49,5 +67,9 @@ export function onSheetAction(a, t) {
 // An alternate's "alt · alternate of S5": go to S5
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-clone-goto]');
-  if (t) scrollToSlice(t.dataset.cloneGoto);
+  if (!t) return;
+  // A flow steps past the original its alternate stands in for: going there shows the chapter's main line
+  const chapterId = t.dataset.chapter;
+  if (chapterId && !document.querySelector(`.bd-head[data-key="${t.dataset.cloneGoto}"]`)) { showFlow(chapterId, null); render(); }
+  scrollToSlice(t.dataset.cloneGoto);
 });

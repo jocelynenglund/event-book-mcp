@@ -1,5 +1,12 @@
 // What the agent tools (tools/eventpad-mcp) say about clones: the clone_slice tool, and "alternate of S5" in the outline.
-import { cloneSlice } from './cloneSlice.command.js';
+import { cloneSlice, setAlternateOf } from './cloneSlice.command.js';
+
+// edit_slice {slice, alternateOf: "S3" | null}: point an alternate at the slice it stands in for (or at none); a refusal throws its words
+export function pointAlternate({ slice, alternateOf, findSlice, state }) {
+  const target = alternateOf === null || alternateOf === '' ? null : findSlice(alternateOf, state()).id;
+  const made = setAlternateOf({ sliceId: slice.id, alternateOf: target });
+  if (typeof made === 'string') throw new Error(made);
+}
 import { projectState, sliceRef } from '../../core/projections.js';
 
 // In the outline, at the end of an alternate's line: " · alternate of S5" ('' for a slice that is no alternate, or whose original is gone)

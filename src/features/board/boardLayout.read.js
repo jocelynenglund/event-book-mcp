@@ -8,6 +8,12 @@
 // ===========================================
 
 import { getBoardGroups, chapterFlows, sliceFlow } from '../../core/projections.js';
+import { replacedInFlow } from '../alternateFlows/alternateFlows.rules.js'; // feature: alternate-flows
+
+// What a shown flow steps past: (state, flow) → Set of slice ids (a slice an alternate in that flow takes the place of)
+const flowSkips = [
+  replacedInFlow, // feature: alternate-flows
+];
 import { shows, filtering as staged, emptyText, filterFor } from '../filter/status.js';
 import { chapterParts } from '../arrange/chapterParts.read.js';
 
@@ -27,7 +33,8 @@ export function withFlows(groups, state, flowOf) {
   return groups.map(g => {
     if (!g.chapter || !chapterFlows(g.chapter.id, state).length) return g;
     const flow = flowOf(g.chapter.id, state);
-    return { ...g, flow, slices: g.slices.filter(s => { const f = sliceFlow(s, state); return !f || f.id === flow?.id; }) };
+    const skipped = flowSkips.map(skip => skip(state, flow));
+    return { ...g, flow, slices: g.slices.filter(s => { const f = sliceFlow(s, state); return (!f || f.id === flow?.id) && !skipped.some(set => set.has(s.id)); }) };
   });
 }
 

@@ -1,5 +1,5 @@
 // CLONE SLICE - Shared pure rules
-import { sliceTitle } from '../../core/projections.js';
+import { sliceTitle, sliceRef } from '../../core/projections.js';
 
 export const alternateName = title => `${title} (alternate)`;
 
@@ -30,3 +30,29 @@ export const defaultKeep = { screen: true, processor: true, command: true, readM
 
 // The slice's own title, for the clone's name
 export const nameFor = (slice, book) => alternateName(sliceTitle(slice, book));
+
+// The main-line slice an alternate stands in for: follow alternateOf (a chain from an older book: S5 of S4 of S3) to its end. A slice that is no
+// alternate is its own root. A loop in the book's own events stops where it began.
+export function alternateRoot(book, sliceId) {
+  const seen = new Set();
+  let id = sliceId;
+  while (book.slices[id]?.alternateOf && book.slices[book.slices[id].alternateOf] && !seen.has(id)) { seen.add(id); id = book.slices[id].alternateOf; }
+  return id;
+}
+
+// Why a slice cannot point at `targetId` as its original (the words), or null when it can; targetId null means "none" and always can
+export function alternateOfRefusal(book, sliceId, targetId) {
+  const slice = book.slices[sliceId];
+  if (!slice) return 'That slice is gone';
+  if (!targetId) return null;
+  const target = book.slices[targetId];
+  if (!target) return 'That slice is gone';
+  if (targetId === sliceId) return 'A slice is not an alternate of itself';
+  if ((target.chapterId || null) !== (slice.chapterId || null)) return "An alternate stays in its original's chapter";
+  const seen = new Set();
+  for (let id = targetId; id && book.slices[id] && !seen.has(id); id = book.slices[id].alternateOf) {
+    if (id === sliceId) return `That would make a loop: ${sliceRef(book, sliceId)} would be an alternate of one of its own alternates`;
+    seen.add(id);
+  }
+  return null;
+}

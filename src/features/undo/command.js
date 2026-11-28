@@ -5,10 +5,12 @@
 import { popBatch, clearEvents, getCurrentModelId, canEditCurrent } from '../../core/eventStore.js';
 import { undoBatch } from '../sync/client.js';
 import { showToast } from '../../ui/toast.js';
+import { undoRestore } from '../replayRestore/replayRestore.command.js'; // feature: replay-restore
 import { render } from '../../ui/feed.js';
 
 export function undo() {
   if (!canEditCurrent()) { showToast('Read-only here: check it out to edit'); return; }
+  if (undoRestore()) { render(); showToast('Brought back'); return; } // feature: replay-restore
   const popped = popBatch();
   if (popped.length) {
     undoBatch(getCurrentModelId(), popped[0].batch, popped.map(e => e.id));

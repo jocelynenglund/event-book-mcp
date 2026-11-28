@@ -70,6 +70,7 @@ const ol = await import(new URL('features/outline/command.js', src));
 const og = await import(new URL('features/outlineGoals/mcp.js', src)); // feature: outline-goals
 const cm = await import(new URL('features/comments/command.js', src));
 const cloneMcp = await import(new URL('features/cloneSlice/cloneSlice.mcp.js', src)); // feature: clone-slice
+const flowsMcp = await import(new URL('features/alternateFlows/alternateFlows.mcp.js', src)); // feature: alternate-flows
 const splitMcp = await import(new URL('features/splitEndings/splitEndings.mcp.js', src)); // feature: split-endings
 const { modelMdTools } = await import(new URL('features/modelMd/modelMd.mcp.js', src)); // feature: model-md
 // What other features say beside a sticky in the outline: (sticky) → words or ''
@@ -80,6 +81,7 @@ const outlineNotes = [
 // What other features say at the end of a slice's line in the outline: (state, slice) → ' · words' or ''
 const sliceNotes = [
   cloneMcp.alternateNote, // feature: clone-slice
+  flowsMcp.flowNote, // feature: alternate-flows
 ];
 const sliceNoteOf = (st, s) => sliceNotes.map(note => note(st, s)).join('');
 const noteOf = e => outlineNotes.map(note => note(e)).filter(Boolean).map(w => ` (${w})`).join('');
@@ -1224,8 +1226,9 @@ const tools = [
       stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' },
       reads: { ...S, description: 'An automation slice\'s processor reads this existing view: its title or S-number (or the read model\'s name)' },
       stopTrigger: { ...S, description: 'An automation slice\'s processor stops starting on this event (its name): the "⚡ on" link goes, the event stays' },
+      alternateOf: { type: ['string', 'null'], description: 'Point this alternate at the slice it is an alternate of (title, S-number or #ref; same chapter), or null to make it a plain slice' }, // feature: clone-slice
       remove: { type: 'array', items: S, description: 'Names of stickies to take off this slice (they stay in the book and on other slices); refused for the slice\'s only command or read model' } }, required: ['slice'] },
-    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger, reads, remove }) => {
+    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger, reads, remove, alternateOf }) => { // feature: clone-slice
       if (refined === undefined) refined = ready;
       const s = findSlice(slice, state(), { destructive: !!del });
       if (del) { const was = nameOf(s); c.deleteSlice(s.id); return `Deleted ${was}.`; }
@@ -1304,6 +1307,7 @@ const tools = [
       if (description !== undefined) c.describeSlice(s.id, description);
       if (fields) addFields(s.id, fields);
       if (chapter) c.setSliceChapter(s.id, chapterId(chapter));
+      if (alternateOf !== undefined) cloneMcp.pointAlternate({ slice: s, alternateOf, findSlice, state }); // feature: clone-slice
       // Waiving is an edit too (it takes refined back), so before refined below
       const by = lib.agentName(null, process.env);
       if (waived === true) { const refused = c.waiveScenarios({ sliceId: s.id, reason: waivedReason || '', by }); if (refused) throw new Error(`${pr.sliceTitle(s, state())} can't be waived: ${refused}`); }
@@ -1428,6 +1432,8 @@ const tools = [
     } },
   cloneMcp.cloneSliceTool({ findSlice, nameOf, S }), // feature: clone-slice
   splitMcp.splitEndingsTool({ findSlice, nameOf, S }), // feature: split-endings
+  flowsMcp.alternateFlowsTool(), // feature: alternate-flows
+  flowsMcp.renameFlowTool(), // feature: alternate-flows
   ...modelMdTools({ S }), // feature: model-md
   { name: 'remove_sticky', edits: true, description: 'Delete a sticky (an event, command, read model, screen, processor) from the whole book, by its name, but only once no slice uses it any more (take it off its slices first with edit_slice {slice, remove: ["<name>"]}); a sticky some slice still draws is refused, naming the slices, and so is one a scenario mentions (its Given, When or Then), naming the scenarios. Comments belong to slices and scenarios, never to a sticky, so none are affected. One undo.',
     inputSchema: { type: 'object', properties: { name: S, slice: { ...S, description: 'Narrows it down when two stickies share the name' } }, required: ['name'] },
@@ -1616,7 +1622,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.16.0' },
+      serverInfo: { name: 'eventpad', version: '0.18.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});
