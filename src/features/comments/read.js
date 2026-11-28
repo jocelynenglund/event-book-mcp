@@ -38,7 +38,8 @@ const threads = state => live(state).filter(c => !c.threadId);
 
 // One slice: its open threads' count, and every thread (resolved ones too, to fold away), each with its replies
 export function sliceComments(state, sliceId) {
-  const all = threads(state).filter(c => c.sliceId === sliceId).sort(byTime);
+  // a scenario's thread belongs to the slice its scenario is on now (a scenario can move to another slice)
+  const all = threads(state).filter(c => ((c.scenarioId && state.scenarios[c.scenarioId]?.sliceId) || c.sliceId) === sliceId).sort(byTime);
   return { sliceId, open: all.filter(c => !c.resolved).length, threads: all.map(c => thread(c, state)) };
 }
 

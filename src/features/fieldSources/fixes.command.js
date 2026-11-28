@@ -27,6 +27,7 @@ import { mapField, mapFromWholeEvent, clearFieldMapping, addFieldSource, removeF
 import { tidyOf } from './tidy.js';
 import { setScreenSketch } from '../pad/screenSketch.command.js';
 import { relabelButton } from '../pad/padScreen.rules.js';
+import { splitEndingsPlan } from '../splitEndings/splitEndings.command.js'; // feature: split-endings
 
 const propOf = (el, field) => (el.properties || []).find(p => fieldKey(p.name) === fieldKey(field));
 const slicesOf = (state, elementId) => Object.values(state.slices).filter(s => s.elements.includes(elementId)).map(s => s.id);
@@ -132,6 +133,8 @@ const plans = {
     if (screen?.type !== 'screen' || !command) return 'No such sticky';
     return { touches: slicesOf(state, screenId), go: () => setScreenSketch(screenId, relabelButton(screen.sketch, label, command.name)) };
   },
+
+  splitendings: (state, sliceId) => splitEndingsPlan(state, sliceId), // feature: split-endings
 
   tidy(state, elementId) {
     const el = state.elements[elementId];

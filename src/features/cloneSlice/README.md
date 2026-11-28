@@ -46,4 +46,5 @@ Every one is a single line marked `feature: clone-slice` (`grep -rn "feature: cl
 1. Delete this folder.
 2. Delete `tests/gwt/clone-slice.test.mjs`, `tests/gwt/clone-slice-parts.test.mjs`, `tests/mcp-clone-slice.test.js`, `tests/clone-slice.test.js` and `tests/feature-clone-slice-boundary.test.js`.
 3. Delete every line marked `feature: clone-slice` (the lists they sit in stay, empty).
+   The Split into endings feature builds on Clone slice: remove it too.
 4. Old books that hold `SliceCloned` still open: the event is ignored.
