@@ -22,6 +22,13 @@ import { openShareSheet } from '../../shareImage/sheet.js';
 import { chapterArrangeOptions } from '../../arrange/chapterArrangeOptions.read.js';
 import { chapterArrangeBox } from '../../arrange/arrange.parts.js';
 import { canArrangeCurrent } from '../../../core/eventStore.js';
+import { chapterAlternateFlowsOption } from '../../alternateFlows/chapterAlternateFlowsOption.read.js'; // feature: alternate-flows
+import { alternateFlowsOption } from '../../alternateFlows/alternateFlows.parts.js'; // feature: alternate-flows
+
+// What other features add to a chapter's menu: chapterId → the option's HTML
+const chapterMenuExtras = [
+  chapterId => alternateFlowsOption(viewOf(chapterAlternateFlowsOption, chapterId)), // feature: alternate-flows
+];
 
 // The book, through one sheet's view: the sheets read nothing of it but what their view holds
 const viewOf = (view, ...args) => view(projectState(), ...args);
@@ -105,6 +112,7 @@ export function openChapterMenu(chapterId) {
     <div class="bd-cell-hint">The chapter header gets a chip per flow; pick one to see just its slices, still left to right. Slices on no flow are the main line, in every flow.</div>
     <div class="sheet-options">
       ${chapterShareOption(v)}
+      ${chapterMenuExtras.map(extra => extra(chapterId)).join('')}
       <div class="sheet-option" data-board-action="save-reference">
         <div class="sheet-option-icon" style="background: var(--surface-hover);">📗</div>
         <div class="sheet-option-text">

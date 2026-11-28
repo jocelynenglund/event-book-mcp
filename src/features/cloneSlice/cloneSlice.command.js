@@ -11,8 +11,9 @@ import { createSlice, addToSlice, placeSlices, setSliceFlow, newId } from '../bo
 import { findByName } from '../outline/command.js';
 import { addProperty } from '../properties/command.js';
 import { addScenario, setMustHave, setGiven, setWhen, setQuery, setThenEvent, setThenRejection, setThenNothing, setThenReadModel, moveScenario } from '../scenarios/command.js';
+import { putInEndingFlow } from '../alternateFlows/alternateFlows.command.js'; // feature: alternate-flows
 import { CloneSliceEvents } from './cloneSlice.events.js';
-import { cloneRefusal, isAutomation, nameFor, defaultKeep } from './cloneSlice.rules.js';
+import { cloneRefusal, isAutomation, nameFor, defaultKeep, alternateRoot, alternateOfRefusal } from './cloneSlice.rules.js';
 
 const ofType = (slice, state, type) => slice.elements.filter(id => state.elements[id]?.type === type);
 
@@ -53,7 +54,7 @@ export function cloneSlice({ sliceId, name = '', keep = {}, ending = '' } = {}) 
   const kept = { ...defaultKeep, ...keep };
 
   const cloneId = createSlice(slice.type, String(name ?? '').trim() || nameFor(slice, state), { actor: isAutomation(slice, state) ? 'processor' : slice.actor, chapterId: slice.chapterId });
-  appendEvent(CloneSliceEvents.SliceCloned, { sliceId: cloneId, from: sliceId });
+  appendEvent(CloneSliceEvents.SliceCloned, { sliceId: cloneId, from: alternateRoot(state, sliceId) }); // a clone of an alternate is an alternate of the original
   placeSlices([cloneId], { after: sliceId });
   if (slice.flowId) setSliceFlow(cloneId, slice.flowId); // in the original's flow (a clone is never paired, so it moves alone)
 
@@ -61,6 +62,7 @@ export function cloneSlice({ sliceId, name = '', keep = {}, ending = '' } = {}) 
   lanes.filter(type => kept[type]).forEach(type => ofType(slice, state, type).forEach(elementId => addToSlice(cloneId, type, { elementId })));
   if (kept.events) ofType(slice, state, 'event').forEach(elementId => addToSlice(cloneId, 'event', { elementId }));
   const endingId = endingName ? addEnding(cloneId, slice, endingName, projectState()) : null;
+  if (endingName) putInEndingFlow(cloneId, endingName); // feature: alternate-flows
 
   const scenarios = {};
   if (kept.scenarios) getScenariosForSlice(sliceId, state).forEach(scn => { scenarios[scn.id] = copyScenario(scn, cloneId); });
@@ -80,4 +82,13 @@ export function giveScenarioItsOwnEnding({ scenarioId, name = '', ending = '' } 
   moveScenario(scenarioId, made.sliceId);
   if (made.endingId) setThenEvent(scenarioId, made.endingId, {});
   return { sliceId: made.sliceId, endingId: made.endingId, scenarioId };
+}
+
+// An alternate points at another slice of its chapter as its original, or at none (alternateOf null). A refusal comes back as its words.
+export function setAlternateOf({ sliceId, alternateOf = null } = {}) {
+  const state = projectState();
+  const refusal = alternateOfRefusal(state, sliceId, alternateOf || null);
+  if (refusal) return refusal;
+  if ((state.slices[sliceId].alternateOf || null) !== (alternateOf || null)) appendEvent(CloneSliceEvents.SliceAlternateOfSet, { sliceId, alternateOf: alternateOf || null });
+  return { sliceId, alternateOf: alternateOf || null };
 }

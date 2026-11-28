@@ -21,16 +21,20 @@ alternate ending is its own slice; Clone makes it, and the board, the Outline an
 - **Outline**: an alternate's row is indented, with "alternate ending" in small muted text.
 - **Agent tools**: `clone_slice {slice, name?, keep?, ending?}`; `outline` ends an alternate's line with "· alternate of S5".
 
+- **Alternate of…** (2026-11-28, Harry's demo book): an alternate's ⋮ menu → "Alternate of…" lists the chapter's main-line slices and "None"; the pick
+  re-points it (`SliceAlternateOfSet`). Refused: itself, another chapter, a loop. A clone of an alternate is an alternate of the ORIGINAL (the root of
+  the chain), not of the alternate it was cloned from. Agent tool: `edit_slice {slice, alternateOf: "S3" | null}`.
+
 ## The event
 
-`SliceCloned { sliceId, from }` (in `cloneSlice.events.js`): the provenance of a clone, folded into `state.slices[sliceId].alternateOf` by
-`cloneSlice.projection.js`. Deleting the original leaves the clone a plain slice (its views say nothing then). The rest of a clone is the book's
+`SliceCloned { sliceId, from }` and `SliceAlternateOfSet { sliceId, alternateOf | null }` (in `cloneSlice.events.js`): the provenance of a clone and a later
+re-pointing, folded into `state.slices[sliceId].alternateOf` by `cloneSlice.projection.js`. Deleting the original leaves the clone a plain slice (its views say nothing then). The rest of a clone is the book's
 existing events (`SliceCreated`, `SliceMoved`, `SliceElementAdded`, `ScenarioAdded`, `ScenarioMoved`, …).
 
 ## What is here
 
 `cloneSlice.command.js` (Clone Slice, Give Scenario Its Own Ending), `cloneSlice.rules.js`, views `alternateOfMark.read.js`,
-`sliceEndingsLabel.read.js`, `outlineAlternateNote.read.js`, `cloneSliceMenuOption.read.js`, `scenarioOwnEnding.read.js`, `cloneSliceChoices.read.js`,
+`sliceEndingsLabel.read.js`, `outlineAlternateNote.read.js`, `cloneSliceMenuOption.read.js`, `scenarioOwnEnding.read.js`, `cloneSliceChoices.read.js`, `alternateOfMenuOption.read.js`, `alternateOfChoices.read.js`,
 `cloneSlice.parts.js` (one component per view), `sheet.js` (the sheet and the tap on the alt mark), `cloneSlice.styles.js`, `cloneSlice.mcp.js`.
 
 ## Hooks outside this folder
@@ -44,7 +48,7 @@ Every one is a single line marked `feature: clone-slice` (`grep -rn "feature: cl
 ## To remove
 
 1. Delete this folder.
-2. Delete `tests/gwt/clone-slice.test.mjs`, `tests/gwt/clone-slice-parts.test.mjs`, `tests/mcp-clone-slice.test.js`, `tests/clone-slice.test.js` and `tests/feature-clone-slice-boundary.test.js`.
+2. Delete `tests/gwt/clone-slice.test.mjs`, `tests/gwt/clone-slice-parts.test.mjs`, `tests/mcp-clone-slice.test.js`, `tests/gwt/clone-slice-alternate-of.test.mjs`, `tests/clone-slice.test.js` and `tests/feature-clone-slice-boundary.test.js`.
 3. Delete every line marked `feature: clone-slice` (the lists they sit in stay, empty).
    The Split into endings feature builds on Clone slice: remove it too.
 4. Old books that hold `SliceCloned` still open: the event is ignored.

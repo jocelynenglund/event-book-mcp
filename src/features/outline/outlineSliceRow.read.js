@@ -23,11 +23,13 @@ import { gapCount, tidyCount, fieldSources } from '../fieldSources/rules.js';
 import { mappingOf } from '../fieldMapping/mappings.js';
 import { fieldKey } from '../../core/constants.js';
 import { isQueryField } from '../viewQueries/queryFields.js';
+import { alternateRowFlowTagExtra } from '../alternateFlows/alternateRowFlowTag.read.js'; // feature: alternate-flows
 import { outlineAlternateNoteExtra } from '../cloneSlice/outlineAlternateNote.read.js'; // feature: clone-slice
 
 // What other features add to a row: (state, slice) → { kind, view } or null (the row draws each, by its kind: outline.parts.js)
 const rowExtraViews = [
   outlineAlternateNoteExtra, // feature: clone-slice
+  alternateRowFlowTagExtra, // feature: alternate-flows
 ];
 
 // Short enough to leave the slice name room on a phone; the colour bar says the rest

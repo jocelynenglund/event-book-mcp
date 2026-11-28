@@ -25,6 +25,8 @@ import { readOnlySliceMenu } from '../../readOnly/readOnlySliceMenu.read.js';
 import { readOnlySliceMenuBox } from '../../readOnly/readOnly.parts.js';
 import { cloneSliceOption } from '../../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
 import { cloneSliceMenuOption } from '../../cloneSlice/cloneSliceMenuOption.read.js'; // feature: clone-slice
+import { alternateOfMenuItem } from '../../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
+import { alternateOfMenuOption } from '../../cloneSlice/alternateOfMenuOption.read.js'; // feature: clone-slice
 
 // The book, through one sheet's view: the sheets read nothing of it but what their view holds
 const viewOf = (view, ...args) => view(projectState(), ...args);
@@ -34,6 +36,7 @@ const viewOf = (view, ...args) => view(projectState(), ...args);
 // What other features add to a slice's menu: (sliceId) → HTML, each drawn from its own view
 const menuExtras = [
   sliceId => cloneSliceOption(viewOf(cloneSliceMenuOption, sliceId)), // feature: clone-slice
+  sliceId => alternateOfMenuItem(viewOf(alternateOfMenuOption, sliceId)), // feature: clone-slice
 ];
 
 let menuSliceId = null;

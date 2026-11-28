@@ -5,4 +5,5 @@ import { CloneSliceEvents as E } from './cloneSlice.events.js';
 
 export function projectCloneSlice(state, event) {
   if (event.type === E.SliceCloned && state.slices[event.data.sliceId] && event.data.from) state.slices[event.data.sliceId].alternateOf = event.data.from;
+  if (event.type === E.SliceAlternateOfSet && state.slices[event.data.sliceId]) state.slices[event.data.sliceId].alternateOf = event.data.alternateOf || null;
 }

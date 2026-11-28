@@ -11,11 +11,13 @@ import { refinedPill } from './refinedPill.js';
 import { sliceProgressChip } from '../buildProgress/progress.parts.js';
 import { propLabel } from '../../core/constants.js';
 import { noSourceMark } from '../fieldSources/fieldGaps.parts.js';
+import { alternateFlowTag } from '../alternateFlows/alternateFlows.parts.js'; // feature: alternate-flows
 import { alternateEndingNote } from '../cloneSlice/cloneSlice.parts.js'; // feature: clone-slice
 
 // What other features add to a row (row.extras: [{ kind, view }], from outlineSliceRow.read.js), each drawn from its own view
 const rowExtras = {
   alternateNote: alternateEndingNote, // feature: clone-slice
+  alternateFlow: alternateFlowTag, // feature: alternate-flows
 };
 
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

@@ -22,6 +22,7 @@ import { openEventsSheet, openPlacesSheet, onSheetAction as eventsAction } from 
 import { openScenariosSheet, onSheetAction as scenariosAction } from './sheets/scenarios.js';
 import { openModelNameSheet, openSliceInfo, openSliceMenu, onSheetAction as sliceMenuAction } from './sheets/sliceMenu.js';
 import { onSheetAction as processorAction } from './sheets/processor.js';
+import { onSheetAction as alternateFlowsAction } from '../alternateFlows/sheet.js'; // feature: alternate-flows
 import { onSheetAction as cloneSliceAction } from '../cloneSlice/sheet.js'; // feature: clone-slice
 import { onSheetAction as storedElsewhereAction } from '../storedElsewhere/sheet.js'; // feature: stored-elsewhere
 import { onSheetAction as modelMdAction } from '../modelMd/sheet.js'; // feature: model-md
@@ -150,6 +151,7 @@ function revealComment(c) {
 // Taps inside the board sheet: each sheet module answers its own
 const sheetActions = [readSheetAction, newSliceAction, chapterAction, arrangeAction, cellAction, eventsAction, scenariosAction, sliceMenuAction, processorAction, findAction, fieldGapAction, fieldMapAction,
   cloneSliceAction, // feature: clone-slice
+  alternateFlowsAction, // feature: alternate-flows
   storedElsewhereAction, // feature: stored-elsewhere
   modelMdAction, // feature: model-md
 ];

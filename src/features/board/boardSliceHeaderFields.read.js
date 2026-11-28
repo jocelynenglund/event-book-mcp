@@ -29,7 +29,7 @@ export function boardSliceHeaderFields(state, col) {
     typeLabel: sliceTypeLabels[slice.type] || slice.type,
     actor: sliceActor(slice, state),
     scenarios: getScenariosForSlice(slice.id, state).length,
-    flow: flow ? flow.name : null,
+    flow: flow && !extras.some(x => x.view?.flow === flow.name) ? flow.name : null, // an extra that says the flow itself keeps the header from saying it twice
     usage: usageBadge(slice, state),
     chip: boardBuildChip(state, slice.id),
     progress: sliceProgress(state, slice.id),
