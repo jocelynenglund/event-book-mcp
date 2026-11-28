@@ -70,6 +70,7 @@ const ol = await import(new URL('features/outline/command.js', src));
 const og = await import(new URL('features/outlineGoals/mcp.js', src)); // feature: outline-goals
 const cm = await import(new URL('features/comments/command.js', src));
 const cloneMcp = await import(new URL('features/cloneSlice/cloneSlice.mcp.js', src)); // feature: clone-slice
+const splitMcp = await import(new URL('features/splitEndings/splitEndings.mcp.js', src)); // feature: split-endings
 const { modelMdTools } = await import(new URL('features/modelMd/modelMd.mcp.js', src)); // feature: model-md
 // What other features say beside a sticky in the outline: (sticky) → words or ''
 const outlineNotes = [
@@ -1217,13 +1218,14 @@ const tools = [
       scenarios.forEach(x => addScenario(s, x));
       return `Added ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} to ${nameOf(s)}.${gapNote(state(), [s.id])}${scenariosNow(s)}`;
     } },
-  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it (on a slice that already is an automation it sets or replaces its ⚡ on trigger and nothing else changes), processor (needed to make a slice of a person an automation), view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). reads: "<view>" makes the slice\'s processor read an existing view (its title or S-number, or the read model\'s name; the one the "an automation reads a view" gap points at; fix_gaps also offers "Read <view>" for each view that draws the trigger event in), and says when its trigger event now reaches it through the view. stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays.',
+  { name: 'edit_slice', edits: true, description: 'Takes the slice by #ref, S-number or title; the reply names it (S8 <title> (#ref)) and lists its scenarios now. Rename, describe, add fields to, move to a chapter, mark refined (refined:true, needs scenarios or a waiver; any other edit clears it, and done with it), waive its scenarios (waived:true, optional waivedReason: nothing to test, so it can be refined without any and no spec is expected; only for a slice with no scenarios; waived:false lifts it), run a command slice from an automation (automation: {when: the event that starts it (on a slice that already is an automation it sets or replaces its ⚡ on trigger and nothing else changes), processor (needed to make a slice of a person an automation), view: an existing view slice with no other half as its first half, else a new one just before it}; it keeps its command, event, fields and scenarios), give it back to a person (person:true) or delete a slice (delete: true, by its #ref or exact title: an S-number is refused, numbers shift; the reply says what was deleted). Once a reply has printed a numbering change, an S-number is refused for any edit until the next full outline: use the ref or title. stopReading: "<view>" makes an automation slice stop reading a view (its title or S-number, or the read model\'s name). reads: "<view>" makes the slice\'s processor read an existing view (its title or S-number, or the read model\'s name; the one the "an automation reads a view" gap points at; fix_gaps also offers "Read <view>" for each view that draws the trigger event in), and says when its trigger event now reaches it through the view. stopTrigger: "<event>" takes away the link that makes an automation slice\'s processor start on that event (the outline shows it as "⚡ on <event>"); the event stays. remove: ["<sticky name>", …] takes those stickies (events, a screen, an extra read model) off this slice in one step, the same as removing a sticky from a slice on the board; they stay in the book and on other slices (remove_sticky deletes one nobody uses). Refused, nothing changed, for a name not on the slice (the reply lists what is) and for the slice\'s only command or only read model.',
     inputSchema: { type: 'object', properties: { slice: S, name: S, description: S, fields: S, chapter: S, refined: { type: 'boolean' }, waived: { type: 'boolean' }, waivedReason: S, ready: { type: 'boolean', description: 'Older name for refined' }, delete: { type: 'boolean' },
       automation: { type: 'object', properties: { when: S, processor: S, view: S }, required: ['when'] }, person: { type: 'boolean' },
       stopReading: { ...S, description: 'An automation slice stops reading a view: its title or S-number (or the read model\'s name)' },
       reads: { ...S, description: 'An automation slice\'s processor reads this existing view: its title or S-number (or the read model\'s name)' },
-      stopTrigger: { ...S, description: 'An automation slice\'s processor stops starting on this event (its name): the "⚡ on" link goes, the event stays' } }, required: ['slice'] },
-    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger, reads }) => {
+      stopTrigger: { ...S, description: 'An automation slice\'s processor stops starting on this event (its name): the "⚡ on" link goes, the event stays' },
+      remove: { type: 'array', items: S, description: 'Names of stickies to take off this slice (they stay in the book and on other slices); refused for the slice\'s only command or read model' } }, required: ['slice'] },
+    run: ({ slice, name, description, fields, chapter, refined, ready, waived, waivedReason, delete: del, automation, person, stopReading, stopTrigger, reads, remove }) => {
       if (refined === undefined) refined = ready;
       const s = findSlice(slice, state(), { destructive: !!del });
       if (del) { const was = nameOf(s); c.deleteSlice(s.id); return `Deleted ${was}.`; }
@@ -1280,6 +1282,23 @@ const tools = [
         if (!links.length) throw new Error(`${pr.sliceTitle(s, st)} doesn't trigger on "${stopTrigger}"`);
         links.forEach(l => c.setTrigger(l.event, l.proc, false));
       }
+      if (remove?.length) {
+        // All checked first: a refusal changes nothing
+        const st = state();
+        const key = n => String(n).trim().toLowerCase();
+        const names = [].concat(remove);
+        const on = s.elements.map(id => st.elements[id]).filter(Boolean);
+        const hits = names.map(n => {
+          const el = on.find(e => key(e.name) === key(n));
+          if (!el) throw new Error(`${pr.sliceTitle(s, st)} has no sticky "${n}" (it has: ${on.map(e => e.name).join(', ') || 'nothing'})`);
+          return el;
+        });
+        for (const type of ['command', 'readModel']) {
+          const all = on.filter(e => e.type === type);
+          if (all.length && all.every(e => hits.includes(e))) throw new Error(`${pr.sliceTitle(s, st)}: "${all[0].name}" is its only ${type === 'command' ? 'command (a Do slice needs one)' : 'read model (a See slice needs one)'}, so it stays`);
+        }
+        [...new Set(hits)].forEach(el => c.removeFromSlice(s.id, el.id));
+      }
       if (person === true) { const why = auto.runSliceByPerson({ sliceId: s.id }); if (why) throw new Error(why); }
       if (name) c.nameSlice(s.id, name);
       if (description !== undefined) c.describeSlice(s.id, description);
@@ -1294,7 +1313,7 @@ const tools = [
       if (refined === true) { const refused = c.markSliceRefined(s.id); if (refused) throw new Error(`${pr.sliceTitle(s, state())} can't be marked refined: ${refused}`); }
       return `Updated ${nameOf(state().slices[s.id])}.${scenariosNow(state().slices[s.id])}${readsNote}`;
     } },
-  { name: 'fix_gaps', description: 'The information completeness gaps of the open model (a slice, a chapter, or the whole book), each with its why and its one-tap fixes, every fix named by an id for apply_fix: add a field to the sticky it comes from, draw an event into a slice, read an existing view (an automation: readview|<processor>|<read model>, instead of waking on its trigger event), set it by the system, remove it, map a field from another sticky\'s field (map|<sticky>|<field>: say which with map|<sticky>|<field>|<from sticky>|<from field>, or use map_field), or tidy fields written as prose (pages[] (pageId, finishedAt) split on its commas). The same list the person sees when they tap the count in the app. Slices that are ☑ Refined are listed but apply_fix will not change them.',
+  { name: 'fix_gaps', description: 'The information completeness gaps of the open model (a slice, a chapter, or the whole book), each with its why and its one-tap fixes, every fix named by an id for apply_fix: add a field to the sticky it comes from, draw an event into a slice, read an existing view (an automation: readview|<processor>|<read model>, instead of waking on its trigger event), set it by the system, remove it, map a field from another sticky\'s field (map|<sticky>|<field>: say which with map|<sticky>|<field>|<from sticky>|<from field>, or use map_field), or tidy fields written as prose (pages[] (pageId, finishedAt) split on its commas), or split a slice that shows alternate outcomes ("A and B look like alternate outcomes": splitendings|<slice>, "Split into endings", the same as split_endings). The same list the person sees when they tap the count in the app. Slices that are ☑ Refined are listed but apply_fix will not change them.',
     inputSchema: { type: 'object', properties: { slice: S, chapter: S }, required: [] },
     run: ({ slice, chapter } = {}) => {
       const st = state();
@@ -1408,7 +1427,25 @@ const tools = [
       return `Deleted "${hit.name}" from ${nameOf(s, st)}.${scenariosNow(s)}`;
     } },
   cloneMcp.cloneSliceTool({ findSlice, nameOf, S }), // feature: clone-slice
+  splitMcp.splitEndingsTool({ findSlice, nameOf, S }), // feature: split-endings
   ...modelMdTools({ S }), // feature: model-md
+  { name: 'remove_sticky', edits: true, description: 'Delete a sticky (an event, command, read model, screen, processor) from the whole book, by its name, but only once no slice uses it any more (take it off its slices first with edit_slice {slice, remove: ["<name>"]}); a sticky some slice still draws is refused, naming the slices, and so is one a scenario mentions (its Given, When or Then), naming the scenarios. Comments belong to slices and scenarios, never to a sticky, so none are affected. One undo.',
+    inputSchema: { type: 'object', properties: { name: S, slice: { ...S, description: 'Narrows it down when two stickies share the name' } }, required: ['name'] },
+    run: ({ name, slice }) => {
+      const st = state();
+      const key = String(name).trim().toLowerCase();
+      let found = Object.values(st.elements).filter(e => (e.name || '').trim().toLowerCase() === key);
+      if (!found.length) throw new Error(`No sticky "${name}" in the book`);
+      if (slice) { const s = findSlice(slice); found = found.filter(e => s.elements.includes(e.id)); if (!found.length) throw new Error(`${pr.sliceTitle(s, st)} has no sticky "${name}"`); }
+      if (found.length > 1) throw new Error(`${found.length} stickies are named "${name}" (${found.map(e => e.type).join(', ')}): pass slice to say which`);
+      const el = found[0];
+      const users = Object.values(st.slices).filter(x => x.elements.includes(el.id));
+      if (users.length) throw new Error(`Not deleted: ${el.name} is still on ${users.map(x => nameOf(x, st)).join(', ')} (edit_slice {slice, remove: ["${el.name}"]} takes it off a slice)`);
+      const mentions = Object.values(st.scenarios).filter(x => (x.given || []).some(g => g.elementId === el.id) || x.when?.commandId === el.id || x.then?.eventId === el.id || x.then?.readModelId === el.id);
+      if (mentions.length) throw new Error(`Not deleted: ${mentions.map(x => `"${x.name}" (${st.slices[x.sliceId] ? nameOf(st.slices[x.sliceId], st) : 'no slice'})`).join(', ')} mention${mentions.length > 1 ? '' : 's'} ${el.name}: change those scenarios first`);
+      es.appendEvent(es.EventTypes.ElementDeleted, { elementId: el.id });
+      return `Deleted ${el.type} "${el.name}" from the book. (Comments belong to slices and scenarios, not stickies: none were affected.)`;
+    } },
   { name: 'move_slice', edits: true, description: 'Put a slice (#ref, S-number or title) right after another one in the order (an automation moves with its other half). To move it to another chapter use edit_slice {chapter}.',
     inputSchema: { type: 'object', properties: { slice: S, after: S }, required: ['slice', 'after'] },
     run: ({ slice, after }) => {
@@ -1579,7 +1616,7 @@ async function handle(msg) {
   const { id, method, params } = msg;
   if (method === 'initialize') {
     return reply(id, { protocolVersion: params?.protocolVersion || '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'eventpad', version: '0.15.0' },
+      serverInfo: { name: 'eventpad', version: '0.16.0' },
       instructions: 'Model in Event Book: outline to read the model, add_steps / add_scenarios to build it a chapter or a slice at a time, keep_model to hand it over (send the person the ?book= link it gives: their Refined ticks and comments then reach the library). share_link makes a copy, for people outside the library.' });
   }
   if (method === 'ping') return reply(id, {});
